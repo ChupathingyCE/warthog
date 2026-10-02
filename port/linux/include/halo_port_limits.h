@@ -18,8 +18,15 @@ a finishing place in 7 bits.
 
 /* ---------- session limits */
 
+#ifdef HALO_XBOX_CONSOLE
+/* the console (port/xbox) stays the Xbox: 16 players, though on as many
+machines as players, one each, as the native builds' players come */
+#define HALO_PORT_MAXIMUM_NETWORK_PLAYERS 16
+#define HALO_PORT_MAXIMUM_NETWORK_MACHINES 16
+#else
 #define HALO_PORT_MAXIMUM_NETWORK_PLAYERS 128
 #define HALO_PORT_MAXIMUM_NETWORK_MACHINES 128
+#endif
 
 /* a host polls its listening socket and one socket per machine; the Xbox's
 Winsock headers default to 64 (the prefix headers define FD_SETSIZE from

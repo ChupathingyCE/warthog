@@ -1002,6 +1002,15 @@ void *_texture_cache_bitmap_get_hardware_format(
 					{
 						sound_idle();
 					}
+#ifdef HALO_XBOX_CONSOLE
+					{
+						extern char const *volatile xbox_main_stage;
+						static char waiting[160];
+
+						sprintf(waiting, "texture cache: waiting for %.120s", tag_get_name(bitmap->tag_index));
+						xbox_main_stage = waiting;
+					}
+#endif
 					SwitchToThread();
 				}
 			}

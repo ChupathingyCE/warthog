@@ -2507,6 +2507,13 @@ void _rasterizer_present(
 			success = FALSE;
 		}
 	}
+#ifdef HALO_XBOX_CONSOLE
+	{
+		extern char const *volatile xbox_main_stage;
+
+		xbox_main_stage = "render: IDirect3DDevice8_Present";
+	}
+#endif
 	if (IDirect3DDevice8_Present(
 		global_d3d_device,
 		NULL,

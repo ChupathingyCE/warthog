@@ -397,6 +397,15 @@ symbols in this file:
 #include "interface/marketing_and_strategic_business_development.h"
 #endif
 
+/* port: the main loop's stage, for the console's bring-up watchdog
+(port/xbox/src/xbox_port.c); nothing elsewhere */
+#ifdef HALO_XBOX_CONSOLE
+extern char const *volatile xbox_main_stage;
+#define MAIN_STAGE(name) (xbox_main_stage = (name))
+#else
+#define MAIN_STAGE(name) ((void)0)
+#endif
+
 /* ---------- constants */
 
 enum
@@ -3105,8 +3114,11 @@ static void main_game_render(
 	long window_count;
 	short last_local_player_index;
 
+	MAIN_STAGE("render: lock_global_random_seed");
 	lock_global_random_seed();
+	MAIN_STAGE("render: collision_log_continue_period");
 	collision_log_continue_period(TRUE);
+	MAIN_STAGE("render: sound_render");
 	sound_render();
 	force_single_screen = game_engine_force_single_screen();
 	last_local_player_index = NONE;
@@ -3124,6 +3136,7 @@ static void main_game_render(
 		window = &global_screenshot_count.windows[window_index];
 		observer = NULL;
 
+		MAIN_STAGE("render: compute_window_bounds");
 		compute_window_bounds(
 			window_index,
 			player_window_count,
@@ -3144,12 +3157,15 @@ static void main_game_render(
 				}
 				else
 				{
+					MAIN_STAGE("render: local_player_get_next");
 					last_local_player_index = local_player_get_next(last_local_player_index);
 				}
 			}
 
 			window->local_player_index = last_local_player_index;
+			MAIN_STAGE("render: observer_get_camera");
 			observer = observer_get_camera(window->local_player_index);
+			MAIN_STAGE("render: render_interpolation_camera");
 			observer = render_interpolation_camera(window->local_player_index, observer);
 		}
 		else
@@ -3157,11 +3173,13 @@ static void main_game_render(
 			window->local_player_index = NONE;
 		}
 
+		MAIN_STAGE("render: set_window_camera_values");
 		set_window_camera_values(window, observer);
 		window->console_window = FALSE;
 	}
 
 	window = &global_screenshot_count.windows[player_window_count];
+	MAIN_STAGE("render: compute_window_bounds");
 	compute_window_bounds(
 		0,
 		1,
@@ -3169,10 +3187,12 @@ static void main_game_render(
 		&window->rasterizer_camera.window_bounds);
 	window->local_player_index = NONE;
 	window->console_window = TRUE;
+	MAIN_STAGE("render: set_window_camera_values");
 	set_window_camera_values(window, NULL);
 
 	if (global_screenshot_count.count <= 0)
 	{
+		MAIN_STAGE("render: render_frame");
 		render_frame(
 			global_screenshot_count.windows,
 			player_window_count + 1,
@@ -3183,10 +3203,13 @@ static void main_game_render(
 	}
 	else
 	{
+		MAIN_STAGE("render: screenshot_render");
 		screenshot_render(global_screenshot_count.windows);
 	}
 
+	MAIN_STAGE("render: collision_log_end_period");
 	collision_log_end_period();
+	MAIN_STAGE("render: unlock_global_random_seed");
 	unlock_global_random_seed();
 	return;
 }
@@ -3199,6 +3222,7 @@ void main_loop(
 
 	if (!game_in_editor())
 	{
+		MAIN_STAGE("csstrncpy");
 		csstrncpy(main_globals.soloplayer_map_name, "levels\\b30\\b30", NUMBEROF(main_globals.soloplayer_map_name)-1);
 		main_globals.soloplayer_map_name[NUMBEROF(main_globals.soloplayer_map_name)-1] = '\0';
 	}
@@ -3207,108 +3231,149 @@ void main_loop(
 	main_globals.switch_to_structure_bsp_index = NONE;
 	main_globals.halt_time_scale = TRUE;
 
+	MAIN_STAGE("console_initialize");
 	console_initialize();
+	MAIN_STAGE("debug_keys_initialize");
 	debug_keys_initialize();
+	MAIN_STAGE("game_initialize");
 	game_initialize();
+	MAIN_STAGE("console_startup");
 	console_startup();
+	MAIN_STAGE("main_setup_connection");
 	main_setup_connection();
+	MAIN_STAGE("main_initialize_time");
 	main_initialize_time();
 
 	while (TRUE)
 	{
+#ifdef HALO_XBOX_CONSOLE
+		/* port: the loop counted for the bring-up watchdog (port/xbox/src/xbox_port.c) */
+		{
+			extern volatile unsigned long xbox_main_loops;
+			extern void xbox_watchdog_start(void);
+
+			if (!xbox_main_loops)
+				xbox_watchdog_start();
+			xbox_main_loops++;
+		}
+#endif
 		if (!game_in_editor())
 		{
 			if (main_globals.switch_to_structure_bsp_index!=NONE)
 			{
+				MAIN_STAGE("main_switch_to_structure_bsp_private");
 				main_switch_to_structure_bsp_private();
 			}
 
 			if (main_globals.lost_map)
 			{
+				MAIN_STAGE("main_lost_map_private");
 				main_lost_map_private();
 			}
 
 			if (main_globals.won_map)
 			{
+				MAIN_STAGE("main_won_map_private");
 				main_won_map_private();
 			}
 
 			if (main_globals.respawn)
 			{
+				MAIN_STAGE("main_respawn_private");
 				main_respawn_private();
 			}
 
 			if (main_globals.save_map_completed)
 			{
+				MAIN_STAGE("main_saving_map_private");
 				main_saving_map_private();
 			}
 
 			if (main_globals.defer_map_change)
 			{
+				MAIN_STAGE("main_change_map_name");
 				main_change_map_name();
 			}
 
 			if (main_globals.revert_map)
 			{
+				MAIN_STAGE("main_revert_map_private");
 				main_revert_map_private();
 			}
 
 			if (main_globals.skip_cinematic)
 			{
+				MAIN_STAGE("main_skip_cinematic_private");
 				main_skip_cinematic_private();
 			}
 
 			if (main_globals.reset_map)
 			{
+				MAIN_STAGE("main_reset_map_private");
 				main_reset_map_private();
 			}
 
 			if (main_globals.save_core)
 			{
+				MAIN_STAGE("main_save_core_private");
 				main_save_core_private();
 			}
 
 			if (main_globals.load_core)
 			{
+				MAIN_STAGE("main_load_core_private");
 				main_load_core_private();
 			}
 
 			if (main_globals.want_to_be_at_main_menu)
 			{
+				MAIN_STAGE("main_menu_load");
 				main_menu_load();
 			}
 
 			if (main_globals.load_last_solo_level)
 			{
+				MAIN_STAGE("main_load_last_solo_map");
 				main_load_last_solo_map();
 			}
 
 			if (main_globals.run_xdemos)
 			{
+				MAIN_STAGE("main_run_demos_private");
 				main_run_demos_private();
 			}
 
 			if (main_globals.skip)
 			{
+				MAIN_STAGE("main_skip_private");
 				main_skip_private();
 			}
 
 			if (main_globals.queue_map)
 			{
+				MAIN_STAGE("main_queue_map_private");
 				main_queue_map_private();
 			}
 		}
 		else if (main_globals.reset_map)
 		{
+			MAIN_STAGE("main_reset_map_private");
 			main_reset_map_private();
 		}
 
+		MAIN_STAGE("profile_frame_start");
 		profile_frame_start();
+		MAIN_STAGE("input_frame_begin");
 		input_frame_begin();
+		MAIN_STAGE("input_update");
 		input_update();
+		MAIN_STAGE("input_abstraction_update");
 		input_abstraction_update();
+		MAIN_STAGE("shell_idle");
 		shell_idle();
+		MAIN_STAGE("event_manager_update");
 		event_manager_update();
+		MAIN_STAGE("telnet_console_process");
 		telnet_console_process();
 
 		if (!shell_application_is_paused())
@@ -3316,6 +3381,7 @@ void main_loop(
 			render_frame = TRUE;
 
 			/* automated system link tests (port/linux/game/network_test.c) */
+			MAIN_STAGE("network_test_update");
 			network_test_update(main_globals.main_menu_scenario_loaded, main_globals.seconds_elapsed);
 			connection = main_globals.connection;
 			if (connection==_game_connection_network_client)
@@ -3324,6 +3390,7 @@ void main_loop(
 				{
 					display_error_when_main_menu_loaded(6);
 					error(_error_silent, "the game host went down");
+					MAIN_STAGE("network_game_abort");
 					network_game_abort();
 				}
 			}
@@ -3333,12 +3400,14 @@ void main_loop(
 				{
 					display_error_when_main_menu_loaded(1);
 					error(_error_silent, "the game host went down");
+					MAIN_STAGE("network_game_abort");
 					network_game_abort();
 				}
 				else if (!network_game_server_start_frame())
 				{
 					display_error_when_main_menu_loaded(1);
 					error(_error_silent, "the game host went down");
+					MAIN_STAGE("network_game_abort");
 					network_game_abort();
 				}
 			}
@@ -3347,7 +3416,9 @@ void main_loop(
 				break;
 			}
 
+			MAIN_STAGE("main_update_time");
 			main_update_time();
+			MAIN_STAGE("process_ui_widgets");
 			process_ui_widgets();
 #ifdef HALO_GAME_BROWSER
 			{
@@ -3360,41 +3431,53 @@ void main_loop(
 				void game_list_claims_update(void);
 				void game_stats_update(void);
 
+				MAIN_STAGE("dedicated_server_update");
 				dedicated_server_update();
+				MAIN_STAGE("probe_update");
 				probe_update();
+				MAIN_STAGE("game_list_claims_update");
 				game_list_claims_update();
 				game_stats_update();
 			}
 #endif
+			MAIN_STAGE("bink_playback_update");
 			bink_playback_update();
 
 			if ((!game_in_editor() && (input_key_is_down(_key_end) || input_key_is_down(_key_escape))) || editor_should_exit())
 			{
+				MAIN_STAGE("main_movie_stop");
 				main_movie_stop();
 
 				if (!game_engine_running())
 				{
+					MAIN_STAGE("main_reset_map");
 					main_reset_map();
 				}
 			}
 
 			if (game_in_progress())
 			{
+				MAIN_STAGE("terminal_update");
 				terminal_update();
 
 				if (!console_update() || main_globals.connection!=_game_connection_local)
 				{
+					MAIN_STAGE("debug_keys_update");
 					debug_keys_update();
+					MAIN_STAGE("cheats_update");
 					cheats_update();
+					MAIN_STAGE("player_control_update");
 					player_control_update((real)main_globals.halt_time_scale*main_globals.seconds_elapsed);
 
 					connection = main_globals.connection;
 					if (connection>_game_connection_local && connection<=_game_connection_network_server && !network_game_client_end_frame())
 					{
 						display_error_when_main_menu_loaded(1);
+						MAIN_STAGE("network_game_abort");
 						network_game_abort();
 					}
 
+					MAIN_STAGE("game_time_update");
 					game_time_update((real)main_globals.halt_time_scale*main_globals.seconds_elapsed);
 
 					render_frame = main_globals.main_menu_scenario_loaded ||
@@ -3405,55 +3488,76 @@ void main_loop(
 						render_frame = main_globals.main_menu_scenario_loaded || main_globals.halt_time_scale;
 					render_frame &= !game_engine_running() || game_time_get()>=3;
 
+					MAIN_STAGE("collision_log_continue_period");
 					collision_log_continue_period(1);
+					MAIN_STAGE("director_update");
 					director_update((real)main_globals.halt_time_scale*main_globals.seconds_elapsed);
+					MAIN_STAGE("observer_update");
 					observer_update((real)main_globals.halt_time_scale*main_globals.seconds_elapsed);
+					MAIN_STAGE("collision_log_end_period");
 					collision_log_end_period();
+					MAIN_STAGE("game_engine_update_non_deterministic");
 					game_engine_update_non_deterministic((real)main_globals.halt_time_scale*main_globals.seconds_elapsed);
 				}
 
 				if (main_globals.saving_map)
 				{
+					MAIN_STAGE("main_save_map_private");
 					main_save_map_private();
 				}
 
 				if (render_frame && !debug_no_drawing)
 				{
+					MAIN_STAGE("profile_render_start");
 					profile_render_start();
+					MAIN_STAGE("render_interpolation_frame_begin");
 					render_interpolation_frame_begin();
+					MAIN_STAGE("main_game_render");
 					main_game_render((double)main_globals.seconds_elapsed);
+					MAIN_STAGE("render_interpolation_frame_end");
 					render_interpolation_frame_end();
+					MAIN_STAGE("profile_render_end");
 					profile_render_end();
 				}
 			}
 			else
 			{
+				MAIN_STAGE("profile_render_start");
 				profile_render_start();
+				MAIN_STAGE("main_pregame_render");
 				main_pregame_render();
+				MAIN_STAGE("profile_render_end");
 				profile_render_end();
 			}
 
+			MAIN_STAGE("main_rasterizer_throttle");
 			main_rasterizer_throttle();
 
 			if (render_frame && !debug_no_drawing)
 			{
+				MAIN_STAGE("main_present_frame");
 				main_present_frame();
 			}
 		}
 
+		MAIN_STAGE("input_frame_end");
 		input_frame_end();
+		MAIN_STAGE("profile_frame_end");
 		profile_frame_end();
+		MAIN_STAGE("main_frame_rate_debug");
 		main_frame_rate_debug();
 
 		if (main_globals.restart_time)
 		{
 			main_globals.restart_time = FALSE;
+			MAIN_STAGE("main_reset_time");
 			main_reset_time();
 			main_globals.halt_time_scale = TRUE;
 		}
 	}
 
 	error(_error_silent, "end of saved film");
+	MAIN_STAGE("main_exit");
 	main_exit();
 
 	return;

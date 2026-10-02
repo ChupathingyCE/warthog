@@ -508,6 +508,16 @@ void *game_state_malloc(
 
 	match_assert("c:\\halo\\SOURCE\\saved games\\game_state.c", 153, !(size&3));
 	match_assert("c:\\halo\\SOURCE\\saved games\\game_state.c", 156, !game_state_globals.locked);
+#ifdef HALO_XBOX_CONSOLE
+	/* port: what did not fit the console's game state, to the debug output */
+	if (game_state_globals.cpu_allocation_size+size>GAME_STATE_CPU_SIZE)
+	{
+		extern unsigned long __cdecl DbgPrint(char const *format, ...);
+
+		DbgPrint("halo: game state full: %s (%s) of %ld bytes, %ld of %ld used\n", name, type, size,
+			game_state_globals.cpu_allocation_size, (long)GAME_STATE_CPU_SIZE);
+	}
+#endif
 	match_assert("c:\\halo\\SOURCE\\saved games\\game_state.c", 159, game_state_globals.cpu_allocation_size+size<=GAME_STATE_CPU_SIZE);
 
 	game_state_allocation_record(name, type, size, FALSE);

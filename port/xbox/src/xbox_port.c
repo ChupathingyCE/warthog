@@ -83,6 +83,49 @@ void platform_show_message(const char *title, const char *message)
 	DbgPrint("halo: %s: %s\n", title, message);
 }
 
+/* ---------- the bring-up watchdog: the main loop's progress (main.c's
+MAIN_STAGE), to the debug output once a second, and where it is when a
+pass takes more than three seconds */
+
+typedef void *HANDLE_TYPE;
+__declspec(dllimport) HANDLE_TYPE __stdcall CreateThread(void *attributes, unsigned long stack_size,
+	unsigned long (__stdcall *start)(void *), void *parameter, unsigned long flags, unsigned long *id);
+__declspec(dllimport) void __stdcall Sleep(unsigned long milliseconds);
+
+volatile unsigned long xbox_main_loops;
+const char *volatile xbox_main_stage = "start";
+
+static unsigned long __stdcall xbox_watchdog(void *parameter)
+{
+	unsigned long last_loops = 0, still = 0;
+
+	(void)parameter;
+	for (;;)
+	{
+		unsigned long loops = xbox_main_loops;
+
+		Sleep(1000);
+		if (xbox_main_loops == loops)
+		{
+			if (++still % 3 == 0)
+				DbgPrint("halo: main loop stalled %lus at '%s' (loop %lu)\n", still, xbox_main_stage, loops);
+		}
+		else
+		{
+			still = 0;
+			DbgPrint("halo: main loop %lu (%lu a second), at '%s'\n", xbox_main_loops, xbox_main_loops - last_loops,
+				xbox_main_stage);
+		}
+		last_loops = xbox_main_loops;
+	}
+	return 0;
+}
+
+void xbox_watchdog_start(void)
+{
+	CreateThread(NULL, 0, xbox_watchdog, NULL, 0, NULL);
+}
+
 /* ---------- the settings: their defaults (port/linux/src/port_config.c's)
 for those the console's code reads */
 
