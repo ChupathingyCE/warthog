@@ -320,9 +320,11 @@ void collision_debug_render(
 					real_matrix4x3 const *matrix = NULL;
 					struct collision_surface const *surface = NULL;
 					char textstring[2048];
+#ifndef HALO_XBOX_CONSOLE
 					/* matrix points into it after the else if below, so it
 					has to outlive that block (see object_reconnect_to_map) */
 					struct collision_model_instance instance;
+#endif
 
 					render_debug_vector(TRUE, &point, &vector, collision.t, global_real_argb_red);
 					render_debug_point(TRUE, &collision.point, 0.125f, global_real_argb_red);
@@ -334,6 +336,10 @@ void collision_debug_render(
 					}
 					else if (collision.type == _collision_result_object && collision.node_index != NONE)
 					{
+#ifdef HALO_XBOX_CONSOLE
+						struct collision_model_instance instance;
+#endif
+
 						if (collision_model_instance_new(&instance, collision.object_index))
 						{
 							struct collision_node *node = TAG_BLOCK_GET_ELEMENT(

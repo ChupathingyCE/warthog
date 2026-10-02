@@ -676,7 +676,9 @@ struct _screenshot_and_framerate_globals
 typedef char screenshot_and_framerate_globals_size_assert[
 	sizeof(struct _screenshot_and_framerate_globals) == 0x38B ? 1 : -1];
 
+#ifndef HALO_XBOX_CONSOLE
 void network_test_update(boolean main_menu_loaded, real seconds);
+#endif
 
 /* ---------- prototypes */
 
@@ -2305,6 +2307,7 @@ static boolean main_framerate_throttle_enabled(
 	return rasterizer_globals.framerate_throttle;
 }
 
+#ifndef HALO_XBOX_CONSOLE
 /* The native ports draw a frame whenever the display can show one, paced
 by vsync, and frames fall between the 30 Hz ticks
 (port/linux/game/render_interpolation.c): no vertical blank throttle, and
@@ -2349,6 +2352,7 @@ static void main_update_time_unthrottled(
 		rasterizer_globals.frame_and_vertical_blank_index;
 }
 
+#endif
 static void main_update_time(
 	void)
 {
@@ -2364,11 +2368,13 @@ static void main_update_time(
 	short short_target_index;
 	real seconds_elapsed;
 
+#ifndef HALO_XBOX_CONSOLE
 	if (halo_interpolation_enabled())
 	{
 		main_update_time_unthrottled();
 		return;
 	}
+#endif
 	end_milliseconds = system_milliseconds();
 	minimum_target_index = MAX(
 		main_globals.rasterizer_target_index,
@@ -2613,7 +2619,11 @@ void main_rasterizer_throttle(
 	did_throttle = FALSE;
 	main_globals.rasterizer_throttle_start_index =
 		rasterizer_globals.frame_and_vertical_blank_index + 1;
+#ifndef HALO_XBOX_CONSOLE
 	if (rasterizer_globals.framerate_throttle && !halo_interpolation_enabled())
+#else
+	if (rasterizer_globals.framerate_throttle)
+#endif
 	{
 		target_index = main_globals.rasterizer_target_index;
 		target_index--;
@@ -2846,11 +2856,16 @@ void main_framerate_render(
 			real frame_rate_real;
 			long frame_rate;
 			rectangle2d bounds;
+#ifndef HALO_XBOX_CONSOLE
 			/* room for three digits under C99 snprintf, which (unlike MSVC's
 			_snprintf) keeps a byte of the count for the terminator */
 			char frame_rate_string[8];
+#else
+			char frame_rate_string[4];
+#endif
 
 			bounds = render.camera.window_bounds;
+#ifndef HALO_XBOX_CONSOLE
 			/* The native ports draw at the display's refresh rate, up to
 			hundreds of frames a second: show frames per second averaged over
 			half a second, counting each frame once (split screen draws this
@@ -2877,6 +2892,13 @@ void main_framerate_render(
 				(void)frame_seconds;
 				(void)frame_rate_real;
 			}
+#else
+			frame_seconds = MAX(main_globals.seconds_elapsed, 0.01f);
+			frame_rate_real = 1.0f / frame_seconds;
+			frame_rate = fast_ftol(frame_rate_real);
+			if (main_globals.vblank_interval_held)
+				frame_rate = 60 / main_globals.vblank_interval_current;
+#endif
 
 			_snprintf(
 				frame_rate_string,
@@ -3023,7 +3045,11 @@ void halt_and_catch_fire(
 					1.0f);
 			window_parameters.camera.z_near = rasterizer_globals.near_clip_distance;
 			window_parameters.camera.viewport_bounds.x0 = 0;
+#ifndef HALO_XBOX_CONSOLE
 			window_parameters.camera.viewport_bounds.x1 = (short)halo_screen_width();
+#else
+			window_parameters.camera.viewport_bounds.x1 = 640;
+#endif
 			window_parameters.camera.viewport_bounds.y0 = 0;
 			window_parameters.camera.viewport_bounds.y1 = 480;
 			window_parameters.camera.z_far = rasterizer_globals.far_clip_distance;
@@ -3166,7 +3192,9 @@ static void main_game_render(
 			MAIN_STAGE("render: observer_get_camera");
 			observer = observer_get_camera(window->local_player_index);
 			MAIN_STAGE("render: render_interpolation_camera");
+#ifndef HALO_XBOX_CONSOLE
 			observer = render_interpolation_camera(window->local_player_index, observer);
+#endif
 		}
 		else
 		{
@@ -3380,9 +3408,11 @@ void main_loop(
 		{
 			render_frame = TRUE;
 
+#ifndef HALO_XBOX_CONSOLE
 			/* automated system link tests (port/linux/game/network_test.c) */
 			MAIN_STAGE("network_test_update");
 			network_test_update(main_globals.main_menu_scenario_loaded, main_globals.seconds_elapsed);
+#endif
 			connection = main_globals.connection;
 			if (connection==_game_connection_network_client)
 			{
@@ -3483,9 +3513,11 @@ void main_loop(
 					render_frame = main_globals.main_menu_scenario_loaded ||
 						(main_globals.halt_time_scale &&
 							(game_time_get_paused() || game_time_get_elapsed()>0 || game_time_get_speed()<1.0f));
+#ifndef HALO_XBOX_CONSOLE
 					/* frames between ticks too (render_interpolation.c) */
 					if (halo_interpolation_enabled())
 						render_frame = main_globals.main_menu_scenario_loaded || main_globals.halt_time_scale;
+#endif
 					render_frame &= !game_engine_running() || game_time_get()>=3;
 
 					MAIN_STAGE("collision_log_continue_period");
@@ -3511,12 +3543,16 @@ void main_loop(
 					MAIN_STAGE("profile_render_start");
 					profile_render_start();
 					MAIN_STAGE("render_interpolation_frame_begin");
+#ifndef HALO_XBOX_CONSOLE
 					render_interpolation_frame_begin();
 					MAIN_STAGE("main_game_render");
 					main_game_render((double)main_globals.seconds_elapsed);
 					MAIN_STAGE("render_interpolation_frame_end");
 					render_interpolation_frame_end();
 					MAIN_STAGE("profile_render_end");
+#else
+					main_game_render((double)main_globals.seconds_elapsed);
+#endif
 					profile_render_end();
 				}
 			}

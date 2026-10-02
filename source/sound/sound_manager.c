@@ -3915,6 +3915,7 @@ void sound_render(
 				((real)render_time - sound_manager_globals.render_time) *
 				0.029999999f;
 			sound_manager_globals.render_time = render_time;
+#ifndef HALO_XBOX_CONSOLE
 			/* Sounds are rendered once a frame, and a frame is well under a
 			tick on the native builds, so the ticks truncate to none and
 			scripted sound class fades would never move: carry the
@@ -3928,6 +3929,9 @@ void sound_render(
 				leftover_ticks -= (real)ticks;
 				sound_classes_update(ticks);
 			}
+#else
+			sound_classes_update((long)sound_manager_globals.ticks_elapsed);
+#endif
 			refresh_listener();
 			process_looping_sounds();
 			refresh_sounds();

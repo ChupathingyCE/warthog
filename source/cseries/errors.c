@@ -117,6 +117,7 @@ char *error_get(
 	return error_globals.message_buffer;
 }
 
+#ifndef HALO_XBOX_CONSOLE
 /* The native builds keep the log open and flush each line: opening and
 closing it per line takes milliseconds on Windows, and a host logs
 thousands of lines when a hundred machines join, load or leave. The file is
@@ -183,6 +184,7 @@ static void write_to_debug_file(
 	fflush(file);
 }
 
+#endif
 void write_to_error_file(
 	char *string,
 	boolean date)
@@ -203,7 +205,40 @@ void write_to_error_file(
 
 	if (error_globals.output_to_debug_file)
 	{
+#ifndef HALO_XBOX_CONSOLE
 		write_to_debug_file(string, date);
+#else
+		FILE *handle = fopen("d:\\debug.txt", "a+b");
+		if (handle)
+		{
+			if (date)
+			{
+				long timeptr;
+				struct tm *_time;
+
+				time(&timeptr);
+				_time = localtime(&timeptr);
+				if (_time)
+				{
+					fprintf(
+						handle,
+						"%02d.%02d.%02d %02d:%02d:%02d  ",
+						_time->tm_mon + 1,
+						_time->tm_mday,
+						_time->tm_year % 100,
+						_time->tm_hour,
+						_time->tm_min,
+						_time->tm_sec);
+				}
+				else
+				{
+					fprintf(handle, "<TIME UNAVAILABLE>  ");
+				}
+			}
+			fprintf(handle, "%s", string);
+			fclose(handle);
+		}
+#endif
 	}
 #ifdef HALO_SERVER
 	{

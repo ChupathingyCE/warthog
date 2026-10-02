@@ -339,8 +339,16 @@ __inline long fast_ftol(
 {
 	long result;
 
+#ifndef HALO_XBOX_CONSOLE
 	/* FISTP: round to nearest under the default control word */
 	result = (long)__builtin_rint((double)value);
+#else
+	__asm
+	{
+		fld value
+		fistp result
+	}
+#endif
 
 	return result;
 }

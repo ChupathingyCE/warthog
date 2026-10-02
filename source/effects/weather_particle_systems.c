@@ -281,12 +281,14 @@ static void weather_particle_system_box_offset_from_point3d(
 	real box_width,
 	real_point3d const *point,
 	real_point3d *offset);
+#ifndef HALO_XBOX_CONSOLE
 /* A frame was a tick on the Xbox; the native builds draw several frames per
 tick (port/linux/game/render_interpolation.c). Weather particles turn their
 acceleration and drift once an update: turn once per 30 Hz tick, and drift by
 the frame's share of a tick. This is the ticks the current update crosses. */
 static long weather_particle_update_ticks = 1;
 
+#endif
 static void weather_particle_update_physics(
 	short local_player_index,
 	short type_index,
@@ -513,6 +515,7 @@ static void weather_particle_system_update(
 
 	system->time_delta_sec = render.time_delta_since_tick_sec;
 	system->time+= system->time_delta_sec;
+#ifndef HALO_XBOX_CONSOLE
 	{
 		static real leftover_ticks[MAXIMUM_NUMBER_OF_LOCAL_PLAYERS];
 
@@ -520,6 +523,7 @@ static void weather_particle_system_update(
 		weather_particle_update_ticks = (long)leftover_ticks[local_player_index];
 		leftover_ticks[local_player_index]-= (real)weather_particle_update_ticks;
 	}
+#endif
 
 	for (type_index = 0; type_index<definition->particle_types.count; type_index++)
 	{
@@ -954,12 +958,14 @@ static void weather_particle_update_physics(
 	unsigned long flags;
 	real_vector3d random_direction;
 
+#ifndef HALO_XBOX_CONSOLE
 	if ((type_definition->acceleration_lower_bound!=0.f || type_definition->acceleration_upper_bound!=0.f) &&
 		weather_particle_update_ticks<=0)
 	{
 		point_from_line3d((real_point3d *)&particle->velocity, &particle->acceleration, system->time_delta_sec, (real_point3d *)&particle->velocity);
 	}
 	else
+#endif
 	if (type_definition->acceleration_lower_bound!=0.f || type_definition->acceleration_upper_bound!=0.f)
 	{
 		real magnitude = normalize3d(&particle->acceleration);
@@ -993,7 +999,11 @@ static void weather_particle_update_physics(
 			NULL,
 			particle->radius,
 			system->time_delta_sec);
+#ifndef HALO_XBOX_CONSOLE
 		point_from_line3d(&particle->position, seed_random_direction3d(&seed, &random_direction), 0.001f*system->time_delta_sec*TICKS_PER_SECOND, &particle->position);
+#else
+		point_from_line3d(&particle->position, seed_random_direction3d(&seed, &random_direction), 0.001f, &particle->position);
+#endif
 	}
 	weather_particle_system_wrap_point(type->box_width, &particle->position, &particle->position);
 

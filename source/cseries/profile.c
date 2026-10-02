@@ -276,7 +276,9 @@ symbols in this file:
 #include "main/main.h"
 #include "game/players.h"
 
+#ifndef HALO_XBOX_CONSOLE
 #include <xtl.h>
+#endif
 
 /* ---------- constants */
 
@@ -324,6 +326,7 @@ enum profile_frame_value
 
 /* ---------- macros */
 
+#ifndef HALO_XBOX_CONSOLE
 /* the native ports: the platform's performance counter stands in for the
 time stamp counter, at its own rate (profile_initialize) */
 #define QUERY_TIMEBASE(timebase) \
@@ -332,6 +335,18 @@ time stamp counter, at its own rate (profile_initialize) */
 	QueryPerformanceCounter(&halo_counter); \
 	*(__int64 *)&(timebase) = halo_counter.QuadPart; \
 }
+#else
+#define QUERY_TIMEBASE(timebase) \
+{ \
+	__asm push eax \
+	__asm push edx \
+	__asm rdtsc \
+	__asm mov dword ptr timebase, eax \
+	__asm mov dword ptr timebase+4, edx \
+	__asm pop edx \
+	__asm pop eax \
+}
+#endif
 
 /* ---------- structures */
 
@@ -1053,12 +1068,16 @@ void profile_initialize(
 {
 	short section_index = 0;
 
+#ifndef HALO_XBOX_CONSOLE
 	{
 		LARGE_INTEGER frequency;
 
 		QueryPerformanceFrequency(&frequency);
 		profile_globals.timebase_frequency = frequency.QuadPart;
 	}
+#else
+	profile_globals.timebase_frequency = 733333333;
+#endif
 
 	while (section_index<profile_globals.section_count)
 	{
@@ -1284,6 +1303,7 @@ static void profile_timesection_inherit(
 	struct profile_timer *parent_timesection,
 	struct profile_timer *child_timesection)
 {
+#ifndef HALO_XBOX_CONSOLE
 	/* port: a machine joining a game in progress loads it mid-frame (the
 	host's start, handled in the frame's network update), and the loading
 	screen draws its windows outside the frame's render: the frame's times
@@ -1293,6 +1313,7 @@ static void profile_timesection_inherit(
 		parent_timesection->frame_total = 0.0f;
 		return;
 	}
+#endif
 	match_vassert("c:\\halo\\SOURCE\\cseries\\profile.c", 434,
 		parent_timesection->frame_total>=child_timesection->total,
 		"parent_timesection->self_msec >= child_timesection->elapsed_msec");

@@ -896,8 +896,13 @@ static void walk_stack(
 {
 	unsigned long level;
 
+#ifndef HALO_XBOX_CONSOLE
 	walk_up_current_frame = (__typeof__(walk_up_current_frame))(__UINTPTR_TYPE__)__builtin_frame_address(0);
 	old_ebp = (__typeof__(old_ebp))walk_up_current_frame;
+#else
+	__asm mov walk_up_current_frame, ebp
+	__asm mov old_ebp, esp
+#endif
 
 	if (!is_valid_ebp())
 	{
