@@ -176,7 +176,7 @@ def generate_xbox_build(n: Writer, sln: Any) -> None:
     n.variable("xbox_link", _llvm_tool("lld-link"))
     n.rule(
         name="xbox_cc",
-        command="$xbox_cc -MMD -MF $out.d $cflags -c $in -o $out",
+        command="$xbox_cc -MD -MF $out.d $cflags -c $in -o $out",
         description="XBOX CC $out",
         depfile="$out.d",
         deps="gcc",
