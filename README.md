@@ -1,323 +1,169 @@
-<p align="center"><img src="docs/icon-160.png" width="120" alt=""></p>
+<h1 align="center">Warthog</h1>
 
-<h1 align="center">ChupathingyCE</h1>
+<p align="center"><b>ChupathingyCE's Halo: Combat Evolved for the original Xbox, and later the Xbox 360.</b></p>
 
-<p align="center"><b>Halo: Combat Evolved on Windows, Mac, Linux and Android: a community build of OpenCE, with its own releases, dedicated servers and the Delta network family.</b></p>
+Warthog is the Halo CE decompilation built back for the console it was
+written for, on the same code as [ChupathingyCE](https://github.com/ChupathingyCE/chupathingyce)
+(the desktop and Android builds). The goal: boot on a real Xbox and play
+online with OpenCE and ChupathingyCE players, 16 players or fewer, on the
+traditional maps.
 
-<p align="center">
-<a href="https://github.com/ChupathingyCE/chupathingyce/releases/latest">Download</a> ·
-<a href="https://halo.milenko.org">Games online now</a> ·
-<a href="https://discord.gg/4BUm2FwuCB">Discord</a>
-</p>
+Warthog stays Halo as it shipped on the Xbox: its memory, caches and limits
+are the console's. Only the platform code differs from ChupathingyCE.
+Game logic and netcode are ChupathingyCE's (the distributed netcode the PC
+builds play), with the console's own code back in place under
+`HALO_XBOX_CONSOLE` where upstream's cleanup (4adc3a87) removed it:
+the rasterizer's fixed 640x480 targets, frame timing, input, the file
+cache, physical memory, sound and effect pools, and the socket transport.
 
-> **Compatible with [OpenCE](https://github.com/OpenCommunityEdition/OpenCE) build-133 through build-138 (network version 20).** Our builds join games hosted on network versions 11 through 20. Games hosted on older builds (network version 10) can't be joined; their hosts need to update.
-> Players on OpenCE and players on ChupathingyCE play together.
+## Status
 
-ChupathingyCE is a community build of **OpenCE**, the port of the Halo: Combat
-Evolved decompilation to modern computers and phones. Our goal is a unified
-online experience, plus our own tweaks, on a project that's still in its
-infancy. We stay compatible with OpenCE, offer our fixes back to it, and put
-out our own releases. Expect rough edges, and please report them.
+| | |
+|---|---|
+| Original Xbox build (`ninja xbox`) | builds on macOS with OXDK, `build/xbox/default.xbe` |
+| Boots | the menus, menu music and profiles on a devkit and a modified retail console (October 2 build); this build is not yet booted |
+| Code | ChupathingyCE main of October 4, network version 11 |
+| System link with PC builds | not yet: see "Cross-play" |
+| Online Games (the game list) | not yet: see "Online Games on the Xbox" |
+| Xbox 360 | planned: see "Xbox 360" |
 
-<p align="center"><img src="docs/screenshots/lobby.jpg" width="720" alt="A multiplayer lobby"></p>
+## Prerequisites
 
-## Features
+Nothing from Microsoft's SDKs is in this repository, and none of it may be
+committed. You supply it, as with [OXDK](https://github.com/MrMilenko/OXDK):
 
-**Online**
-- **Online Games**, a server list in the Multiplayer menu: join a game with **A**, or host one with **Y**
-- Games you host are listed for everyone, from any of our builds
-- Invite links (`halo://join/…`) to send to friends; opening one joins their game
-- Direct connections between players, with no port forwarding in most homes
-- Plays with OpenCE builds of the same network version, both ways
-- Dedicated servers anyone can run: a playlist of games, around the clock, on Linux x86, x64 or arm64
+- Python 3, [ninja](https://ninja-build.org/) and LLVM 22 or later (clang
+  and lld-link). On macOS: `brew install llvm ninja`. The build looks in
+  `LLVM_DIR`, then in Homebrew's folder.
+- [OXDK](https://github.com/MrMilenko/OXDK) in `~/OXDK` (or `--oxdk DIR`,
+  or `OXDK_DIR`), with its `cxbe` built.
+- The Xbox SDK's libraries and headers, in OXDK's `xbox/xdk/lib` and
+  `xbox/xdk/include`, set up as OXDK's instructions say.
+- An Aug 2001 Direct3D library, `d3d8ntpr.lib` (`port/xbox/README.md`,
+  "Direct3D").
+- The North American (NTSC, 01.10.12.2276) disc's maps, which every
+  ChupathingyCE build and dedicated server plays.
 
-**Stats, on [halo.milenko.org](https://halo.milenko.org)**
-- A carnage report for every finished game, with medals
-- Service records and leaderboards, with confirmed players (your games count toward you, whatever name you use)
-- Accounts, made on the site or from the game, with an encrypted backup of your player identity
-- Listing a game hosted from an OpenCE build, by its invite link
-
-**The game**
-- The campaign, split screen and System Link, running natively (no emulator)
-- High-res HUD and text, and widescreen menus
-- Controller prompts for Xbox, PlayStation and Nintendo pads, and the keyboard
-- Updates itself: it checks for new releases when it starts, and asks first
-
-**Platforms**
-
-| | Windows | Mac | Linux | Android |
-| --- | --- | --- | --- | --- |
-| The game | Yes | Yes, Apple silicon and Intel | Yes | Yes |
-| Online Games, hosting, stats | Yes | Yes | Yes | Yes |
-| Dedicated server | The game, for a test | The game, for a test | Yes: x86, x64 and arm64, and Docker | |
-| Updates itself | Yes | Not yet | Yes | Yes |
-| Halo PC (Custom Edition) maps | 64-bit build only | Yes | Yes | Not yet |
-| HaloMD maps | 64-bit build only | Yes | Yes | Not yet |
-| Server Browser in the PC menus | Yes | Yes | Yes | Yes |
-
-## Download
-
-Get the latest release from the [Releases page](https://github.com/ChupathingyCE/chupathingyce/releases/latest):
-
-| Platform | Download | Notes |
-| --- | --- | --- |
-| Windows | `chupathingyce-windows-release.zip` | Windows 10 or later. |
-| Linux (64-bit) | `chupathingyce-linux64-release.zip` | Needs SDL3. See [port/linux/README.md](port/linux/README.md). |
-| Linux (32-bit, older systems) | `chupathingyce-linux-release.zip` | Needs SDL3 (32-bit). See [port/linux/README.md](port/linux/README.md). |
-| Android | `chupathingyce-android-release.zip` | Android 9 or later, 64-bit. See [port/android/README.md](port/android/README.md). |
-| Mac | `chupathingyce-macos-release.zip` | macOS 13 or later, Apple silicon or Intel. |
-
-The game checks for new releases when it starts and asks before updating.
-
-We don't pay for code signing yet, so the first start needs one extra step:
-
-- **Windows** may warn about an unknown publisher: choose **More info → Run anyway**.
-- **Mac**: move ChupathingyCE to Applications and open it. If macOS won't open
-  it, go to **System Settings → Privacy & Security**, and choose **Open
-  Anyway** next to ChupathingyCE. You only do this once.
-
-## You need your own copy of Halo
-
-ChupathingyCE doesn't include the game's maps, sounds or art. You need an Xbox
-disc image (`.iso` or `.xiso`) of Halo: Combat Evolved. Any region works.
-
-1. Start ChupathingyCE.
-2. The first time, it asks for your disc image. Pick it.
-3. It copies the game's `maps` folder out of the image (about 2 GB), then starts.
-
-On Android, copy the disc image to your phone first; the maps, settings and
-saves go in `/sdcard/Android/data/dev.horrible.chupathingyce/files`. On a
-Mac, the maps, settings and saves go in
-`~/Library/Application Support/ChupathingyCE`.
-On Linux, the maps and settings (`config.toml`) go next to the `halo`
-executable, and the saves in `~/.local/share/halo-linux` (or
-`$XDG_DATA_HOME/halo-linux`). The 64-bit and 32-bit builds use the same
-places, so switching from one to the other keeps your saves and settings.
-
-## Halo PC maps
-
-ChupathingyCE also plays Halo PC (Custom Edition) multiplayer maps, on a Mac,
-on Linux and in the 64-bit Windows build. Copy the `.map` files from your own Halo PC (Custom Edition)
-install into a `ce` folder inside the game's `maps` folder:
-
-| Platform | Put Halo PC maps in |
-| --- | --- |
-| Mac | `~/Library/Application Support/ChupathingyCE/maps/ce/` |
-| Linux | `maps/ce/` next to the `halo` executable |
-| Windows (64-bit) | `maps\ce\` next to `halo.exe` |
-
-Include `bitmaps.map`, `sounds.map` and `loc.map`, which the maps share. Halo PC's
-own `ui.map` adds its map names and pictures. The maps appear in the multiplayer
-map list after the Xbox maps, marked HALO PC. In Online Games, a game on a Halo PC
-map is badged, and it can be joined only by players who have that map: the game
-says which file is missing. The Xbox maps from your disc image are still needed.
-A map file named `<name>@ce.map`, as some other builds name them, is found too,
-in `maps/ce/` or in `maps/`.
-
-### HaloMD maps
-
-ChupathingyCE also plays HaloMD's multiplayer maps (the Mac Halo community's
-maps, made for Halo PC 1.0), on a Mac, on Linux and in the 64-bit Windows
-build. Bring your own: download
-the maps you want from HaloMD's mod list, and put their `.map` files in an
-`md_maps` folder beside the game's `maps` folder:
-
-| Platform | Put HaloMD maps in |
-| --- | --- |
-| Mac | `~/Library/Application Support/ChupathingyCE/md_maps/` |
-| Linux | `md_maps/` next to the `halo` executable |
-| Windows (64-bit) | `md_maps\` next to `halo.exe` |
-
-They need the Halo PC (Custom Edition) files above too: `bitmaps.map`,
-`sounds.map` and `loc.map` from your own Halo PC install, in `maps/ce/`. A
-HaloMD map keeps Halo's own textures and sounds in those shared files, and
-the game reads them from Custom Edition's copies. ChupathingyCE doesn't come
-with any of these files.
-
-The maps appear in the multiplayer map list after the Halo PC maps, marked
-[MD], with their names from HaloMD's list. Online, a HaloMD map is played as
-`<name>@md` (`bgplus_5@md`), badged HALOMD in Online Games, and joined only by
-players who have the same map file. A HaloMD map already in `maps/ce/` still
-plays, and a file named `<name>@md.map` in `md_maps/` or `maps/` is found too.
-
-HaloMD's plug-ins aren't part of ChupathingyCE. A few maps were made for one:
-the visible-object and bigger-BSP limits they raised are already raised here,
-and the widescreen view is the game's own, but the maps made for gameplay
-plug-ins (3rd Person, Rocket Surfing, Spartan) play without them, as plain
-Halo.
-
-## Playing online
-
-| You want to | Do this |
-| --- | --- |
-| Join a game | **Multiplayer → Online Games**, pick a game, press **A**. Or press **Join** on [halo.milenko.org](https://halo.milenko.org). |
-| Host a game | **Multiplayer → Online Games → Y (Create Game)**, or host from System Link as usual. Your game is listed online by itself, on halo.milenko.org and in OpenCE's in-game Server Browser (`public_lobby`/`host_public` under `[network]` in `config.toml` turn that off). |
-| Invite a friend | When you host, the game copies an invite link (`halo://join/…`). Send it; opening it joins your game. |
-| See your stats | Your service record is on [halo.milenko.org](https://halo.milenko.org), found by your name. Games you join count even when the host doesn't run ChupathingyCE: when an online game you joined ends, the game sends halo.milenko.org the scoreboard as your game saw it (names, kills, deaths, scores, medals, weapons) with your player ID. To turn that off, set `report_joined_games = false` under `[network]` in `config.toml`. |
-| Make an account | On [halo.milenko.org/profile](https://halo.milenko.org/profile), or press **Start** in Online Games to make one for the player you already are. |
-| Link the game without a browser (Steam Deck, Game Mode) | In Online Games, press **RB** (or **C** on the keyboard) for Link Profile. On your phone or computer, go to [halo.milenko.org/connect](https://halo.milenko.org/connect), enter the code the game shows (or scan its QR code), then press **A** in the game to confirm. |
-| Use the PC menus | Set `menus = "pc"` under `[display]` in `config.toml`. **Multiplayer → Join Game → Server Browser** lists OpenCE's public games and the games of halo.milenko.org, each once. |
-| List a game from an OpenCE build | Sign in on the site, open **Host a Game**, and paste your invite link. |
-
-Everything here plays with OpenCE builds of the same network version: they can
-join your games and you can join theirs. Games an OpenCE build hosts are
-recorded from the reports of the ChupathingyCE players in them; a game only
-one player reported counts only on that player's own record. Games hosted from OpenCE builds can still be listed by
-their host on the site (Host a Game).
-
-<p align="center">
-<img src="docs/screenshots/site-games.jpg" width="49%" alt="halo.milenko.org: games and recent games">
-<img src="docs/screenshots/site-medals.jpg" width="49%" alt="halo.milenko.org: medals">
-</p>
-
-## Settings (config.toml)
-
-Most of what you can change lives in the game's menus, but everything the
-port adds is in one file, `config.toml`. The game writes it the first time it
-starts, with every setting listed, commented out at its default, and a line
-or two saying what each one does. To change one, remove the `#` in front of it
-and edit the value; the game reads the file when it starts.
-
-| Platform | config.toml is |
-| --- | --- |
-| Windows | next to `halo.exe` |
-| Mac | `~/Library/Application Support/ChupathingyCE/config.toml` |
-| Linux and Steam Deck | next to the `halo` executable |
-| Android | in the game's data folder, `/sdcard/Android/data/dev.horrible.chupathingyce/files` |
-
-A few people look for most:
-
-| Setting | What it does |
-| --- | --- |
-| `display.mode` | `"fullscreen"`, `"borderless"` or `"windowed"`. F11 switches between a window and the whole screen. |
-| `display.window_scale` | The window's size, as a multiple of 640x480. |
-| `display.vsync`, `display.max_fps` | Vertical sync, and a frame rate cap (0 for none). |
-| `display.menus` | `"xbox"` (the default) or `"pc"`, the Halo PC style menus with their Server Browser. |
-| `display.player_names` | Names over players' heads: `"all"`, `"allies"`, `"enemies"` or `"none"`. |
-| `audio.volume`, `audio.music_volume`, `audio.effects_volume` | Volumes, from 0.0 to 1.0. |
-| `input.mouse_sensitivity`, `input.invert_mouse` | Mouse aim. |
-| `controls.*` | Every key: `controls.jump = "Space"`, or two at once, such as `"F, Mouse 4"`. |
-| `network.browser_url` | The game list Online Games shows (halo.milenko.org). |
-| `network.host_public` | Whether games you host are listed for everyone (true) or only joinable by invite (false). |
-| `update.auto` | Whether the game updates itself. |
-| `paths.data`, `paths.saves` | Where the maps and the saves are, if not the usual place. |
-
-Settings you leave at their default follow each new version's default, so
-leaving the file alone is always safe. Every setting can also be given as an
-environment variable for one run (the file lists each one's name), which
-overrides the file.
-
-## Run a server
-
-The ChupathingyCE Dedicated Server hosts a playlist of games around the clock,
-with no player of its own, and lists them on halo.milenko.org and in the
-Server Browser. It is its own download for Linux on x86, x64 and arm64
-(Oracle Cloud's free tier and Raspberry Pis included): one file, no libraries
-to install, and no port forwarding. See [server/README.md](server/README.md).
-
-## ChupathingyCE, OpenCE and Delta
-
-- **OpenCE** ([OpenCommunityEdition/OpenCE](https://github.com/OpenCommunityEdition/OpenCE))
-  is the port ChupathingyCE started from. We merge its changes on our own
-  schedule, and ChupathingyCE has its own releases and version numbers, so it
-  doesn't change under you every few hours.
-- **Playing together.** OpenCE players and ChupathingyCE players join each
-  other's games. OpenCE raises its network version often, and its builds join
-  only hosts of their exact number. ChupathingyCE follows those raises on its
-  own: a workflow watches OpenCE's releases, checks that a raise doesn't
-  change multiplayer, and releases a matching build, usually within the hour.
-  The line at the top of this page says which OpenCE builds match this one.
-- **Delta** is ChupathingyCE's network family ([docs/delta.md](docs/delta.md)):
-  everything our machines and services say beyond OpenCE's game protocol,
-  which stays OpenCE's byte for byte. OpenCE's version number is Delta's
-  legacy layer, kept for compatibility. Between ChupathingyCE machines, Delta
-  Peer negotiates what each side supports, so small changes stop splitting
-  players. The game list, stats and profile links on
-  [halo.milenko.org](https://halo.milenko.org) and the dedicated server's
-  admin tools are Delta List, Delta Stats, Delta Link and Delta Control.
-- Fixes to the shared game code are offered back to OpenCE as pull requests.
-
-## Building it yourself
-
-You need Python 3, [ninja](https://ninja-build.org/) and clang. The game
-supplies the Xbox SDK declarations it uses, so you don't need the SDK.
+## Build
 
 ```sh
-python3 configure.py
-ninja            # the game for the computer you're on
+python3 configure.py --xbox-d3d8 /path/to/d3d8ntpr.lib
+ninja xbox
+python3 tools/xbox_package.py --maps /path/to/maps --out ~/Downloads/Warthog-xbox
 ```
 
-| Target | Result | Instructions |
-| --- | --- | --- |
-| `ninja macos` | `build/macos/ChupathingyCE.app` | [port/macos/README.md](port/macos/README.md) |
-| `ninja linux64` | `build/linux64/halo` (64-bit) | [port/linux/README.md](port/linux/README.md) |
-| `ninja linux` | `build/linux/halo` (32-bit) | [port/linux/README.md](port/linux/README.md) |
-| `ninja windows` | `build/windows/halo.exe` | [port/windows/README.md](port/windows/README.md) |
-| `ninja windows64` | `build/windows64/halo.exe`, the 64-bit game | [port/windows/README.md](port/windows/README.md#64-bit) |
-| `ninja android_apk` | the Android app | [port/android/README.md](port/android/README.md) |
-| `ninja server` | `build/server-<arch>/chupathingyce-server`, the dedicated server (Linux) | [server/docs/building.md](server/docs/building.md) |
+`xbox_package.py` lays out `default.xbe` and `maps/` as one folder for the
+console's hard disk (hard links where it can, so the maps take no more
+space). The Linux, Windows and macOS targets in `configure.py` are
+ChupathingyCE's; Warthog only builds `xbox`.
 
-Useful `configure.py` options:
+## Testing
 
-| Option | What it does |
-| --- | --- |
-| `--release` | A release build, as players get. Without it, a failed check stops the game. |
-| `--portable` | A Linux or Windows build that runs on any x86-64 computer, to give to others. |
-| `--no-game-browser` | Leaves out the server list, stats and dedicated servers, as OpenCE's builds are. |
-| `--pgo=off`, `--lto=off` | Faster builds, without profile-guided or link-time optimisation. |
+**Devkit or modified retail console.** Copy the folder to the hard disk,
+e.g. `E:\Games\Warthog\` (FTP, or the devkit's tools), and launch
+`default.xbe`. The game logs `halo:` lines to the debug monitor (XBDM)
+and writes `D:\debug.txt`. It is a debug build: an assertion stops it and
+shows the error on screen and in `debug.txt`. A bring-up watchdog prints
+the main loop's progress once a second.
 
-The version being made is in `VERSION`. Releases are built and published by
-the project's release workflow; the builds on this repository's Actions page
-are for checking changes.
+**xemu.** vsod99's fork of OpenCE (`vsod99/halo-ce-universal`, branch
+`xbox-backport`, CC0) has a development loop, `tools/xbox_dev.py`: it packs
+an ISO, boots it in xemu at 128 MB with NAT and streams the serial log.
+It builds with nxdk, but its ISO and xemu steps work for any XBE. xemu
+needs the user's own MCPX boot ROM, flash image and hard disk image.
 
-## Credits
+**Xbox 360.** Xenia first (unsigned XEX files run there), then an RGH or
+JTAG console through a launcher such as Aurora.
 
-- The decompilation: [punpckhdq/halo](https://github.com/punpckhdq/halo) and
-  [bnunu/halo-1](https://github.com/bnunu/halo-1), of the Xbox build 2342.
-- The port: [OpenCE](https://github.com/OpenCommunityEdition/OpenCE) and
-  its contributors.
-- ChupathingyCE: [Milenko](https://github.com/MrMilenko) and contributors. The
-  icon is MrBruh's helmet, with tusks.
-- Fonts: [Noto Sans](https://fonts.google.com/noto) (SIL OFL) and
-  [Kenney's Input Prompts](https://kenney.nl/assets/input-prompts) (CC0).
-- HaloMD map names: from [MacGamingMods](https://macgamingmods.com)' public
-  HaloMD mod list, so the menus can show each map's own name.
-- Libraries: SDL3, stb, Mbed TLS, miniupnpc, KCP, tomlc17, musl's maths,
-  extract-xiso, and Project Nayuki's QR Code generator. Their licenses are
-  beside them in `port/third_party`.
+## Cross-play
 
-### Contributors
+The goal is system link and internet games with the PC builds at network
+version 11. Two things stand in the way today, and both are capacities the
+network carries, not code:
 
-Fixes from other people's OpenCE pull requests and forks, taken into
-ChupathingyCE with their authors credited in each commit. What OpenCE has
-merged itself, such as MrBruh's work, comes with OpenCE and is credited
-there.
+- **Session size.** The console builds 16 players on 16 machines
+  (`halo_port_limits.h`); the PCs build 128 and 128. The game settings
+  record (`struct network_game`) is sent whole, and its size follows from
+  those limits (13,120 bytes at 128), so the two cannot read each other's.
+  The console needs the PCs' layout, with the 16 player limit kept as the
+  game's own maximum.
+- **Object indices.** The distributed netcode names objects by their index
+  in the object array, and a client puts its own objects in the array's
+  upper half. The console's array has 2,048 entries, the PCs' 8,192.
 
-- [Tyberious](https://github.com/Tyberious) (Jeff Clark): Xbox ADPCM decoding
-  without the 344 Hz buzz, vertex constant serials that never wrap, pose
-  snapping for frame interpolation, and the clip-space position kept on the
-  desktop (no more first-person vertex spikes).
-- [thelinkin3000](https://github.com/thelinkin3000): the motion sensor for
-  three and four local players (a split screen crash), and split screen
-  dividers where the views meet on a wide screen.
-- [xshxdex98](https://github.com/xshxdex98) ([DamnationCE](https://github.com/xshxdex98/DamnationCE)):
-  the pause menu's QUIT by mouse or keyboard, and lens flares out of view no
-  longer tested.
-- [zimm3rmann](https://github.com/zimm3rmann): visibility test slot 0 kept
-  apart from the scratch query (lens flares sharing a result).
-- [nsafran1217](https://github.com/nsafran1217) (Nathan Safran): no hang
-  where the visibility results buffer cannot be mapped.
-- [saulob](https://github.com/saulob): the first menu frame's colors.
-- [natsu-anon](https://github.com/natsu-anon): the cursor hidden during play.
-- [lantos1618](https://github.com/lantos1618): no ghosting in the zoom effect
-  at high resolutions; on macOS, Command-W does not quit and Command-Q asks
-  twice.
-- [pfista](https://github.com/pfista) (Michael Pfister): projectile trails
-  ready before a weapon's first shot.
-- [JoshRob297](https://github.com/JoshRob297): hosts that run their own games
-  (the dedicated servers) no longer refuse every join after one arrived as a
-  game ended.
+Both need a bigger game state, and the Xbox's is full: its pools fill all
+but 948 bytes of the 0x305000 bytes at 0x80061000, and maps are linked to
+the tag cache right after it. vsod99's memory probe found the route: the
+game state as ordinary virtual memory (at 0x40000000) on a 128 MB console,
+with the tag cache and texture and sound caches kept contiguous in the low
+64 MB. Only the index space has to match the PCs; the pools behind it can
+stay the console's.
 
-Halo is a trademark of Microsoft. ChupathingyCE is a fan project, not made or
-endorsed by Microsoft, Bungie or 343 Industries, and includes none of the
-game's content. The code is released under [CC0](LICENSE.md).
+The console's network stack also speaks the Xbox's secure system link
+unless XNet starts with `XNET_STARTUP_BYPASS_SECURITY`. The game has its
+own switch for that (`D:\bypass_security.txt`). The PCs speak plain UDP,
+so cross-play needs it on.
+
+## Online Games on the Xbox
+
+ChupathingyCE's Online Games list (`port/linux/src/browser.c`) and internet
+play (`p2p.c`, `p2p_signal.c`, `p2p_lobby.c`, KCP, STUN) are the desktop
+platform layer's, on POSIX sockets, threads and Mbed TLS. The console has
+none of that layer; its game talks to XNet directly. The pieces:
+
+1. **The list (first milestone).** Define `HALO_GAME_BROWSER` for the
+   console and answer `browser.h` from `port/xbox`: an HTTP/1.0 client on
+   XNet's Winsock with `XNetDnsLookup`, on a thread of its own, as
+   `posix_browser.c` does. halo.milenko.org answers only HTTPS, so either
+   Mbed TLS (already in `port/third_party`) runs on the console, with the
+   list server's root certificate built in and no clock check (the console's
+   clock may be unset), or the list server offers a read only plain HTTP
+   list for consoles. The list is public; announcing and reports, which
+   carry the player key, stay on TLS. A 32 KB response buffer and Mbed TLS's
+   working memory fit easily in 64 MB.
+2. **Joining.** Internet games are reached through the PCs' p2p tunnel
+   (STUN, signaling, KCP), which hands the game stand-in addresses. On the
+   console that layer would sit under `transport_endpoint_winsock.c`, which
+   is where the game's sockets are. This waits on "Cross-play", since
+   until then the console cannot read a v11 host's settings.
+3. **Invites.** No clipboard: the list itself is the invite (choose a game
+   and join), plus Link Profile (the
+   desktop builds' QR code, which links the game to a profile from another
+   device).
+
+## Xbox 360
+
+Not started in this pass. The plan, from Milenko's 360 ports (QSS-M,
+doomretro-x360) and OXDK360:
+
+- **Toolchain:** OXDK360's patched clang (`~/llvm-xenon`) and `cxex`, with
+  the user's own Xbox 360 SDK, not committed, the same line as OXDK.
+- **Endianness first.** Maps, saved games and network messages are
+  little-endian Xbox data. Swap at load (tag data swapped by its field
+  definitions as each tag loads), and swap network fields in the message codec, which already
+  encodes field by field. Not a big-endian aware loader everywhere.
+- **Alignment.** PowerPC traps on misaligned multi-byte reads from byte
+  buffers; audit the cache file and network readers for `*(long *)` reads.
+- **Memory:** 512 MB, so the PCs' capacities fit and cross-play needs no
+  special layout.
+- **Renderer:** Xenos through the SDK's Direct3D 9, starting from the
+  desktop builds' renderer (`d3d8_gl.c` maps the game's Direct3D 8 calls),
+  not the original Xbox's push buffer code.
+- **First milestone:** a XEX that logs a line in Xenia.
+
+## Keeping in step with ChupathingyCE
+
+Warthog takes ChupathingyCE main by pull request: each merge on main's
+first parent is replayed here as one commit (`git cherry-pick -m 1`),
+which keeps main's own conflict resolutions, and names the pull request,
+its commits and their authors (`Co-authored-by` trailers for contributors).
+Only pull requests that change nothing but the README are left out. Then
+`ninja xbox` must build. Making `chupathingyce` a submodule, with only
+`port/xbox` and the console's gates here, is the later plan once the gates
+live in ChupathingyCE's own shared code.
+
+## Licensing
+
+The code is the decompilation's and ChupathingyCE's (CC0, with the
+third-party notices in `port/third_party`). Never commit Microsoft SDK
+files, game files or maps.

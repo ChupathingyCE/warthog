@@ -42,6 +42,7 @@ release (01.01.14.2342) work too, played as the NTSC maps are
 (`port/linux/game/pal_tags.c`). Use `maps/*.map` and `maps/loading.tga`
 from the disc.
 
+`python3 tools/xbox_package.py --maps DIR --out DIR` lays the build out.
 Put the files on the console's hard disk in one folder, for example:
 
 ```
@@ -90,10 +91,15 @@ inline functions that units call through a prototype.
 
 ## Status
 
-The game starts on a modified retail console and on a development kit. It
-shows the menus, plays the menu music and makes profiles. Known:
+The October 2 build started on a modified retail console and on a
+development kit: the menus, the menu music and profiles. This code is
+ChupathingyCE main's of October 4 (network version 11) and links; it is not
+yet booted. Known:
 
 - There is no Bink video (the movies are skipped) and no reverb.
-- The netcode is the original game's. It cannot play with the PC ports,
-  which use newer netcode.
+- The netcode is the PC builds' (distributed), but the console cannot yet
+  play with them: its session (16 machines) and object array (2,048) give a
+  different game settings record and object indices than theirs (128
+  machines, 8,192 objects). The top level README's "Cross-play" has the plan.
+- The menus are the Xbox's; the PC menus and Online Games are not built.
 - Campaign and multiplayer levels are not yet tested.
