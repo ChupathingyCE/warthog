@@ -8498,12 +8498,12 @@ void process_ui_widgets(
 	widget_globals.current_system_milliseconds = system_milliseconds();
 #ifndef HALO_XBOX_CONSOLE
 	ui_widgets_process_mouse();
-#endif
 	if (ui_widget_port_press_controller != NONE)
 	{
 		event_manager_post_button(ui_widget_port_press_controller, ui_widget_port_press_button);
 		ui_widget_port_press_controller = NONE;
 	}
+#endif
 	if (widget_globals.initialization_thread)
 	{
 		if (!thread_has_exited(widget_globals.initialization_thread))

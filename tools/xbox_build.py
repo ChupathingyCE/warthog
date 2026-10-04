@@ -40,6 +40,7 @@ from .windows_build import COMMENT, EXPORTED_INLINE
 PORT_DIR = Path("port/xbox")
 XDK_INCLUDE = Path("port/include/xdk")
 LINUX_SRC = Path("port/linux/src")
+PORT_LINUX_INCLUDE = Path("port/linux/include")
 
 GAME_FLAGS = [
     "-target", "i386-pc-windows-msvc",
@@ -230,6 +231,9 @@ def generate_xbox_build(n: Writer, sln: Any) -> None:
     game_cflags = " ".join([
         " ".join(GAME_FLAGS), f"-include {_quote(prefix_header)}", f"-include {_quote(semantics_header)}",
         game_defines_and_includes(config), f"-idirafter {_quote(XDK_INCLUDE)}", f"-idirafter {_quote(xdk / 'include')}",
+        # the port's own headers (halo_menus.h, halo_keyboard.h), after the
+        # SDK's so its C runtime headers win
+        f"-idirafter {_quote(PORT_LINUX_INCLUDE)}",
     ])
     for source in game_sources(config):
         add_object(source, f"-std=gnu89 {game_cflags}", [semantics_header, prefix_header],

@@ -333,3 +333,155 @@ void p2p_set_game_player_counts(int count, int maximum)
 	(void)count;
 	(void)maximum;
 }
+
+void p2p_set_hosting_allowed(int allowed)
+{
+	(void)allowed;
+}
+
+void p2p_set_hosting_public(int public)
+{
+	(void)public;
+}
+
+void p2p_set_game_listing(const char *name, const char *map, const char *gametype, int engine_type, int open,
+	int in_progress, int has_teams)
+{
+	(void)name;
+	(void)map;
+	(void)gametype;
+	(void)engine_type;
+	(void)open;
+	(void)in_progress;
+	(void)has_teams;
+}
+
+/* ---------- the menus: the Xbox's own (ui.map); the PC version's menus
+(port/linux/game/menu_tags.c) are the desktop builds' */
+
+typedef unsigned char boolean_type;
+struct widget_instance;
+struct event_record;
+
+void menu_tags_loaded(char const *map_name)
+{
+	(void)map_name;
+}
+
+void menu_tags_unloaded(void)
+{
+}
+
+char const *pc_menus_root_name(void)
+{
+	return "ui\\shell\\main_menu\\main_menu";
+}
+
+char const *pc_menus_screen(char const *name)
+{
+	return name;
+}
+
+boolean_type pc_menu_tag(long tag_index)
+{
+	(void)tag_index;
+	return 0;
+}
+
+boolean_type pc_menu_text_color(struct widget_instance const *widget, void *rgb)
+{
+	(void)widget;
+	(void)rgb;
+	return 0;
+}
+
+boolean_type pc_menu_event_function_invoke(struct widget_instance *widget, struct event_record *event,
+	long function_index, boolean_type *widget_deleted)
+{
+	(void)widget;
+	(void)event;
+	(void)function_index;
+	(void)widget_deleted;
+	return 0;
+}
+
+void pc_menu_game_data_function_invoke(struct widget_instance *widget, long function)
+{
+	(void)widget;
+	(void)function;
+}
+
+/* ---------- the keyboard and the desktop's settings: none on the console */
+
+unsigned long halo_keyboard_actions(short controller_index)
+{
+	(void)controller_index;
+	return 0;
+}
+
+void platform_text_typing(int typing)
+{
+	(void)typing;
+}
+
+void platform_scoreboard_scroll(int open, long *notches, long *pages)
+{
+	(void)open;
+	if (notches)
+		*notches = 0;
+	if (pages)
+		*pages = 0;
+}
+
+float halo_screen_scale(void)
+{
+	return 1.0f;
+}
+
+/* (the settings never change: there is no config.toml) */
+unsigned long config_changes(void)
+{
+	return 0;
+}
+
+/* ---------- addresses in the log (port/linux/src/log_address.h): the
+private ranges whole, a public address only as a tag salted per run */
+
+__declspec(dllimport) unsigned long __stdcall GetTickCount(void);
+
+static int log_address_private(const unsigned char *bytes, int length)
+{
+	if (length != 4)
+		return length == 16 && (bytes[0] & 0xFE) == 0xFC;
+	return bytes[0] == 10 || bytes[0] == 127 || bytes[0] == 0 ||
+		(bytes[0] == 172 && (bytes[1] & 0xF0) == 16) || (bytes[0] == 192 && bytes[1] == 168) ||
+		(bytes[0] == 169 && bytes[1] == 254) || (bytes[0] == 100 && (bytes[1] & 0xC0) == 64);
+}
+
+const char *log_address(const unsigned char *bytes, int length, int port, char *text, int size)
+{
+	static unsigned long salt;
+	char host[48];
+	char port_text[8] = "";
+
+	if (size <= 0)
+		return text;
+	if (port >= 0)
+		snprintf(port_text, sizeof(port_text), ":%d", port & 0xFFFF);
+	if (length == 4 && log_address_private(bytes, length))
+		snprintf(host, sizeof(host), "%u.%u.%u.%u", bytes[0], bytes[1], bytes[2], bytes[3]);
+	else
+	{
+		unsigned long hash;
+		int index;
+
+		if (!salt)
+			salt = GetTickCount() * 2654435761UL | 1;
+		hash = 2166136261UL ^ salt;
+		for (index = 0; index < length; index++)
+			hash = (hash ^ bytes[index]) * 16777619UL;
+		snprintf(host, sizeof(host), "addr#%06lx", hash & 0xFFFFFF);
+	}
+	snprintf(text, (size_t)size, "%s%s", host, port_text);
+	return text;
+}
