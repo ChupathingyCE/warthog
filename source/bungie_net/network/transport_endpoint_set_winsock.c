@@ -270,6 +270,18 @@ void transport_pop_key(
 	return;
 }
 
+#ifdef HALO_XBOX_CONSOLE
+/* (an XNet export the XDK leaves out of its headers: what the network
+settings and DHCP gave the console) */
+typedef struct
+{
+	DWORD dwFlags;
+	IN_ADDR ina, inaMask, inaGateway, inaDnsPrimary, inaDnsSecondary, inaDhcpServer;
+	char achPppServer[4][64];
+} XNetConfigStatus;
+long __stdcall XNetGetConfigStatus(XNetConfigStatus *status);
+#endif
+
 short transport_initialize(
 	void)
 {
@@ -308,6 +320,19 @@ short transport_initialize(
 			error(_error_silent, "XNET_STARTUP_BYPASS_SECURITY [ON]");
 			startup_params.cfgFlags |= XNET_STARTUP_BYPASS_SECURITY;
 			fclose(bypass_file);
+#ifdef HALO_XBOX_CONSOLE
+			/* port: internet play over plain IP needs room for DHCP, DNS and
+			TCP that secure system link never did: the pool and queues a
+			dashboard uses, and XNet's own security tables left at their
+			defaults */
+			startup_params.cfgPrivatePoolSizeInPages = 64;
+			startup_params.cfgEnetReceiveQueueLength = 16;
+			startup_params.cfgIpFragMaxSimultaneous = 16;
+			startup_params.cfgIpFragMaxPacketDiv256 = 32;
+			startup_params.cfgSockMaxSockets = 64;
+			startup_params.cfgKeyRegMax = 0;
+			startup_params.cfgSecRegMax = 0;
+#endif
 		}
 
 		if (XNetStartup(&startup_params) != 0)
@@ -334,6 +359,46 @@ short transport_initialize(
 			}
 		}
 		while (address_status == XNET_GET_XNADDR_PENDING);
+
+#ifdef HALO_XBOX_CONSOLE
+		/* port: with security bypassed, wait for an IP address too (DHCP can
+		finish after the link is up), and say what the console got */
+		if (startup_params.cfgFlags & XNET_STARTUP_BYPASS_SECURITY)
+		{
+			deadline = system_milliseconds() + 20000;
+			while (!(address_status & (XNET_GET_XNADDR_STATIC | XNET_GET_XNADDR_DHCP | XNET_GET_XNADDR_PPPOE)) &&
+				system_milliseconds() < deadline)
+			{
+				Sleep(250);
+				address_status = XNetGetTitleXnAddr(&global_address);
+			}
+			{
+				/* (the address and what XNet was told: a LAN address only,
+				never logged when public) */
+				XNetConfigStatus config;
+				const unsigned char *a = (const unsigned char *)&global_address.ina;
+				const unsigned char *g, *d;
+
+				memset(&config, 0, sizeof(config));
+				XNetGetConfigStatus(&config);
+				g = (const unsigned char *)&config.inaGateway;
+				d = (const unsigned char *)&config.inaDnsPrimary;
+				error(_error_log, "xbox title address %s%u.%u.%u.%u, config flags 0x%08lx, gateway %s, dns %s",
+					(a[0] == 10 || (a[0] == 192 && a[1] == 168) || (a[0] == 172 && (a[1] & 0xf0) == 16) ||
+						a[0] == 0 || a[0] == 169) ? "" : "(public, hidden) ",
+					(a[0] == 10 || (a[0] == 192 && a[1] == 168) || (a[0] == 172 && (a[1] & 0xf0) == 16) ||
+						a[0] == 0 || a[0] == 169) ? a[0] : 0, a[1], a[2], a[3],
+					(unsigned long)config.dwFlags, (g[0] | g[1] | g[2] | g[3]) ? "set" : "none",
+					(d[0] | d[1] | d[2] | d[3]) ? "set" : "none");
+			}
+			error(_error_log, "xbox title address: status 0x%08lx%s%s%s%s",
+				(unsigned long)address_status,
+				(address_status & XNET_GET_XNADDR_DHCP) ? " dhcp" : "",
+				(address_status & XNET_GET_XNADDR_STATIC) ? " static" : "",
+				(address_status & XNET_GET_XNADDR_GATEWAY) ? " gateway" : " (no gateway)",
+				(address_status & XNET_GET_XNADDR_DNS) ? " dns" : " (no dns servers)");
+		}
+#endif
 
 		XNetRandom(global_nonce, sizeof(global_nonce));
 		transport_initialized = TRUE;
