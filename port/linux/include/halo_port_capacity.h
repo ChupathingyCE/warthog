@@ -30,12 +30,20 @@ vertices, as on the Xbox. A change to a pool's size changes the game state's
 layout: saved games of builds before it no longer load. */
 
 #ifdef HALO_XBOX_CONSOLE
-/* the console (port/xbox): its own sizes, those of the game as it shipped */
+/* the console (port/xbox) keeps the Xbox's game state and pools: its 64 MB
+hold no more (docs/cross-play.md) */
 
 #define HALO_PORT_GAME_STATE_BASE_ADDRESS 0x80061000
 #define HALO_PORT_GAME_STATE_CPU_SIZE 0x305000
 #define HALO_PORT_GAME_STATE_GPU_SIZE 0x40000
 #define HALO_PORT_GAME_STATE_SIZE (HALO_PORT_GAME_STATE_CPU_SIZE+HALO_PORT_GAME_STATE_GPU_SIZE)
+
+/* ---------- AI */
+
+#define HALO_PORT_MAXIMUM_ACTORS 256
+#define HALO_PORT_MAXIMUM_PROPS 768
+#define HALO_PORT_MAXIMUM_SWARMS 32
+#define HALO_PORT_MAXIMUM_SWARM_COMPONENTS 256
 
 /* ---------- objects */
 
@@ -48,7 +56,8 @@ objects, noncollideable objects, lights) */
 #define HALO_PORT_MAXIMUM_CACHED_OBJECT_RENDER_STATES 256
 /* objects one explosion can damage */
 #define HALO_PORT_MAXIMUM_AREA_OF_EFFECT_OBJECTS 64
-/* object references shared by all script object lists */
+/* script object lists, and the object references they all share */
+#define HALO_PORT_MAXIMUM_OBJECT_LISTS_PER_MAP 48
 #define HALO_PORT_MAXIMUM_LISTED_OBJECTS_PER_MAP 128
 
 /* ---------- effects, particles, lights and sounds */
@@ -64,11 +73,53 @@ objects, noncollideable objects, lights) */
 #define HALO_PORT_MAXIMUM_GAME_LOOPING_SOUNDS 1024
 
 #else
-
 #define HALO_PORT_GAME_STATE_BASE_ADDRESS 0x81A00000 /* (0x80061000) */
 #define HALO_PORT_GAME_STATE_CPU_SIZE 0x13C0000 /* (0x305000) */
 #define HALO_PORT_GAME_STATE_GPU_SIZE 0x40000 /* (0x40000) */
 #define HALO_PORT_GAME_STATE_SIZE (HALO_PORT_GAME_STATE_CPU_SIZE+HALO_PORT_GAME_STATE_GPU_SIZE)
+
+/* ---------- AI
+
+Network co-op adds enemies for its players (port/linux/game/coop_enemies.c):
+the actors, and their knowledge of the units about them (props: with many
+players, more each), have room for several times a level's own. */
+
+#define HALO_PORT_MAXIMUM_ACTORS 1024 /* (256) */
+#define HALO_PORT_MAXIMUM_PROPS 8192 /* (768) */
+#define HALO_PORT_MAXIMUM_SWARMS 128 /* (32) */
+#define HALO_PORT_MAXIMUM_SWARM_COMPONENTS 1024 /* (256) */
+
+/* ---------- objects */
+
+#define HALO_PORT_MAXIMUM_OBJECTS_PER_MAP 8192 /* (2048) */
+#define HALO_PORT_OBJECT_MEMORY_POOL_SIZE 0x800000 /* (0x100000) */
+/* each of the two reference lists of every cluster partition (collideable
+objects, noncollideable objects, lights) */
+#define HALO_PORT_MAXIMUM_CLUSTER_REFERENCES 8192 /* (2048) */
+#define HALO_PORT_MAXIMUM_RENDERED_OBJECTS 1024 /* (256) */
+#define HALO_PORT_MAXIMUM_CACHED_OBJECT_RENDER_STATES 1024 /* (256) */
+/* objects one explosion can damage */
+#define HALO_PORT_MAXIMUM_AREA_OF_EFFECT_OBJECTS 256 /* (64) */
+/* script object lists, and the object references they all share. The
+lists of a tick's scripts are freed after it (object_list_gc): a Halo PC
+map whose scripts test (players) in many places a tick took more than the
+Xbox's 48 (coldsnap's), and its game halted */
+#define HALO_PORT_MAXIMUM_OBJECT_LISTS_PER_MAP 1024 /* (48) */
+#define HALO_PORT_MAXIMUM_LISTED_OBJECTS_PER_MAP 8192 /* (128) */
+
+/* ---------- effects, particles, lights and sounds */
+
+#define HALO_PORT_MAXIMUM_EFFECTS 2048 /* (256) */
+#define HALO_PORT_MAXIMUM_EFFECT_LOCATIONS 4096 /* (512) */
+#define HALO_PORT_MAXIMUM_PARTICLES 8192 /* (1024) */
+#define HALO_PORT_MAXIMUM_PARTICLE_SYSTEMS 256 /* (64) */
+#define HALO_PORT_MAXIMUM_SYSTEM_PARTICLES 4096 /* (512) */
+#define HALO_PORT_MAXIMUM_CONTRAILS 1024 /* (256) */
+#define HALO_PORT_MAXIMUM_CONTRAIL_POINTS 8192 /* (1024) */
+#define HALO_PORT_MAXIMUM_LIGHTS_PER_MAP 4096 /* (896) */
+#define HALO_PORT_MAXIMUM_GAME_LOOPING_SOUNDS 4096 /* (1024) */
+
+#endif /* HALO_XBOX_CONSOLE */
 
 /* ---------- texture cache
 
@@ -117,48 +168,5 @@ state. Android and the Xbox builds keep the Xbox's. */
 #define HALO_PORT_MAXIMUM_RENDERED_ENVIRONMENT_SURFACES 16384 /* (16384) */
 #define HALO_PORT_MAXIMUM_DYNAMIC_TRIANGLES 32768 /* (32768) */
 #endif
-
-/* ---------- AI
-
-Network co-op adds enemies for its players (port/linux/game/coop_enemies.c):
-the actors, and their knowledge of the units about them (props: with many
-players, more each), have room for several times a level's own. */
-
-#define HALO_PORT_MAXIMUM_ACTORS 1024 /* (256) */
-#define HALO_PORT_MAXIMUM_PROPS 8192 /* (768) */
-#define HALO_PORT_MAXIMUM_SWARMS 128 /* (32) */
-#define HALO_PORT_MAXIMUM_SWARM_COMPONENTS 1024 /* (256) */
-
-/* ---------- objects */
-
-#define HALO_PORT_MAXIMUM_OBJECTS_PER_MAP 8192 /* (2048) */
-#define HALO_PORT_OBJECT_MEMORY_POOL_SIZE 0x800000 /* (0x100000) */
-/* each of the two reference lists of every cluster partition (collideable
-objects, noncollideable objects, lights) */
-#define HALO_PORT_MAXIMUM_CLUSTER_REFERENCES 8192 /* (2048) */
-#define HALO_PORT_MAXIMUM_RENDERED_OBJECTS 1024 /* (256) */
-#define HALO_PORT_MAXIMUM_CACHED_OBJECT_RENDER_STATES 1024 /* (256) */
-/* objects one explosion can damage */
-#define HALO_PORT_MAXIMUM_AREA_OF_EFFECT_OBJECTS 256 /* (64) */
-/* script object lists, and the object references they all share. The
-lists of a tick's scripts are freed after it (object_list_gc): a Halo PC
-map whose scripts test (players) in many places a tick took more than the
-Xbox's 48 (coldsnap's), and its game halted */
-#define HALO_PORT_MAXIMUM_OBJECT_LISTS_PER_MAP 1024 /* (48) */
-#define HALO_PORT_MAXIMUM_LISTED_OBJECTS_PER_MAP 8192 /* (128) */
-
-/* ---------- effects, particles, lights and sounds */
-
-#define HALO_PORT_MAXIMUM_EFFECTS 2048 /* (256) */
-#define HALO_PORT_MAXIMUM_EFFECT_LOCATIONS 4096 /* (512) */
-#define HALO_PORT_MAXIMUM_PARTICLES 8192 /* (1024) */
-#define HALO_PORT_MAXIMUM_PARTICLE_SYSTEMS 256 /* (64) */
-#define HALO_PORT_MAXIMUM_SYSTEM_PARTICLES 4096 /* (512) */
-#define HALO_PORT_MAXIMUM_CONTRAILS 1024 /* (256) */
-#define HALO_PORT_MAXIMUM_CONTRAIL_POINTS 8192 /* (1024) */
-#define HALO_PORT_MAXIMUM_LIGHTS_PER_MAP 4096 /* (896) */
-#define HALO_PORT_MAXIMUM_GAME_LOOPING_SOUNDS 4096 /* (1024) */
-
-#endif /* HALO_XBOX_CONSOLE */
 
 #endif /* __HALO_PORT_CAPACITY_H */
