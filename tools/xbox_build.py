@@ -155,7 +155,7 @@ def _inline_export_wrapper(source: Path, build_dir: Path) -> Path:
 
 def xbox_configure_inputs() -> List[Path]:
     """Files whose change must re-run configure.py."""
-    return [Path(__file__), PORT_DIR / "src"]
+    return [Path(__file__), PORT_DIR / "src", PORT_DIR / "game"]
 
 
 def generate_xbox_build(n: Writer, sln: Any) -> None:
@@ -251,6 +251,10 @@ def generate_xbox_build(n: Writer, sln: Any) -> None:
     # screens of the game list, which draw through their platform layer
     for name in XBOX_PORT_GAME_SOURCES:
         add_object(Path("port/linux/game") / name, f"-std=gnu89 {game_cflags}", [semantics_header, prefix_header])
+
+    # the console's own game code: its Online Games screen
+    for source in sorted((PORT_DIR / "game").glob("*.c")):
+        add_object(source, f"-std=gnu89 {game_cflags}", [semantics_header, prefix_header])
 
     support_cflags = " ".join([*SUPPORT_FLAGS, f"-I{_quote(xdk / 'include')}"])
     for source in sorted((PORT_DIR / "src").glob("*.c")):

@@ -4,10 +4,11 @@ XBOX_GAME_LIST.C
 The game list on the console (xbox_game_list.h): once the game's network is
 up (transport_initialize), a thread of its own resolves the list's host,
 fetches GET /v1/console/games over plain HTTP (the console has no TLS),
-and parses it; the main loop then logs it to debug.txt, as the thread did
-to the debug monitor. Nothing waits on it: the game goes on as if there
-were no list. Showing the list in a menu, and joining, come later (the
-top level README, "Online Games on the Xbox").
+and parses it; the main loop then takes it (xbox_game_list_get) for the
+Multiplayer menu's ONLINE GAMES (port/xbox/game/xbox_browser_screen.c),
+which asks again on X, and logs it to debug.txt. Nothing waits on it: the
+game goes on as if there were no list. Joining comes later (the top level
+README, "Online Games on the Xbox").
 
 No address is ever logged: the host's name, or "the address in
 game_list.txt", only.
@@ -40,11 +41,26 @@ enum
 	_list_failed
 };
 
+/* the fetch's thread writes fetched, then the state (an interlocked store,
+so the list is whole before it: set_state); the main thread takes it into shown once
+the state is done, and only then may a new fetch start */
 static volatile LONG list_state = _list_idle;
-static volatile LONG list_logged = 1;
-static struct game_list list;
+static int list_taken = 1;
+static struct game_list fetched;
 static int list_error;
 static int list_status;
+/* the main thread's (xbox_game_list_get): the last list that came, kept
+while a refresh fails */
+static struct game_list shown;
+static int shown_lists;
+static int shown_error;
+static int shown_state = XBOX_GAME_LIST_NONE;
+
+/* (a locked store: what was written before it is seen before it) */
+static void set_state(LONG state)
+{
+	__atomic_store_n(&list_state, state, __ATOMIC_SEQ_CST);
+}
 
 /* the server to ask: the list's host, else D:\game_list.txt's */
 static int find_server(unsigned long *address, char *host, int host_size, unsigned short *port)
@@ -105,7 +121,7 @@ static int fetch_once(char *buffer)
 	list_status = response.status;
 	if (response.status != 200)
 		return GAME_LIST_ERROR_HTTP;
-	return game_list_parse(response.body, response.body_size, &list);
+	return game_list_parse(response.body, response.body_size, &fetched);
 }
 
 static unsigned long __stdcall game_list_thread(void *parameter)
@@ -125,14 +141,14 @@ static unsigned long __stdcall game_list_thread(void *parameter)
 	{
 		DbgPrint("halo: game list: the network did not start; no list\n");
 		list_error = GAME_LIST_ERROR_CONNECT;
-		list_state = _list_failed;
+		set_state(_list_failed);
 		return 0;
 	}
 	buffer = (char *)malloc(GAME_LIST_RESPONSE_SIZE);
 	if (!buffer)
 	{
 		list_error = GAME_LIST_ERROR_TOO_LARGE;
-		list_state = _list_failed;
+		set_state(_list_failed);
 		return 0;
 	}
 	DbgPrint("halo: game list: getting http://%s%s\n", GAME_LIST_HOST, GAME_LIST_PATH);
@@ -150,18 +166,8 @@ static unsigned long __stdcall game_list_thread(void *parameter)
 	list_error = result;
 	if (result == GAME_LIST_OK)
 	{
-		int index;
-
-		DbgPrint("halo: game list: %d games (format %d)%s\n", list.count, list.format,
-			list.skipped ? ", some lines left out" : "");
-		for (index = 0; index < list.count; index++)
-		{
-			const struct game_list_game *game = &list.games[index];
-
-			DbgPrint("halo: game list: %s | %s | %s | %d/%d | v%u | %s | %s\n", game->name, game->map,
-				game->gametype[0] ? game->gametype : "?", game->players, game->maximum_players, game->version,
-				game->region[0] ? game->region : "-", game->state);
-		}
+		DbgPrint("halo: game list: %d games (format %d)%s\n", fetched.count, fetched.format,
+			fetched.skipped ? ", some lines left out" : "");
 	}
 	else if (result == GAME_LIST_ERROR_CONNECT || result == GAME_LIST_ERROR_RESOLVE || result == GAME_LIST_ERROR_TIMEOUT)
 	{
@@ -173,7 +179,7 @@ static unsigned long __stdcall game_list_thread(void *parameter)
 			DbgPrint("halo: game list: (the internet needs XNet's insecure mode: put an empty "
 				"d:\\bypass_security.txt beside default.xbe)\n");
 	}
-	list_state = result == GAME_LIST_OK ? _list_done : _list_failed;
+	set_state(result == GAME_LIST_OK ? _list_done : _list_failed);
 	return 0;
 }
 
@@ -181,17 +187,18 @@ void xbox_game_list_request(void)
 {
 	HANDLE thread;
 
-	/* (the main thread's only: the fetch's thread sets the state once, last,
-	an aligned store, after the list) */
-	if (list_state == _list_fetching)
+	/* (the main thread's only; not while a fetch runs, or before its list
+	is taken) */
+	if (list_state == _list_fetching || !list_taken)
 		return;
-	list_state = _list_fetching;
-	list_logged = 0;
+	list_taken = 0;
+	shown_state = XBOX_GAME_LIST_FETCHING;
+	set_state(_list_fetching);
 	thread = CreateThread(NULL, 0, game_list_thread, NULL, 0, NULL);
 	if (!thread)
 	{
 		list_error = GAME_LIST_ERROR_CONNECT;
-		list_state = _list_failed;
+		set_state(_list_failed);
 		return;
 	}
 	CloseHandle(thread);
@@ -202,22 +209,52 @@ void xbox_game_list_update(void)
 	LONG state = list_state;
 	int index;
 
-	if (list_logged || (state != _list_done && state != _list_failed))
+	if (list_taken || (state != _list_done && state != _list_failed))
 		return;
-	list_logged = 1;
+	list_taken = 1;
 	if (state == _list_failed)
 	{
+		shown_error = list_error;
+		shown_state = XBOX_GAME_LIST_FAILED;
 		error(ERROR_LOG, "game list: could not get the list from %s (%s)", GAME_LIST_HOST,
 			game_list_error_string(list_error));
 		return;
 	}
-	error(ERROR_LOG, "game list: %d games from %s", list.count, GAME_LIST_HOST);
-	for (index = 0; index < list.count; index++)
+	memcpy(&shown, &fetched, sizeof(shown));
+	shown_error = GAME_LIST_OK;
+	shown_state = XBOX_GAME_LIST_READY;
+	error(ERROR_LOG, "game list: %d games from %s", shown.count, GAME_LIST_HOST);
+	/* (each game the first time; a refresh's count alone) */
+	if (!shown_lists++)
 	{
-		const struct game_list_game *game = &list.games[index];
+		for (index = 0; index < shown.count; index++)
+		{
+			const struct game_list_game *game = &shown.games[index];
 
-		error(ERROR_LOG, "game list: %s | %s | %s | %d/%d | v%u | %s | %s", game->name, game->map,
-			game->gametype[0] ? game->gametype : "?", game->players, game->maximum_players, game->version,
-			game->region[0] ? game->region : "-", game->state);
+			char line[256];
+
+			snprintf(line, sizeof(line), "game list: %s | %s | %s | %d/%d | v%u | %s | %s", game->name, game->map,
+				game->gametype[0] ? game->gametype : "-", game->players, game->maximum_players, game->version,
+				game->region[0] ? game->region : "-", game->state);
+			error(ERROR_LOG, "%s", line);
+			DbgPrint("halo: %s\n", line);
+		}
 	}
+}
+
+const struct game_list *xbox_game_list_get(int *lists)
+{
+	if (lists)
+		*lists = shown_lists;
+	return shown_lists ? &shown : NULL;
+}
+
+int xbox_game_list_state(void)
+{
+	return shown_state;
+}
+
+const char *xbox_game_list_error(void)
+{
+	return game_list_error_string(shown_error);
 }

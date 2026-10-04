@@ -21,10 +21,10 @@ cache, physical memory, sound and effect pools, and the socket transport.
 | | |
 |---|---|
 | Original Xbox build (`ninja xbox`) | builds on macOS with OXDK, `build/xbox/default.xbe` |
-| Boots | the menus, menu music and profiles on a devkit and a modified retail console (October 2 build); this build is not yet booted |
+| Boots | the menus at a steady 30 fps on a devkit (October 4); XNet gets its address by DHCP and the game list comes over the internet |
 | Code | ChupathingyCE main of October 4, network version 11 |
 | System link with PC builds | not yet: see "Cross-play" |
-| Online Games (the game list) | the list fetched and logged (`debug.txt`, XBDM); no menu or joining yet: see "Online Games on the Xbox" |
+| Online Games (the game list) | Multiplayer, ONLINE GAMES: the list on a screen of its own, read only; no joining yet: see "Online Games on the Xbox" |
 | Xbox 360 | planned: see "Xbox 360" |
 
 ## Prerequisites
@@ -54,7 +54,10 @@ python3 tools/xbox_package.py --maps /path/to/maps --out ~/Downloads/Warthog-xbo
 
 `xbox_package.py` lays out `default.xbe` and `maps/` as one folder for the
 console's hard disk (hard links where it can, so the maps take no more
-space). The Linux, Windows and macOS targets in `configure.py` are
+space), with an empty `bypass_security.txt` (XNet's insecure mode, which
+the internet and the PCs need; `--secure` leaves it out) and, with
+`--game-list-server HOST`, a `game_list.txt` for a console whose DNS can't
+find the list's host. The Linux, Windows and macOS targets in `configure.py` are
 ChupathingyCE's; Warthog only builds `xbox`.
 
 ## Testing
@@ -118,15 +121,27 @@ none of that layer; its game talks to XNet directly. The pieces:
    XNet's Winsock (`XNetDnsLookup`, or `D:\game_list.txt`), on a thread of
    its own, and bounded parsers for the response and the list, fuzzed on
    the host (`port/xbox/tests/run.sh`). At the start the game fetches the
-   list and logs it; showing it in a menu comes with `HALO_GAME_BROWSER`'s
-   screens on the console. Announcing and reports, which carry the player
-   key, stay on the desktop builds' TLS.
-2. **Joining.** Internet games are reached through the PCs' p2p tunnel
+   list and logs it. Announcing and reports, which carry the player key,
+   stay on the desktop builds' TLS.
+2. **The screen (done, read only).** The Multiplayer menu's ONLINE GAMES
+   item is the desktop builds' (`interface/ui_widget.c`: a copy of System
+   Link's item, under `HALO_XBOX_CONSOLE` as well as `HALO_GAME_BROWSER`).
+   Their screen (`port/linux/game/browser_screen.c`) draws through their
+   platform layer (SDL, its overlay and fonts) and joins through the p2p
+   tunnel, so the console has its own, `port/xbox/game/xbox_browser_screen.c`:
+   drawn like the virtual keyboard, in the menus' own fonts and button
+   icons, over the menus. Each game's name, map (the menus' names), type,
+   players and region; the selected game's details and map picture below.
+   D-pad or stick to pick (left and right turn the page), X refreshes, B
+   goes back; A says "Joining from the Xbox is coming." The list is fetched
+   on its own thread and the main loop takes a whole copy (about 14 KB) for
+   the screen; the 64 KB response buffer lives only while a fetch runs.
+3. **Joining.** Internet games are reached through the PCs' p2p tunnel
    (STUN, signaling, KCP), which hands the game stand-in addresses. On the
    console that layer would sit under `transport_endpoint_winsock.c`, which
    is where the game's sockets are. This waits on "Cross-play", since
    until then the console cannot read a v11 host's settings.
-3. **Invites.** No clipboard: the list itself is the invite (choose a game
+4. **Invites.** No clipboard: the list itself is the invite (choose a game
    and join), plus Link Profile (the
    desktop builds' QR code, which links the game to a profile from another
    device).

@@ -111,6 +111,21 @@ int game_list_parse(const char *text, unsigned long size, struct game_list *list
 (at most host_size - 1 characters) and the port; 0 if it is neither */
 int game_list_parse_server(const char *text, unsigned long size, char *host, int host_size, unsigned short *port);
 
+/* ---------- the screen's words (xbox_game_list_text.c) */
+
+/* a map as the menus name it ("Blood Gulch" for bloodgulch, or for its
+scenario's path; else the file's name, "timberland (PC)" for a Halo PC map,
+"(MD)" for HaloMD's) in text, at most size - 1 characters: 1 if it is one of
+the console's own multiplayer maps */
+int game_list_map_name(const char *map, char *text, unsigned long size);
+/* a game's type: its gametype, else its engine's name, else "Unknown" */
+const char *game_list_type_name(const struct game_list_game *game);
+/* a game's state ("open", ...) in words */
+const char *game_list_state_name(const char *state);
+/* the games in the screen's order (most players first, then by name), as
+indices into list->games in order; their count */
+int game_list_order(const struct game_list *list, unsigned char *order);
+
 /* ---------- the fetch (xbox_game_list_fetch.c) */
 
 /* the host's IPv4 address in network order: a dotted address as it is,
@@ -124,11 +139,25 @@ int game_list_fetch(unsigned long address, unsigned short port, const char *host
 
 /* ---------- the console (xbox_game_list.c) */
 
+enum
+{
+	XBOX_GAME_LIST_NONE,
+	XBOX_GAME_LIST_FETCHING,
+	XBOX_GAME_LIST_READY,
+	XBOX_GAME_LIST_FAILED
+};
+
 /* the list fetched once the network is up, on a thread of its own; again
-on a later call, if that one is done */
+on a later call, once that one's list is taken (xbox_game_list_update) */
 void xbox_game_list_request(void);
-/* the main thread's part, each loop: the list logged to debug.txt once it
-has come */
+/* the main thread's part, each loop: a list that came taken (and logged
+to debug.txt) */
 void xbox_game_list_update(void);
+/* the main thread's: the last list taken (NULL before one came; kept while
+a refresh fails), and how many have come */
+const struct game_list *xbox_game_list_get(int *lists);
+/* the latest request's state (XBOX_GAME_LIST_...), and its error's words */
+int xbox_game_list_state(void);
+const char *xbox_game_list_error(void);
 
 #endif

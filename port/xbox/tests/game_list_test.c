@@ -358,6 +358,69 @@ static unsigned long next_random(void)
 	return (unsigned long)(random_state >> 11);
 }
 
+/* the screen's words (xbox_game_list_text.c) */
+static void test_text(void)
+{
+	struct game_list list;
+	struct game_list_game game;
+	unsigned char order[GAME_LIST_MAXIMUM_GAMES];
+	char text[64], small[4];
+	int index;
+
+	CHECK(game_list_map_name("bloodgulch", text, sizeof(text)) && !strcmp(text, "Blood Gulch"));
+	CHECK(game_list_map_name("levels\\test\\carousel\\carousel", text, sizeof(text)) && !strcmp(text, "Derelict"));
+	CHECK(game_list_map_name("levels/test/putput/putput", text, sizeof(text)) && !strcmp(text, "Chiron TL-34"));
+	CHECK(game_list_map_name("HangEmHigh", text, sizeof(text)) && !strcmp(text, "Hang 'Em High"));
+	CHECK(!game_list_map_name("timberland@ce", text, sizeof(text)) && !strcmp(text, "timberland (PC)"));
+	CHECK(!game_list_map_name("levels\\test\\gephyrophobia\\gephyrophobia@md", text, sizeof(text)) &&
+		!strcmp(text, "gephyrophobia (MD)"));
+	CHECK(!game_list_map_name("bloodgulch@xx", text, sizeof(text)) && !strcmp(text, "bloodgulch (?)"));
+	CHECK(!game_list_map_name("levels\\b30\\b30", text, sizeof(text)) && !strcmp(text, "b30"));
+	CHECK(!game_list_map_name("bloodgulc", text, sizeof(text)) && !strcmp(text, "bloodgulc"));
+	CHECK(!game_list_map_name("", text, sizeof(text)) && !strcmp(text, ""));
+	/* (cut to the room, always terminated) */
+	CHECK(game_list_map_name("bloodgulch", small, sizeof(small)) && !strcmp(small, "Blo"));
+	CHECK(!game_list_map_name("timberland@ce", small, sizeof(small)) && !strcmp(small, "tim"));
+
+	memset(&game, 0, sizeof(game));
+	game.engine = 2;
+	CHECK(!strcmp(game_list_type_name(&game), "Slayer"));
+	strcpy(game.gametype, "??? ?");
+	CHECK(!strcmp(game_list_type_name(&game), "Slayer"));
+	strcpy(game.gametype, "TS 50");
+	CHECK(!strcmp(game_list_type_name(&game), "TS 50"));
+	game.gametype[0] = 0;
+	game.engine = 0;
+	CHECK(!strcmp(game_list_type_name(&game), "Unknown"));
+	game.engine = 15;
+	CHECK(!strcmp(game_list_type_name(&game), "Unknown"));
+
+	CHECK(!strcmp(game_list_state_name("playing"), "In Progress"));
+	CHECK(!strcmp(game_list_state_name("open"), "Open"));
+	CHECK(!strcmp(game_list_state_name("later"), "Unknown"));
+
+	/* most players first, then by name, then as listed */
+	memset(&list, 0, sizeof(list));
+	list.count = 5;
+	strcpy(list.games[0].name, "bravo");
+	strcpy(list.games[1].name, "Alpha");
+	strcpy(list.games[2].name, "charlie");
+	list.games[2].players = 8;
+	strcpy(list.games[3].name, "alpha");
+	strcpy(list.games[4].name, "delta");
+	list.games[4].players = 3;
+	CHECK(game_list_order(&list, order) == 5);
+	CHECK(order[0] == 2 && order[1] == 4 && order[2] == 1 && order[3] == 3 && order[4] == 0);
+	list.count = GAME_LIST_MAXIMUM_GAMES;
+	for (index = 0; index < list.count; index++)
+		list.games[index].players = (short)(index % 7);
+	CHECK(game_list_order(&list, order) == GAME_LIST_MAXIMUM_GAMES);
+	for (index = 1; index < list.count; index++)
+		CHECK(list.games[order[index - 1]].players >= list.games[order[index]].players);
+	list.count = 1000;
+	CHECK(game_list_order(&list, order) == GAME_LIST_MAXIMUM_GAMES);
+}
+
 static void fuzz(long iterations)
 {
 	static const char *const pieces[] = {
@@ -456,6 +519,7 @@ int main(int argc, char **argv)
 	test_list();
 	test_response();
 	test_server_line();
+	test_text();
 	fuzz(iterations);
 	if (failures)
 	{

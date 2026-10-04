@@ -1301,7 +1301,7 @@ long scenario_tags_load(
 
 				hud_hires_tags_loaded();
 			}
-#ifdef HALO_GAME_BROWSER
+#if defined(HALO_GAME_BROWSER) || defined(HALO_XBOX_CONSOLE)
 			/* the Multiplayer menu's ONLINE GAMES (interface/ui_widget.c) */
 			{
 				extern void ui_widget_online_games_tags_loaded(void);

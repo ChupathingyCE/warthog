@@ -2,7 +2,8 @@
 # The console's game list code on the host (port/xbox/src/xbox_game_list_*.c),
 # under AddressSanitizer and UndefinedBehaviorSanitizer:
 #
-#   port/xbox/tests/run.sh               the parsers' tests and 200,000 mutations
+#   port/xbox/tests/run.sh               the parsers' and the screen's words' tests,
+#                                        and 200,000 mutations
 #   port/xbox/tests/run.sh --fuzz 300    and libFuzzer for 300 seconds (LLVM's clang)
 #   port/xbox/tests/run.sh --fetch       and the fetch of the real list, over the
 #                                        host's sockets (warthog.milenko.org)
@@ -20,7 +21,8 @@ SAN="-g -O1 -fsanitize=address,undefined -fno-sanitize-recover=undefined"
 SRC=port/xbox/src
 mkdir -p "$OUT"
 $CC -std=c89 -pedantic -Wall -Wextra -Werror $SAN -c $SRC/xbox_game_list_parse.c -o "$OUT/parse.o"
-$CC -Wall -Wextra $SAN port/xbox/tests/game_list_test.c "$OUT/parse.o" -o "$OUT/game_list_test"
+$CC -std=c89 -pedantic -Wall -Wextra -Werror $SAN -c $SRC/xbox_game_list_text.c -o "$OUT/text.o"
+$CC -Wall -Wextra $SAN port/xbox/tests/game_list_test.c "$OUT/parse.o" "$OUT/text.o" -o "$OUT/game_list_test"
 "$OUT/game_list_test" 200000
 while [ $# -gt 0 ]; do
 	case "$1" in
