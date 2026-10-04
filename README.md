@@ -102,6 +102,10 @@ with the tag cache and texture and sound caches kept contiguous in the low
 64 MB. Only the index space has to match the PCs; the pools behind it can
 stay the console's.
 
+The field-by-field analysis, the choice (the PCs' 128 player and machine
+slots on the console; object slots translated at the console's netcode)
+and what is built so far are in [docs/cross-play.md](docs/cross-play.md).
+
 The console's network stack also speaks the Xbox's secure system link
 unless XNet starts with `XNET_STARTUP_BYPASS_SECURITY`. The game has its
 own switch for that (`D:\bypass_security.txt`). The PCs speak plain UDP,
