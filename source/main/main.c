@@ -3275,14 +3275,22 @@ void main_loop(
 	while (TRUE)
 	{
 #ifdef HALO_XBOX_CONSOLE
-		/* port: the loop counted for the bring-up watchdog (port/xbox/src/xbox_port.c) */
+		/* port: the loop counted for the bring-up watchdog (port/xbox/src/xbox_port.c);
+		the game list fetched once at the start, on a thread of its own, and
+		logged when it comes (port/xbox/src/xbox_game_list.c) */
 		{
 			extern volatile unsigned long xbox_main_loops;
 			extern void xbox_watchdog_start(void);
+			extern void xbox_game_list_request(void);
+			extern void xbox_game_list_update(void);
 
 			if (!xbox_main_loops)
+			{
 				xbox_watchdog_start();
+				xbox_game_list_request();
+			}
 			xbox_main_loops++;
+			xbox_game_list_update();
 		}
 #endif
 		if (!game_in_editor())

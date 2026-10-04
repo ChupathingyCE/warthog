@@ -89,6 +89,33 @@ The files in `port/xbox/src` supply what the later SDK does not:
 Linux port's files. `port/linux/game/msvc_comdat.c` supplies the header
 inline functions that units call through a prototype.
 
+## The game list
+
+At the start, once the network is up, a thread of the game's own gets the
+game list from `http://warthog.milenko.org/v1/console/games` (plain HTTP:
+the console has no TLS) and the game logs it, to the debug monitor as
+`halo: game list:` lines and to `debug.txt` as `game list:` lines. Nothing
+waits on it. The menus do not show it yet.
+
+- `src/xbox_game_list_fetch.c`: HTTP/1.0 over XNet's Winsock. The host is
+  looked up with `XNetDnsLookup`; if it does not resolve, `D:\game_list.txt`
+  names another, one line: a host or an IPv4 address, `:port` optional
+  (the request still says `Host: warthog.milenko.org` for an address).
+  The response is read to the server's close or its Content-Length, at
+  most 64 KB, each wait bounded (15 seconds in all); three tries.
+- `src/xbox_game_list_parse.c`: the response (status line, headers, body)
+  and the list, with a bound on every read: lines of 1,024 bytes (headers)
+  and 255 (the list), 64 headers, 64 games, each field its size; anything
+  cut short is an error. The format is the site's list for consoles (format 1).
+- `src/xbox_game_list.c`: the thread and the logging. No address is logged.
+- `tests/run.sh`: the parsers on the host under AddressSanitizer and
+  UndefinedBehaviorSanitizer (known inputs, every truncation, a mutation
+  fuzzer), `--fuzz SECONDS` with libFuzzer, `--fetch` the real list over
+  the host's sockets.
+
+XNet speaks only to other consoles unless it starts insecure, so the list,
+like play with the PCs, needs an empty `D:\bypass_security.txt`.
+
 ## Status
 
 The October 2 build started on a modified retail console and on a
@@ -102,4 +129,5 @@ yet booted. Known:
   different game settings record and object indices than theirs (128
   machines, 8,192 objects). The top level README's "Cross-play" has the plan.
 - The menus are the Xbox's; the PC menus and Online Games are not built.
+  The game list is fetched and logged only ("The game list").
 - Campaign and multiplayer levels are not yet tested.

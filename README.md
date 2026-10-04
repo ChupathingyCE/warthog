@@ -24,7 +24,7 @@ cache, physical memory, sound and effect pools, and the socket transport.
 | Boots | the menus, menu music and profiles on a devkit and a modified retail console (October 2 build); this build is not yet booted |
 | Code | ChupathingyCE main of October 4, network version 11 |
 | System link with PC builds | not yet: see "Cross-play" |
-| Online Games (the game list) | not yet: see "Online Games on the Xbox" |
+| Online Games (the game list) | the list fetched and logged (`debug.txt`, XBDM); no menu or joining yet: see "Online Games on the Xbox" |
 | Xbox 360 | planned: see "Xbox 360" |
 
 ## Prerequisites
@@ -111,16 +111,16 @@ play (`p2p.c`, `p2p_signal.c`, `p2p_lobby.c`, KCP, STUN) are the desktop
 platform layer's, on POSIX sockets, threads and Mbed TLS. The console has
 none of that layer; its game talks to XNet directly. The pieces:
 
-1. **The list (first milestone).** Define `HALO_GAME_BROWSER` for the
-   console and answer `browser.h` from `port/xbox`: an HTTP/1.0 client on
-   XNet's Winsock with `XNetDnsLookup`, on a thread of its own, as
-   `posix_browser.c` does. halo.milenko.org answers only HTTPS, so either
-   Mbed TLS (already in `port/third_party`) runs on the console, with the
-   list server's root certificate built in and no clock check (the console's
-   clock may be unset), or the list server offers a read only plain HTTP
-   list for consoles. The list is public; announcing and reports, which
-   carry the player key, stay on TLS. A 32 KB response buffer and Mbed TLS's
-   working memory fit easily in 64 MB.
+1. **The list (first milestone, done).** The console has no TLS, so the
+   site serves it a list of its own over plain HTTP, read only:
+   `http://warthog.milenko.org/v1/console/games`, ASCII, a tab-separated
+   line a game. `port/xbox/src/xbox_game_list*.c`: an HTTP/1.0 client on
+   XNet's Winsock (`XNetDnsLookup`, or `D:\game_list.txt`), on a thread of
+   its own, and bounded parsers for the response and the list, fuzzed on
+   the host (`port/xbox/tests/run.sh`). At the start the game fetches the
+   list and logs it; showing it in a menu comes with `HALO_GAME_BROWSER`'s
+   screens on the console. Announcing and reports, which carry the player
+   key, stay on the desktop builds' TLS.
 2. **Joining.** Internet games are reached through the PCs' p2p tunnel
    (STUN, signaling, KCP), which hands the game stand-in addresses. On the
    console that layer would sit under `transport_endpoint_winsock.c`, which
