@@ -768,14 +768,75 @@ static boolean network_game_client_handle_message_server_game_advertise(
 			&packet_version,
 			_network_game_packet_class_advertisement))
 		{
-			if (transport_is_nonce(&advertisement, TRANSPORT_NONCE_LENGTH))
+#ifdef HALO_XBOX_CONSOLE
+			/* port: each host's advertisement, a few times then every 10
+			seconds (the console's internet play: port/xbox/src/
+			xbox_winsock_hooks.c logs the hops before this) */
 			{
+				extern void platform_log(char const *format, ...);
+				static unsigned long logged_time;
+				static long logged;
+				unsigned long now = system_milliseconds();
+
+				if (logged < 4 || now - logged_time >= 10000)
+				{
+					byte const *host = (byte const *)&advertisement.xnaddr + 2;
+
+					logged++;
+					logged_time = now;
+					platform_log("tunnel: advertisement from host %02x%02x%02x%02x%02x%02x: version %d, %d of %d players, "
+						"%d machines, flags 0x%x, network version %d%s",
+						host[0], host[1], host[2], host[3], host[4], host[5], (int)advertisement.version,
+						(int)advertisement.player_count, (int)advertisement.maximum_player_count,
+						(int)advertisement.machine_count, (int)advertisement.flags,
+						advertisement.reserved[0] | advertisement.reserved[1] << 8,
+						transport_is_nonce(&advertisement, TRANSPORT_NONCE_LENGTH) ? "" :
+							source_address && (source_address->address.long_words[0] & 0xFFC00000UL) == 0x64400000UL ?
+								" (another machine's search's answer, through the tunnel: taken)" :
+								" (no nonce: ignored)");
+				}
+			}
+#endif
+			if (transport_is_nonce(&advertisement, TRANSPORT_NONCE_LENGTH)
+#ifdef HALO_XBOX_CONSOLE
+				/* port: or the advertisement comes through internet play's
+				tunnel (a virtual address of 100.64.0.0/10: port/xbox/src/
+				xbox_winsock_hooks.c), from a host this machine reached with
+				its invite and nothing else could pass for: a host answers
+				one search in each quarter second for everyone, and the
+				console's searches cross the internet, so the answer it
+				gets may be to another machine's search. The invite's host
+				is still found by its identifier (network_game_client_join_
+				invite_host); a LAN advertisement still needs this machine's
+				nonce */
+				|| (source_address && source_address->address_length == IPV4_ADDRESS_LENGTH &&
+					(source_address->address.long_words[0] & 0xFFC00000UL) == 0x64400000UL)
+#endif
+				)
+			{
+#ifdef HALO_XBOX_CONSOLE
+				/* (its key is the tunnel's: not XNet's to register,
+				port/xbox/src/xbox_winsock_hooks.c) */
+				if (source_address && (source_address->address.long_words[0] & 0xFFC00000UL) == 0x64400000UL)
+				{
+					extern void xbox_winsock_tunnel_key(void const *key_identifier);
+
+					xbox_winsock_tunnel_key(&advertisement.key_id);
+				}
+#endif
 				network_game_client_new_advertised_game(client, &advertisement);
 			}
 		}
 		else
 		{
 			network_event("failed to decode a message_server_game_advertise packet");
+#ifdef HALO_XBOX_CONSOLE
+			{
+				extern void platform_log(char const *format, ...);
+
+				platform_log("tunnel: an advertisement did not decode (%d bytes)", (int)message_size);
+			}
+#endif
 		}
 	}
 	else
@@ -998,6 +1059,15 @@ static boolean network_game_client_receive_game_settings_piece(
 						network_event("cross-play: the host's game takes more players than this build's %d; held to them",
 							(int)MAXIMUM_NUMBER_OF_PLAYERS);
 					}
+				}
+				{
+					extern void platform_log(char const *format, ...);
+					static long folds;
+
+					if (folds++ < 3)
+						platform_log("cross-play: the host's settings record folded (%d machines, %d players)",
+							(int)network_game_client_settings_folded.machine_count,
+							(int)network_game_client_settings_folded.player_count);
 				}
 				result = network_game_client_game_settings_updated(client, &network_game_client_settings_folded);
 #else

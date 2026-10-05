@@ -46,7 +46,10 @@ renamed in the game's units, the SDK's declarations of them included */
 #define recvfrom halo_xbox_recvfrom
 #define sendto halo_xbox_sendto
 #define getpeername halo_xbox_getpeername
+#define select halo_xbox_select
 #define XNetXnAddrToInAddr halo_xbox_XNetXnAddrToInAddr
+#define XNetRegisterKey halo_xbox_XNetRegisterKey
+#define XNetUnregisterKey halo_xbox_XNetUnregisterKey
 
 /* the shared sources' limits, as the native builds' prefix includes them:
 the console's own (HALO_XBOX_CONSOLE) */

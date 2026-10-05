@@ -15,16 +15,34 @@ renames the calls the game makes to these, which call XNet's own.
   (p2p_incoming).
 - The tunnel is told the game's sockets' ports, which alone peers reach
   (p2p_socket_port), and when one closes.
+- A peer's datagram for the game goes from its stand-in (a UDP socket of
+  the tunnel's) to the game's socket. On the desktop that is a datagram
+  over 127.0.0.1; here the stand-in's send to a game socket's port on
+  127.0.0.1 is handed over in memory (xbox_winsock_deliver, from
+  xbox_p2p.c's posix_socket_sendto), and the game's select and recvfrom
+  see it as that datagram, from the stand-in's port on 127.0.0.1 (which
+  p2p_incoming turns into the peer's). XNet's loopback is then not needed
+  for the game's datagrams (it is for its connections, as the game's own
+  host-joins-itself connection always used).
+- Every hop is logged, a few times then once in a while ("tunnel:" lines):
+  the system link search going to the peers, the peers' datagrams handed to
+  the game, the game reading them.
 
 Without internet play (no D:\bypass_security.txt, or the tunnel off), every
 p2p_ call answers "not a peer's", and these are XNet's calls as they were.
 Nothing here logs an address.
 */
 
+/* (the game's fd_set is the SDK's, FD_SETSIZE 64, as here: the console's
+prefix does not set it) */
 #include <xtl.h>
+#include <stdio.h>
 #include <string.h>
 
+#include "../p2p/pthread.h"
 #include "../../linux/src/p2p.h"
+
+void platform_log(const char *format, ...) __attribute__((format(printf, 1, 2)));
 
 /* (the socket types the game made, by socket: XNet's SO_TYPE is not relied on) */
 enum
@@ -36,7 +54,48 @@ static struct
 {
 	SOCKET socket;
 	int type;
+	/* its local port (network byte order), once it has one */
+	unsigned short port;
 } tracked[MAXIMUM_TRACKED_SOCKETS];
+
+/* ---------- the log: each kind of hop logged its first few times, then
+every 10 seconds with how many since */
+
+enum
+{
+	_hop_search,
+	_hop_search_unbound,
+	_hop_delivered,
+	_hop_dropped,
+	_hop_read,
+	_hop_select,
+	_hop_not_game,
+	NUMBER_OF_HOPS
+};
+
+static struct
+{
+	long count;
+	long logged;
+	unsigned long time;
+} hops[NUMBER_OF_HOPS];
+
+/* whether to log this hop now; *since: how many there were since the last */
+static int hop_log(int hop, long *since)
+{
+	unsigned long now = GetTickCount();
+
+	hops[hop].count++;
+	if (hops[hop].logged < 3 || now - hops[hop].time >= 10000)
+	{
+		*since = hops[hop].count;
+		hops[hop].count = 0;
+		hops[hop].logged++;
+		hops[hop].time = now;
+		return 1;
+	}
+	return 0;
+}
 
 static int is_virtual(unsigned long network_address)
 {
@@ -99,9 +158,155 @@ static unsigned short socket_port(SOCKET socket)
 static void note_socket_port(SOCKET socket, int listening)
 {
 	unsigned short port = socket_port(socket);
+	int index;
 
-	if (port)
-		p2p_socket_port((int)socket, socket_type(socket) == SOCK_STREAM, listening, port);
+	if (!port)
+		return;
+	for (index = 0; index < MAXIMUM_TRACKED_SOCKETS; index++)
+	{
+		if (tracked[index].socket == socket)
+			tracked[index].port = port;
+	}
+	p2p_socket_port((int)socket, socket_type(socket) == SOCK_STREAM, listening, port);
+}
+
+/* ---------- datagrams handed to the game in memory */
+
+enum
+{
+	INBOX_DATAGRAMS = 32,
+	INBOX_DATAGRAM_SIZE = 1400,
+};
+
+static pthread_mutex_t inbox_lock = PTHREAD_MUTEX_INITIALIZER;
+static struct
+{
+	/* network byte order: the game socket's port, and the stand-in's */
+	unsigned short port;
+	unsigned short from_port;
+	short size;
+	char data[INBOX_DATAGRAM_SIZE];
+} inbox[INBOX_DATAGRAMS];
+static int inbox_first, inbox_count;
+
+/* a game datagram socket's, of this local port (network byte order) */
+static int game_datagram_port(unsigned short port)
+{
+	int index;
+
+	for (index = 0; index < MAXIMUM_TRACKED_SOCKETS; index++)
+	{
+		if (tracked[index].socket && tracked[index].socket != INVALID_SOCKET && tracked[index].port == port &&
+			tracked[index].type == SOCK_DGRAM)
+		{
+			return 1;
+		}
+	}
+	return 0;
+}
+
+/* the tunnel's stand-in (from_port) sends the game's socket of port a
+datagram on 127.0.0.1 (xbox_p2p.c): 1 if it is a game socket's port and
+the datagram is queued for it (or dropped, the queue full, as a datagram
+may be); 0 if it is not one (the send goes to XNet) */
+int xbox_winsock_deliver(unsigned short port, unsigned short from_port, const void *data, int size)
+{
+	long since;
+
+	if (!game_datagram_port(port))
+	{
+		/* (the game's datagram sockets' ports, for the log) */
+		char ports[96];
+		int index, used = 0;
+
+		ports[0] = 0;
+		for (index = 0; index < MAXIMUM_TRACKED_SOCKETS && used < (int)sizeof(ports) - 8; index++)
+		{
+			if (tracked[index].socket && tracked[index].socket != INVALID_SOCKET && tracked[index].type == SOCK_DGRAM)
+				used += _snprintf(ports + used, sizeof(ports) - used, " %u", (unsigned)ntohs(tracked[index].port));
+		}
+		ports[sizeof(ports) - 1] = 0;
+		if (hop_log(_hop_not_game, &since))
+			platform_log("tunnel: %ld stand-in datagram(s) to 127.0.0.1:%u, not a game datagram socket's port (they:%s); "
+				"sent through XNet", since, (unsigned)ntohs(port), ports);
+		return 0;
+	}
+	pthread_mutex_lock(&inbox_lock);
+	if (inbox_count < INBOX_DATAGRAMS && size >= 0 && size <= INBOX_DATAGRAM_SIZE)
+	{
+		int slot = (inbox_first + inbox_count++) % INBOX_DATAGRAMS;
+
+		inbox[slot].port = port;
+		inbox[slot].from_port = from_port;
+		inbox[slot].size = (short)size;
+		memcpy(inbox[slot].data, data, (size_t)size);
+		pthread_mutex_unlock(&inbox_lock);
+		if (hop_log(_hop_delivered, &since))
+			platform_log("tunnel: %ld peer datagram(s) handed to the game's port %u (this one %d bytes)", since,
+				(unsigned)ntohs(port), size);
+		return 1;
+	}
+	pthread_mutex_unlock(&inbox_lock);
+	if (hop_log(_hop_dropped, &since))
+		platform_log("tunnel: %ld peer datagram(s) for the game's port %u dropped (the game is not reading them)",
+			since, (unsigned)ntohs(port));
+	return 1;
+}
+
+/* the oldest datagram queued for the socket's port, taken: its size, or -1 */
+static int inbox_take(SOCKET socket, char *buffer, int length, unsigned short *from_port)
+{
+	unsigned short port = 0;
+	int index, result = -1;
+
+	for (index = 0; index < MAXIMUM_TRACKED_SOCKETS; index++)
+	{
+		if (tracked[index].socket == socket)
+			port = tracked[index].port;
+	}
+	if (!port || !inbox_count)
+		return -1;
+	pthread_mutex_lock(&inbox_lock);
+	for (index = 0; index < inbox_count; index++)
+	{
+		int slot = (inbox_first + index) % INBOX_DATAGRAMS;
+		int later;
+
+		if (inbox[slot].port != port)
+			continue;
+		result = inbox[slot].size < length ? inbox[slot].size : length;
+		memcpy(buffer, inbox[slot].data, (size_t)result);
+		*from_port = inbox[slot].from_port;
+		/* (the rest move up one) */
+		for (later = index; later + 1 < inbox_count; later++)
+			inbox[(inbox_first + later) % INBOX_DATAGRAMS] = inbox[(inbox_first + later + 1) % INBOX_DATAGRAMS];
+		inbox_count--;
+		break;
+	}
+	pthread_mutex_unlock(&inbox_lock);
+	return result;
+}
+
+/* whether a datagram is queued for the socket */
+static int inbox_has(SOCKET socket)
+{
+	unsigned short port = 0;
+	int index, result = 0;
+
+	if (!inbox_count)
+		return 0;
+	for (index = 0; index < MAXIMUM_TRACKED_SOCKETS; index++)
+	{
+		if (tracked[index].socket == socket)
+			port = tracked[index].port;
+	}
+	if (!port)
+		return 0;
+	pthread_mutex_lock(&inbox_lock);
+	for (index = 0; index < inbox_count && !result; index++)
+		result = inbox[(inbox_first + index) % INBOX_DATAGRAMS].port == port;
+	pthread_mutex_unlock(&inbox_lock);
+	return result;
 }
 
 /* a destination of a peer's goes to its stand-in (1); -1 (WSAEHOSTUNREACH)
@@ -193,6 +398,14 @@ int WSAAPI halo_xbox_connect(SOCKET socket, const struct sockaddr *address, int 
 	result = connect(socket, address, address_length);
 	error = result != 0 ? WSAGetLastError() : 0;
 	note_socket_port(socket, 0);
+	if (address == (const struct sockaddr *)&target)
+	{
+		static int logged;
+
+		if (logged++ < 6)
+			platform_log("tunnel: the game connects to the host's stand-in (port %u): %s (%d)",
+				(unsigned)ntohs(target.sin_port), result == 0 ? "connected" : "under way or failed", error);
+	}
 	if (result != 0)
 		WSASetLastError(error);
 	return result;
@@ -222,7 +435,31 @@ SOCKET WSAAPI halo_xbox_accept(SOCKET socket, struct sockaddr *address, int *add
 int WSAAPI halo_xbox_recvfrom(SOCKET socket, char *buffer, int length, int flags, struct sockaddr *address,
 	int *address_length)
 {
-	int result = recvfrom(socket, buffer, length, flags, address, address_length);
+	unsigned short from_port;
+	int result = inbox_take(socket, buffer, length, &from_port);
+
+	/* (a peer's datagram, from its stand-in on 127.0.0.1) */
+	if (result >= 0)
+	{
+		long since;
+
+		if (address && address_length && *address_length >= (int)sizeof(struct sockaddr_in))
+		{
+			struct sockaddr_in *in = (struct sockaddr_in *)address;
+
+			memset(in, 0, sizeof(*in));
+			in->sin_family = AF_INET;
+			in->sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+			in->sin_port = from_port;
+			*address_length = sizeof(*in);
+			incoming(0, address, address_length);
+			if (hop_log(_hop_read, &since))
+				platform_log("tunnel: the game read %ld peer datagram(s) (this one %d bytes, %s a peer's)", since,
+					result, is_virtual(in->sin_addr.s_addr) ? "seen as" : "NOT seen as");
+		}
+		return result;
+	}
+	result = recvfrom(socket, buffer, length, flags, address, address_length);
 
 	if (result != SOCKET_ERROR)
 		incoming(0, address, address_length);
@@ -264,16 +501,41 @@ int WSAAPI halo_xbox_sendto(SOCKET socket, const char *buffer, int length, int f
 			if (source_port)
 				note_socket_port(socket, 0);
 		}
+		/* (the first search's bytes, to compare with the desktop builds') */
+		{
+			static int dumped;
+
+			if (!dumped && length > 0)
+			{
+				char hex[3 * 48 + 1];
+				int index;
+
+				dumped = 1;
+				for (index = 0; index < length && index < 48; index++)
+					_snprintf(hex + 3 * index, 4, " %02x", (unsigned char)buffer[index]);
+				hex[3 * (length < 48 ? length : 48)] = 0;
+				platform_log("tunnel: the game's first broadcast, %d bytes:%s", length, hex);
+			}
+		}
 		if (source_port)
 		{
-			if (p2p_broadcast_datagram(source_port, ((const struct sockaddr_in *)address)->sin_port, buffer, length) > 0 &&
-				result == SOCKET_ERROR)
-			{
+			int peers = p2p_broadcast_datagram(source_port, ((const struct sockaddr_in *)address)->sin_port, buffer,
+				length);
+			long since;
+
+			if (peers > 0 && result == SOCKET_ERROR)
 				result = length;
-			}
+			if (hop_log(_hop_search, &since))
+				platform_log("tunnel: %ld broadcast(s) from the game's port %u to port %u: %d peer(s) through the tunnel",
+					since, (unsigned)ntohs(source_port), (unsigned)ntohs(((const struct sockaddr_in *)address)->sin_port),
+					peers);
 		}
 		else
 		{
+			long since;
+
+			if (hop_log(_hop_search_unbound, &since))
+				platform_log("tunnel: %ld broadcast(s) from an unbound socket: through the stand-ins", since);
 			memcpy(&target, address, sizeof(target));
 			count = p2p_broadcast_targets(((const struct sockaddr_in *)address)->sin_port, targets, ports, 16);
 			for (index = 0; index < count; index++)
@@ -340,4 +602,121 @@ int WSAAPI halo_xbox_WSAStartup(WORD version_requested, LPWSADATA data)
 	if (result == 0)
 		p2p_initialize(htonl(INADDR_LOOPBACK));
 	return result;
+}
+
+/* the game's select: a socket with a peer's datagram queued for it
+(xbox_winsock_deliver) is readable, whatever XNet says */
+int WSAAPI halo_xbox_select(int count, fd_set *read_set, fd_set *write_set, fd_set *error_set,
+	const struct timeval *timeout)
+{
+	static fd_set queued;
+	struct timeval now = { 0, 0 };
+	unsigned int index;
+	int result;
+
+	FD_ZERO(&queued);
+	for (index = 0; read_set && index < read_set->fd_count; index++)
+	{
+		if (inbox_has(read_set->fd_array[index]))
+			FD_SET(read_set->fd_array[index], &queued);
+	}
+	if (!queued.fd_count)
+		return select(count, read_set, write_set, error_set, timeout);
+	{
+		long since;
+
+		if (hop_log(_hop_select, &since))
+			platform_log("tunnel: the game's select found %ld time(s) a peer datagram waiting", since);
+	}
+	/* (the rest as they are now, not waited for) */
+	result = select(count, read_set, write_set, error_set, &now);
+	if (result < 0)
+	{
+		if (read_set)
+			FD_ZERO(read_set);
+		if (write_set)
+			FD_ZERO(write_set);
+		if (error_set)
+			FD_ZERO(error_set);
+		result = 0;
+	}
+	for (index = 0; index < queued.fd_count && read_set->fd_count < FD_SETSIZE; index++)
+	{
+		if (!FD_ISSET(queued.fd_array[index], read_set))
+		{
+			FD_SET(queued.fd_array[index], read_set);
+			result++;
+		}
+	}
+	return result;
+}
+
+/* (the game's units' fd_set: the SDK's default, as this unit's) */
+typedef char xbox_winsock_fd_setsize_assert[FD_SETSIZE == 64 ? 1 : -1];
+
+/* ---------- the keys of tunnel hosts
+
+A system link host's advertisement carries its XNet key (XNKID, XNKEY),
+which a client registers before it reaches the host (transport_client_start,
+XNetRegisterKey). A PC host's are random bytes (the desktop's xnet.c has no
+keys), which XNet refuses as a key id; the tunnel's host is reached through
+its virtual address, without XNet's key exchange. So the key ids of games
+advertised through the tunnel are remembered (network_client_message_
+handler.c), and neither registered with XNet nor unregistered; a LAN
+host's key goes to XNet as it always did. */
+
+enum
+{
+	MAXIMUM_TUNNEL_KEYS = 8,
+};
+
+static XNKID tunnel_keys[MAXIMUM_TUNNEL_KEYS];
+static int tunnel_key_next;
+
+static int is_tunnel_key(const XNKID *key_identifier)
+{
+	int index;
+
+	for (index = 0; key_identifier && index < MAXIMUM_TUNNEL_KEYS; index++)
+	{
+		if (!memcmp(&tunnel_keys[index], key_identifier, sizeof(*key_identifier)))
+			return 1;
+	}
+	return 0;
+}
+
+/* a game advertised through the tunnel has this key id */
+void xbox_winsock_tunnel_key(const void *key_identifier)
+{
+	static const XNKID none;
+
+	if (!key_identifier || !memcmp(key_identifier, &none, sizeof(none)) || is_tunnel_key((const XNKID *)key_identifier))
+		return;
+	memcpy(&tunnel_keys[tunnel_key_next++ % MAXIMUM_TUNNEL_KEYS], key_identifier, sizeof(XNKID));
+}
+
+INT WSAAPI halo_xbox_XNetRegisterKey(const XNKID *key_identifier, const XNKEY *key)
+{
+	INT result;
+
+	if (is_tunnel_key(key_identifier))
+	{
+		static int told;
+
+		if (!told)
+			platform_log("tunnel: the host's key is the tunnel's, not registered with XNet");
+		told = 1;
+		return 0;
+	}
+	result = XNetRegisterKey(key_identifier, key);
+	if (result != 0)
+		platform_log("tunnel: XNetRegisterKey refused a LAN host's key (%d)", (int)result);
+	return result;
+}
+
+INT WSAAPI halo_xbox_XNetUnregisterKey(const XNKID *key_identifier)
+{
+	if (is_tunnel_key(key_identifier))
+		return 0;
+	return XNetUnregisterKey(key_identifier);
 }

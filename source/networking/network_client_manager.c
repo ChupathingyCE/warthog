@@ -3248,6 +3248,24 @@ long network_game_client_join_invite_host(
 	byte identifier[6];
 	long game_index;
 
+#ifdef HALO_XBOX_CONSOLE
+	{
+		extern void platform_log(char const *format, ...);
+		static unsigned long state_logged_time;
+		unsigned long now = system_milliseconds();
+
+		if (!client || client->state != _network_game_client_state_searching || client->join_in_progress ||
+			!client->connection || network_connection_connected(client->connection))
+		{
+			if (!state_logged_time || now - state_logged_time >= 5000)
+			{
+				state_logged_time = now ? now : 1;
+				platform_log("tunnel: the game's client is not searching (client %d, state %d, joining %d)",
+					client != NULL, client ? (int)client->state : -1, client ? (int)client->join_in_progress : -1);
+			}
+		}
+	}
+#endif
 	if (!client || client->state != _network_game_client_state_searching || client->join_in_progress ||
 		!client->connection || network_connection_connected(client->connection))
 	{
@@ -3255,6 +3273,35 @@ long network_game_client_join_invite_host(
 	}
 	if (!network_game_client_invite_identifier(invite, identifier))
 		return -1;
+#ifdef HALO_XBOX_CONSOLE
+	/* port: what is looked for, and what has been advertised, every 5
+	seconds while the console waits (its internet play's last hop) */
+	{
+		extern void platform_log(char const *format, ...);
+		static unsigned long logged_time;
+		unsigned long now = system_milliseconds();
+
+		if (!logged_time || now - logged_time >= 5000)
+		{
+			long valid = 0;
+
+			logged_time = now ? now : 1;
+			for (game_index = 0; game_index < MAXIMUM_NETWORK_ADVERTISED_GAMES; game_index++)
+			{
+				struct network_advertised_game const *game = &client->available_games[game_index];
+
+				if (!network_game_client_advertised_game_is_valid(game))
+					continue;
+				valid++;
+				platform_log("tunnel: advertised game %ld: host %02x%02x%02x%02x%02x%02x, open %d",
+					game_index, game->xnaddr.data[2], game->xnaddr.data[3], game->xnaddr.data[4], game->xnaddr.data[5],
+					game->xnaddr.data[6], game->xnaddr.data[7], (int)game->open);
+			}
+			platform_log("tunnel: looking for host %02x%02x%02x%02x%02x%02x among %ld advertised game(s)",
+				identifier[0], identifier[1], identifier[2], identifier[3], identifier[4], identifier[5], valid);
+		}
+	}
+#endif
 	for (game_index = 0; game_index < MAXIMUM_NETWORK_ADVERTISED_GAMES; game_index++)
 	{
 		struct network_advertised_game *game = &client->available_games[game_index];

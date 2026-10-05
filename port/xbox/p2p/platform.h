@@ -15,6 +15,8 @@ of the layer they call (port/xbox/src/xbox_p2p.c).
 /* the console joins, never hosts: room in p2p.c for its host's stand-ins
 and streams, not a 128-machine game's */
 #define P2P_JOINER_ONLY 1
+/* and logs what becomes of each datagram a peer sends the game */
+#define P2P_TRACE_DATAGRAMS 1
 
 /* (the tunnel's select lists: its sockets, the brokers' and the stand-ins') */
 #define FD_SETSIZE 256

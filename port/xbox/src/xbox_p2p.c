@@ -50,8 +50,6 @@ int xbox_p2p_online(void)
 	return known;
 }
 
-void platform_log(const char *format, ...);
-
 const char *platform_data_root(void)
 {
 	return "d:";
@@ -181,6 +179,31 @@ int posix_socket_last_error(void)
 	return WSAGetLastError();
 }
 
+void platform_log(const char *format, ...);
+
+/* a socket call of the tunnel's that failed (not one that would block): a
+few logged, then one in ten seconds */
+static int socket_failed(const char *call)
+{
+	static unsigned long logged_time;
+	static long logged, since;
+	int error = WSAGetLastError();
+	unsigned long now = GetTickCount();
+
+	if (error == WSAEWOULDBLOCK || error == WSAEINPROGRESS)
+		return -1;
+	since++;
+	if (logged < 8 || now - logged_time >= 10000)
+	{
+		platform_log("tunnel: %s failed (WSA error %d; %ld failure(s) since the last told)", call, error, since);
+		logged++;
+		logged_time = now;
+		since = 0;
+	}
+	WSASetLastError(error);
+	return -1;
+}
+
 static int new_descriptor(SOCKET socket)
 {
 	int descriptor;
@@ -212,7 +235,7 @@ int posix_socket(int family, int type, int protocol)
 	SOCKET socket_handle = socket(family, type, protocol);
 
 	if (socket_handle == INVALID_SOCKET)
-		return -1;
+		return socket_failed("socket");
 	return new_descriptor(socket_handle);
 }
 
@@ -252,17 +275,18 @@ int posix_socket_bind(int descriptor, const void *address, int address_length)
 			return 0;
 		}
 	}
-	return -1;
+	return socket_failed("bind");
 }
 
 int posix_socket_connect(int descriptor, const void *address, int address_length)
 {
-	return connect(to_socket(descriptor), (const struct sockaddr *)address, address_length) == 0 ? 0 : -1;
+	return connect(to_socket(descriptor), (const struct sockaddr *)address, address_length) == 0 ? 0 :
+		socket_failed("connect");
 }
 
 int posix_socket_listen(int descriptor, int backlog)
 {
-	return listen(to_socket(descriptor), backlog) == 0 ? 0 : -1;
+	return listen(to_socket(descriptor), backlog) == 0 ? 0 : socket_failed("listen");
 }
 
 int posix_socket_accept(int descriptor, void *address, int *address_length)
@@ -270,8 +294,16 @@ int posix_socket_accept(int descriptor, void *address, int *address_length)
 	SOCKET accepted = accept(to_socket(descriptor), (struct sockaddr *)address, address_length);
 
 	if (accepted == INVALID_SOCKET)
-		return -1;
+		return socket_failed("accept");
 	loopback_source(address, address_length);
+	{
+		static int logged;
+
+		if (logged++ < 6)
+			platform_log("tunnel: a stand-in took a connection from %s",
+				address && ((struct sockaddr_in *)address)->sin_addr.s_addr == htonl(INADDR_LOOPBACK) ?
+					"this console (the game's)" : "elsewhere (not the game's: refused)");
+	}
 	return new_descriptor(accepted);
 }
 
@@ -282,13 +314,33 @@ int posix_socket_send(int descriptor, const void *buffer, int length, int flags)
 	return result == SOCKET_ERROR ? -1 : result;
 }
 
+/* xbox_winsock_hooks.c's: a stand-in's datagram for the game, in memory */
+int xbox_winsock_deliver(unsigned short port, unsigned short from_port, const void *data, int size);
+
 int posix_socket_sendto(int descriptor, const void *buffer, int length, int flags, const void *address,
 	int address_length)
 {
-	int result = sendto(to_socket(descriptor), (const char *)buffer, length, flags, (const struct sockaddr *)address,
+	const struct sockaddr_in *to = (const struct sockaddr_in *)address;
+	int result;
+
+	/* a stand-in's datagram to the game's socket on 127.0.0.1: handed over
+	without XNet's loopback (xbox_winsock_hooks.c) */
+	if (to && address_length >= (int)sizeof(*to) && to->sin_family == AF_INET &&
+		to->sin_addr.s_addr == htonl(INADDR_LOOPBACK))
+	{
+		struct sockaddr_in from;
+		int from_length = sizeof(from);
+
+		if (getsockname(to_socket(descriptor), (struct sockaddr *)&from, &from_length) == 0 &&
+			xbox_winsock_deliver(to->sin_port, from.sin_port, buffer, length))
+		{
+			return length;
+		}
+	}
+	result = sendto(to_socket(descriptor), (const char *)buffer, length, flags, (const struct sockaddr *)address,
 		address_length);
 
-	return result == SOCKET_ERROR ? -1 : result;
+	return result == SOCKET_ERROR ? socket_failed("sendto") : result;
 }
 
 int posix_socket_recv(int descriptor, void *buffer, int length, int flags)
@@ -318,7 +370,7 @@ int posix_socket_set_nonblocking(int descriptor, int nonblocking)
 {
 	u_long value = nonblocking ? 1 : 0;
 
-	return ioctlsocket(to_socket(descriptor), FIONBIO, &value) == 0 ? 0 : -1;
+	return ioctlsocket(to_socket(descriptor), FIONBIO, &value) == 0 ? 0 : socket_failed("ioctlsocket");
 }
 
 int posix_socket_bytes_available(int descriptor, posix_ulong *count)
@@ -350,7 +402,8 @@ int posix_socket_getsockopt(int descriptor, int level, int name, void *value, in
 
 int posix_socket_getsockname(int descriptor, void *address, int *address_length)
 {
-	return getsockname(to_socket(descriptor), (struct sockaddr *)address, address_length) == 0 ? 0 : -1;
+	return getsockname(to_socket(descriptor), (struct sockaddr *)address, address_length) == 0 ? 0 :
+		socket_failed("getsockname");
 }
 
 int posix_socket_getpeername(int descriptor, void *address, int *address_length)
@@ -610,3 +663,63 @@ void p2p_lobby_slot_topic(const unsigned char *key_hash, char *topic, int size)
 	if (length < size)
 		topic[length] = 0;
 }
+
+/* ---------- what becomes of the peers' datagrams for the game (p2p.c's
+datagram_received, P2P_TRACE_DATAGRAMS): a few logged, then one in ten
+seconds, each outcome on its own */
+
+void p2p_trace_datagram(unsigned short source_port, unsigned short port, int size, int result)
+{
+	static const char *const outcomes[] =
+	{
+		"no stand-in for it",
+		"not a port of the game's",
+		"not sent to the game",
+		"sent to the game",
+	};
+	static struct
+	{
+		long count;
+		long logged;
+		unsigned long time;
+	} traced[4];
+	int outcome = result + 2;
+	unsigned long now = GetTickCount();
+
+	if (outcome < 0 || outcome > 3)
+		return;
+	traced[outcome].count++;
+	if (traced[outcome].logged < 4 || now - traced[outcome].time >= 10000)
+	{
+		platform_log("tunnel: %ld datagram(s) from the peer's port %u for the game's port %u (%d bytes): %s",
+			traced[outcome].count, (unsigned)ntohs(source_port), (unsigned)ntohs(port), size, outcomes[outcome]);
+		traced[outcome].count = 0;
+		traced[outcome].logged++;
+		traced[outcome].time = now;
+	}
+}
+
+/* each packet the tunnel opened from a peer: counted by type, logged every
+10 seconds (types: 1 ping, 2 pong, 3 datagram, 4 stream, others by number) */
+void p2p_trace_packet(int type, int size)
+{
+	static long counts[8];
+	static long bytes;
+	static unsigned long time;
+	unsigned long now = GetTickCount();
+
+	counts[type >= 0 && type < 8 ? type : 7]++;
+	bytes += size;
+	if (!time)
+		time = now;
+	if (now - time >= 10000)
+	{
+		platform_log("tunnel: in the last %lu s, from peers: types 0-7 %ld %ld %ld %ld %ld %ld %ld %ld (%ld bytes)",
+			(now - time) / 1000, counts[0], counts[1], counts[2], counts[3], counts[4], counts[5], counts[6], counts[7],
+			bytes);
+		memset(counts, 0, sizeof(counts));
+		bytes = 0;
+		time = now;
+	}
+}
+

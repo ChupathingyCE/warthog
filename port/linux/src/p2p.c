@@ -1858,6 +1858,15 @@ static void proxy_readable(struct proxy *proxy)
 }
 
 /* a datagram from a peer to the game */
+#ifdef P2P_TRACE_DATAGRAMS
+/* (the platform's: each datagram a peer sent the game, and what became of
+it: 1 sent to the game's port, 0 not sent, -1 not a game port, -2 no
+stand-in; the console logs them, port/xbox/src/xbox_p2p.c) */
+void p2p_trace_datagram(unsigned short source_port, unsigned short port, int size, int result);
+/* (and each packet the tunnel opened from a peer, by its type) */
+void p2p_trace_packet(int type, int size);
+#endif
+
 static void datagram_received(struct peer *peer, const unsigned char *inner, int size)
 {
 	struct proxy *proxy;
@@ -1865,12 +1874,27 @@ static void datagram_received(struct peer *peer, const unsigned char *inner, int
 
 	/* only to the game */
 	if (size < 5 || !game_port_open(0, get_short(inner + 3)))
+	{
+#ifdef P2P_TRACE_DATAGRAMS
+		p2p_trace_datagram(size >= 5 ? get_short(inner + 1) : 0, size >= 5 ? get_short(inner + 3) : 0, size, -1);
+#endif
 		return;
+	}
 	proxy = find_proxy((int)(peer - p2p.peers), get_short(inner + 1), 1);
 	if (!proxy)
+	{
+#ifdef P2P_TRACE_DATAGRAMS
+		p2p_trace_datagram(get_short(inner + 1), get_short(inner + 3), size, -2);
+#endif
 		return;
+	}
 	make_address(&to, p2p.local_address, get_short(inner + 3));
+#ifdef P2P_TRACE_DATAGRAMS
+	p2p_trace_datagram(get_short(inner + 1), get_short(inner + 3), size,
+		posix_socket_sendto(proxy->socket, inner + 5, size - 5, 0, &to, sizeof(to)) >= 0);
+#else
 	posix_socket_sendto(proxy->socket, inner + 5, size - 5, 0, &to, sizeof(to));
+#endif
 }
 
 /* ---------- streams */
@@ -2205,6 +2229,9 @@ static void tunnel_received(const unsigned char *packet, int size, const struct 
 	newest = counter > peer->receive_highest;
 	packet_received(peer, counter);
 	peer_heard(peer, from->sin_addr.s_addr, from->sin_port, newest);
+#ifdef P2P_TRACE_DATAGRAMS
+	p2p_trace_packet(inner[0], inner_size);
+#endif
 	switch (inner[0])
 	{
 	case _packet_ping:
