@@ -24,7 +24,7 @@ cache, physical memory, sound and effect pools, and the socket transport.
 | Boots | the menus at a steady 30 fps on a devkit (October 4); XNet gets its address by DHCP and the game list comes over the internet |
 | Code | ChupathingyCE main of October 4, network version 11 |
 | System link with PC builds | the console joins a PC host's game (a dedicated server too) and plays it, tested on the host with the console's limits; not yet on the console: see "Cross-play" |
-| Online Games (the game list) | Multiplayer, ONLINE GAMES: the list on a screen of its own, read only; no joining yet: see "Online Games on the Xbox" |
+| Online Games (the game list) | Multiplayer, ONLINE GAMES: the list on a screen of its own; A joins a game by its invite (internet play's tunnel), not yet tested on a console |
 | Xbox 360 | planned: see "Xbox 360" |
 
 ## Prerequisites
@@ -112,8 +112,11 @@ state into its own 16 slots as they arrive, and leaves a game that grows
 past them as it leaves a full one. A copy of a desktop build with the
 console's limits (`configure.py --console-limits`) plays whole games
 against a PC dedicated server on one computer that way. On the console it
-finds a PC host's game in System Link, or joins the host in
-`D:\join.txt` directly (one line, the host's IPv4 address).
+joins an internet game as the PCs do, by its invite, through their own
+tunnel code (`port/linux/src/p2p.c`, built for the console): ONLINE GAMES'
+A on a listed game, such as a [D] server, or Y for the invite in
+`D:\join.txt`. On a LAN it finds a PC host's game in System Link, or
+joins the host whose IPv4 address is in `D:\join.txt`.
 
 The console's network stack also speaks the Xbox's secure system link
 unless XNet starts with `XNET_STARTUP_BYPASS_SECURITY`. The game has its
@@ -146,14 +149,19 @@ none of that layer; its game talks to XNet directly. The pieces:
    icons, over the menus. Each game's name, map (the menus' names), type,
    players and region; the selected game's details and map picture below.
    D-pad or stick to pick (left and right turn the page), X refreshes, B
-   goes back; A says "Joining from the Xbox is coming." The list is fetched
-   on its own thread and the main loop takes a whole copy (about 14 KB) for
-   the screen; the 64 KB response buffer lives only while a fetch runs.
-3. **Joining.** Internet games are reached through the PCs' p2p tunnel
-   (STUN, signaling, KCP), which hands the game stand-in addresses. On the
-   console that layer would sit under `transport_endpoint_winsock.c`, which
-   is where the game's sockets are. This waits on "Cross-play", since
-   until then the console cannot read a v11 host's settings.
+   goes back; A joins (below), Y joins the invite in `D:\join.txt`. The
+   list is fetched on its own thread and the main loop takes a whole copy
+   (about 14 KB) for the screen; the 64 KB response buffer lives only
+   while a fetch runs.
+3. **Joining (built, not yet tested on a console).** The PCs' tunnel
+   itself, `p2p.c`, `p2p_signal.c` and `p2p_crypto.c` with KCP and
+   Monocypher, built for the console as they are (joining only: no UPnP,
+   Discord or public listing), with `port/xbox/src/xbox_p2p.c` as its
+   platform (XNet's Winsock, DNS and random numbers) and
+   `port/xbox/src/xbox_winsock_hooks.c` in the game's socket calls, as the
+   desktop's `xnet.c`. A on a listed game joins its invite: the tunnel to
+   its host, then the host's game, advertised through it, and its lobby.
+   Needs `D:\bypass_security.txt`. docs/cross-play.md has the details.
 4. **Invites.** No clipboard: the list itself is the invite (choose a game
    and join), plus Link Profile (the
    desktop builds' QR code, which links the game to a profile from another

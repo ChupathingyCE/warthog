@@ -84,10 +84,19 @@ enum
 	/* a host needs a UDP stand-in for two or three ports of every other
 	machine, and a stream for each one's connection; one peer can have no
 	more than these */
+#ifndef P2P_JOINER_ONLY
 	MAXIMUM_PROXIES = 512,
 	MAXIMUM_PEER_PROXIES = 4,
 	MAXIMUM_LISTENERS = 64,
 	MAXIMUM_STREAMS = 160,
+#else
+	/* (a machine that only joins, the original Xbox's: its host's stand-ins
+	and streams, a few over; each stream holds STREAM_BUFFER_SIZE) */
+	MAXIMUM_PROXIES = 16,
+	MAXIMUM_PEER_PROXIES = 4,
+	MAXIMUM_LISTENERS = 8,
+	MAXIMUM_STREAMS = 8,
+#endif
 	MAXIMUM_PEER_STREAMS = 4,
 	MAXIMUM_PEER_OPENING_STREAMS = 2,
 	/* the game's sockets' ports (xnet.c), and the ports it sent peers

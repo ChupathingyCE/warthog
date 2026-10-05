@@ -3291,6 +3291,12 @@ void main_loop(
 			}
 			xbox_main_loops++;
 			xbox_game_list_update();
+			{
+				/* (other threads' lines into debug.txt: internet play's) */
+				extern void xbox_log_flush(void);
+
+				xbox_log_flush();
+			}
 		}
 #endif
 		if (!game_in_editor())

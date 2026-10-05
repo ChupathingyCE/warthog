@@ -8,6 +8,11 @@
     xbox_sources.py bink port/linux/src/bink_null.c OUT
         The Bink stub, with the SDK's headers in place of the Linux
         platform layer's.
+    xbox_sources.py copy port/linux/src/p2p.c OUT
+        A source as it is (internet play's, and its libraries'), in a folder
+        of the build's, so that its quoted includes find port/xbox/p2p's
+        headers (named on the command line) before the Linux layer's beside
+        it. Its lines keep their file and numbers (#line).
 """
 
 import argparse
@@ -40,13 +45,17 @@ def bink(source: Path) -> str:
     return HEADER.format(source=source.as_posix()) + text.replace('#include "platform.h"', PLATFORM)
 
 
+def copy(source: Path) -> str:
+    return HEADER.format(source=source.as_posix()) + f'#line 1 "{source.as_posix()}"\n' + source.read_text(encoding="utf-8")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("kind", choices=("common", "bink"))
+    parser.add_argument("kind", choices=("common", "bink", "copy"))
     parser.add_argument("source", type=Path)
     parser.add_argument("output", type=Path)
     args = parser.parse_args()
-    text = common(args.source) if args.kind == "common" else bink(args.source)
+    text = {"common": common, "bink": bink, "copy": copy}[args.kind](args.source)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     if not args.output.is_file() or args.output.read_text(encoding="utf-8") != text:
         args.output.write_text(text, encoding="utf-8")

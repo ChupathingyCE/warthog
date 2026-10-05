@@ -219,15 +219,35 @@ and leaving cleanly what doesn't fold:
   past its 2,048 (not made). In the host-side runs below, two players on
   Blood Gulch never went past index 102. The table of plan (b) waits for a
   measurement on the console that needs it.
-- **Joining.** System Link finds a PC host on the console's LAN by its
+- **Joining by invite (internet).** The console joins a game as the PCs
+  do, by its invite (`halo://join/` and 64 hex digits): ONLINE GAMES' A on
+  a listed game (the console list's first field is the invite), or Y for
+  the invite in `D:\join.txt`. The tunnel is the desktop builds' own
+  `port/linux/src/p2p.c`, `p2p_signal.c` and `p2p_crypto.c` (with KCP and
+  Monocypher), compiled for the console as they are (`tools/xbox_build.py`
+  copies them into the build so their includes find `port/xbox/p2p`'s
+  headers): MQTT to the public brokers over XNet's TCP, STUN and hole
+  punching on one UDP socket, X25519 and ChaCha20-Poly1305. Its platform
+  layer is `port/xbox/src/xbox_p2p.c` (sockets over XNet's Winsock,
+  `XNetDnsLookup`, `XNetRandom`, threads, the settings' defaults), and
+  `port/xbox/src/xbox_winsock_hooks.c` does what the desktop's `xnet.c`
+  does: the game's datagrams to a peer's virtual address (100.64/10, which
+  `XNetXnAddrToInAddr` gives for its XNADDR) go onto the tunnel, its
+  connections go to the tunnel's stand-ins on 127.0.0.1, its broadcasts
+  (the System Link search) go to every peer too, and the tunnel learns the
+  game's ports. The console only joins: no UPnP (the [D] servers forward
+  their own), no Discord, no public listing (`p2p_lobby.c`), no invite
+  hand-off; `P2P_JOINER_ONLY` gives p2p.c room for one host's stand-ins
+  and streams (about 160 KB, not a 128-machine host's 2.7 MB). Internet
+  play is on only with `D:\bypass_security.txt`. The tunnel's thread logs
+  to the debug monitor at once and to `debug.txt` through the main loop
+  (`xbox_log_flush`): "Internet play: ..." lines, addresses only as
+  tags.
+- **Joining on a LAN.** System Link finds a PC host on the console's LAN by its
   broadcast advertisement, as it finds a console's. A host the broadcasts
   don't reach is joined by address: `D:\join.txt`, one line, an IPv4
   address; the console tries it once each time System Link opens
-  (`port/xbox/src/xbox_direct_join.c`), with the address never logged. The
-  [D] servers on the internet are reached only through the PCs' p2p tunnel
-  (their system link sockets are on loopback addresses of their own), so
-  for now the console plays a dedicated server on its LAN: the same server
-  program, run on a PC beside it.
+  (`port/xbox/src/xbox_direct_join.c`), with the address never logged.
 
 Tested on the host: `port/xbox/tests/run.sh` (the record's fold, round trip
 and refusals; the game type states' fold, Slayer's sizes, the entries
@@ -237,7 +257,18 @@ macOS build as a dedicated server and as a network-test host (`HALO_NETWORK_TEST
 host:bloodgulch:slayer,slayer` with kills, shots and a vehicle), a
 `--console-limits` build of this branch joining with `HALO_NETWORK_TEST=join`.
 It joined, played, took the host's kills and scores (4 of 4, then 3 and 3
-over two games) and each game's end, with no failed creates.
+over two games) and each game's end, with no failed creates. And by invite:
+main's build as an online dedicated server (not listed), the
+`--console-limits` build joining with its `halo://join/` link over the
+public brokers, the tunnel and the folded settings record together.
+
+The tunnel's cost on the console's 733 MHz Pentium III, estimated from the
+host (an Apple M4: ChaCha20-Poly1305 at 2.4 ns, about 10 cycles, a byte;
+X25519 in 0.36 ms) with three times the cycles for 32-bit code: about 30
+cycles a byte, 50 microseconds a full 1,200-byte packet, so a client's
+traffic (well under 100 KB a second both ways) takes under 0.5% of the
+CPU; X25519 and the run's Ed25519 key, once each, tens of milliseconds, on
+the tunnel's thread. To be measured on the console.
 
 ### The settings record (first pass)
 

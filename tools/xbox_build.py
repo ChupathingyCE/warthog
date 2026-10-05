@@ -90,6 +90,13 @@ LINK_FLAGS = [
 LIBRARIES = [
     "libcmt.lib", "oldnames.lib", "xboxkrnl.lib", "dsound.lib", "xnet.lib", "xapilib.lib", "xkbd.lib",
 ]
+# internet play's sources (port/xbox/p2p/platform.h)
+KCP_DIR = Path("port/third_party/kcp")
+MONOCYPHER_DIR = Path("port/third_party/monocypher")
+P2P_SOURCES = [
+    LINUX_SRC / "p2p.c", LINUX_SRC / "p2p_signal.c", LINUX_SRC / "p2p_crypto.c", KCP_DIR / "ikcp.c",
+    MONOCYPHER_DIR / "monocypher.c", MONOCYPHER_DIR / "monocypher-ed25519.c",
+]
 # the game's C++ sources (game_sources has its C only)
 XBOX_GAME_CXX_SOURCES = [Path("source/main/d3d_intimacy.cpp")]
 # port/linux/game's sources the console builds too
@@ -155,7 +162,7 @@ def _inline_export_wrapper(source: Path, build_dir: Path) -> Path:
 
 def xbox_configure_inputs() -> List[Path]:
     """Files whose change must re-run configure.py."""
-    return [Path(__file__), PORT_DIR / "src", PORT_DIR / "game"]
+    return [Path(__file__), PORT_DIR / "src", PORT_DIR / "game", PORT_DIR / "p2p"]
 
 
 def generate_xbox_build(n: Writer, sln: Any) -> None:
@@ -266,6 +273,17 @@ def generate_xbox_build(n: Writer, sln: Any) -> None:
         n.build(outputs=generated, rule="xbox_source", inputs=source, implicit=[Path("tools/xbox_sources.py")],
                 variables={"kind": kind})
         add_object(generated, support_cflags)
+
+    # internet play (the desktop builds' tunnel, joining only: port/xbox/src/
+    # xbox_p2p.c is its platform layer), its sources as they are, with
+    # port/xbox/p2p's headers in place of the Linux layer's
+    p2p_cflags = " ".join([*SUPPORT_FLAGS, "-std=gnu11", f"-I{_quote(PORT_DIR / 'p2p')}", f"-I{_quote(LINUX_SRC)}",
+                           f"-I{_quote(KCP_DIR)}", f"-I{_quote(MONOCYPHER_DIR)}", f"-I{_quote(xdk / 'include')}"])
+    for source in P2P_SOURCES:
+        generated = gen_dir / "p2p" / source.name
+        n.build(outputs=generated, rule="xbox_source", inputs=source, implicit=[Path("tools/xbox_sources.py")],
+                variables={"kind": "copy"})
+        add_object(generated, p2p_cflags, sorted((PORT_DIR / "p2p").glob("*.h")))
 
     n.build(
         outputs=exe,

@@ -51,6 +51,47 @@ int xbox_direct_join_parse(const char *text, unsigned long size, unsigned long *
 	return 1;
 }
 
+int xbox_direct_join_parse_invite(const char *text, unsigned long size, char *invite)
+{
+	static const char prefix[] = "halo://join/";
+	unsigned long start = 0, end, index;
+
+	if (!text || !invite)
+		return 0;
+	for (end = 0; end < size && text[end] != '\n' && text[end] != '\r' && text[end]; end++)
+		;
+	while (start < end && (text[start] == ' ' || text[start] == '\t'))
+		start++;
+	while (end > start && (text[end - 1] == ' ' || text[end - 1] == '\t' || text[end - 1] == '/'))
+		end--;
+	if (end - start > sizeof(prefix) - 1)
+	{
+		for (index = 0; index < sizeof(prefix) - 1; index++)
+		{
+			char c = text[start + index];
+
+			if ((c >= 'A' && c <= 'Z' ? c - 'A' + 'a' : c) != prefix[index])
+				break;
+		}
+		if (index == sizeof(prefix) - 1)
+			start += index;
+	}
+	if (end - start != XBOX_DIRECT_JOIN_INVITE_LENGTH)
+		return 0;
+	for (index = 0; index < XBOX_DIRECT_JOIN_INVITE_LENGTH; index++)
+	{
+		char c = text[start + index];
+
+		if (c >= 'A' && c <= 'F')
+			c = (char)(c - 'A' + 'a');
+		if (!((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f')))
+			return 0;
+		invite[index] = c;
+	}
+	invite[XBOX_DIRECT_JOIN_INVITE_LENGTH] = 0;
+	return 1;
+}
+
 #ifdef _XBOX
 
 #include <stdio.h>
@@ -73,13 +114,29 @@ int xbox_direct_join_address(unsigned long *address)
 	fclose(file);
 	if (!xbox_direct_join_parse(line, (unsigned long)size, address))
 	{
-		if (!told)
-			error(ERROR_LOG, "cross-play: %s holds no host's IPv4 address (a.b.c.d); not joining by it",
+		char invite[XBOX_DIRECT_JOIN_INVITE_LENGTH + 1];
+
+		/* (an invite is ONLINE GAMES' to join: xbox_direct_join_invite) */
+		if (!told && !xbox_direct_join_parse_invite(line, (unsigned long)size, invite))
+			error(ERROR_LOG, "cross-play: %s holds neither a host's IPv4 address (a.b.c.d) nor an invite; not joining by it",
 				XBOX_DIRECT_JOIN_FILE);
 		told = 1;
 		return 0;
 	}
 	return 1;
+}
+
+int xbox_direct_join_invite(char *invite)
+{
+	char line[128];
+	FILE *file = fopen(XBOX_DIRECT_JOIN_FILE, "rb");
+	size_t size;
+
+	if (!file)
+		return 0;
+	size = fread(line, 1, sizeof(line), file);
+	fclose(file);
+	return xbox_direct_join_parse_invite(line, (unsigned long)size, invite);
 }
 
 #endif

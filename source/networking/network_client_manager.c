@@ -3208,7 +3208,7 @@ boolean network_game_client_set_team(
 }
 
 
-#ifdef HALO_GAME_BROWSER
+#if defined(HALO_GAME_BROWSER) || defined(HALO_XBOX_CONSOLE)
 /* the game list's game whose invite this machine joined (the Online Games
 screen, port/linux/game/browser_screen.c): joined once its host's game is
 advertised through the tunnel. The host is told by its XNADDR's abEnet,
@@ -3280,6 +3280,9 @@ long network_game_client_join_invite_host(
 	return 0;
 }
 
+#endif
+
+#ifdef HALO_GAME_BROWSER
 long network_game_client_invite_host_advertisement(
 	char const *invite,
 	struct network_invite_advertisement *advertisement)

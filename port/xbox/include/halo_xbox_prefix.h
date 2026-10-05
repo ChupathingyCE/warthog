@@ -33,6 +33,21 @@ library no longer takes: port/xbox/src/xbox_dsound.c translates them */
 #define IDirectSoundStream_SetMixBins halo_xbox_IDirectSoundStream_SetMixBins
 #define IDirectSoundStream_SetMixBinVolumes halo_xbox_IDirectSoundStream_SetMixBinVolumes
 
+/* The game's Winsock calls that internet play's tunnel must see (port/xbox/
+src/xbox_winsock_hooks.c, as the desktop builds' port/linux/src/xnet.c):
+renamed in the game's units, the SDK's declarations of them included */
+#define WSAStartup halo_xbox_WSAStartup
+#define socket halo_xbox_socket
+#define closesocket halo_xbox_closesocket
+#define bind halo_xbox_bind
+#define connect halo_xbox_connect
+#define listen halo_xbox_listen
+#define accept halo_xbox_accept
+#define recvfrom halo_xbox_recvfrom
+#define sendto halo_xbox_sendto
+#define getpeername halo_xbox_getpeername
+#define XNetXnAddrToInAddr halo_xbox_XNetXnAddrToInAddr
+
 /* the shared sources' limits, as the native builds' prefix includes them:
 the console's own (HALO_XBOX_CONSOLE) */
 #include "../../linux/include/halo_port_limits.h"

@@ -127,11 +127,16 @@ yet booted. Known:
 - The netcode is the PC builds' (distributed). The console joins a PC
   host's game as a client: it folds the PCs' 128-slot game settings record
   and Slayer's state into its 16 slots, and leaves a game that grows past
-  them as a full one (docs/cross-play.md, "What is built"). It finds a PC
-  host on its LAN in System Link, or joins the host whose IPv4 address is
-  in `D:\join.txt` (one line; `src/xbox_direct_join.c`). It does not yet
-  host the PCs, and its object array (2,048) is the Xbox's: `debug.txt`
-  logs how high a PC host's object indices go ("cross-play:" lines).
+  them as a full one (docs/cross-play.md, "What is built"). It joins an
+  internet game by its invite from ONLINE GAMES (A on a listed game, Y for
+  the invite in `D:\join.txt`), through the desktop builds' tunnel
+  (`port/linux/src/p2p*.c`, built as they are; `src/xbox_p2p.c` and
+  `src/xbox_winsock_hooks.c` are its platform), with
+  `D:\bypass_security.txt`. On a LAN it finds a PC host in System Link, or
+  joins the host whose IPv4 address is in `D:\join.txt`
+  (`src/xbox_direct_join.c`). It does not yet host the PCs, and its object
+  array (2,048) is the Xbox's: `debug.txt` logs how high a PC host's object
+  indices go ("cross-play:" lines).
 - The menus are the Xbox's; the PC menus and Online Games are not built.
   The game list is fetched and logged only ("The game list").
 - Campaign and multiplayer levels are not yet tested.

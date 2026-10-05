@@ -8,12 +8,16 @@ a screen of its own over the menus, as the game's virtual keyboard is
 own fonts and button icons. The menu item is the desktop builds' (ONLINE
 GAMES, interface/ui_widget.c); their screen (port/linux/game/
 browser_screen.c) draws through their platform layer, which the console
-lacks, and joins, which the console can't yet.
+lacks.
 
-The list is read only. Up and down pick a game, left and right turn the
-page, X asks for the list again, B goes back. The selected game's details
-show below the list; A on it says joining from the Xbox is coming (the
-top level README, "Cross-play"): no join is faked.
+Up and down pick a game, left and right turn the page, X asks for the list
+again, B goes back. The selected game's details show below the list. A
+joins it as the desktop builds' screen does: through its invite (the list's
+first field), internet play's tunnel to its host (port/xbox/src/
+xbox_p2p.c, the desktop builds' p2p.c) is made, and once the host's game
+is advertised through it, the game is joined and its lobby opens. Y joins
+the invite in D:\join.txt the same way (port/xbox/src/xbox_direct_join.c),
+for testing. Internet play needs D:\bypass_security.txt.
 
 Memory: the screen's own state is the list's order and a few numbers; the
 list itself is the fetch's one copy (xbox_game_list_get).
@@ -24,6 +28,11 @@ list itself is the fetch's one copy (xbox_game_list_get).
 #include "cseries/cseries.h"
 #include "cseries/cseries_windows.h"
 #include "cseries/errors.h"
+#include "game/game.h"
+#include "interface/player_ui.h"
+#include "networking/network_game_globals.h"
+#include "saved games/player_profile.h"
+#include "saved games/saved_game_files.h"
 #include "bitmaps/bitmap_group.h"
 #include "cutscene/cinematics.h"
 #include "input/input.h"
@@ -38,9 +47,22 @@ list itself is the fetch's one copy (xbox_game_list_get).
 #include <string.h>
 
 #include "../include/xbox_game_list.h"
+#include "../include/xbox_direct_join.h"
 
 /* (ui_widget.c's) */
 long ui_widget_online_games_font(boolean heading);
+/* (ui_widget_event_handler_functions.c's: the network searching, as System
+Link's list starts it) */
+boolean ui_online_games_start_network(void);
+/* (network_client_manager.c's: the game whose host's identifier the invite
+starts with, joined once it is advertised) */
+long network_game_client_join_invite_host(char const *invite);
+boolean create_global_network_game_client(void);
+void game_connection_set(short connection);
+/* (internet play's, port/linux/src/p2p.c: the tunnel to an invite's host) */
+int p2p_join_invite(char const *text);
+/* (port/xbox/src/xbox_p2p.c's: whether internet play is on) */
+int xbox_p2p_online(void);
 
 /* ---------- constants */
 
@@ -61,6 +83,10 @@ enum
 	/* the screen takes no A this soon after it opens (the menu's A) */
 	OPEN_SETTLE = 600,
 	STATUS_DURATION = 5000,
+	/* how long the tunnel and the host's advertisement may take (the
+	desktop builds' screen waits 15 seconds; the console's DNS and the
+	brokers' first answers can take longer) */
+	CONNECT_TIMEOUT = 45000,
 
 	/* the 640x480 layout */
 	SCREEN_LEFT = 48,
@@ -118,6 +144,10 @@ static struct
 	char selected_invite[GAME_LIST_INVITE_LENGTH + 1];
 	char status[64];
 	unsigned long status_time;
+	/* a join under way: the invite's digits and when it started */
+	boolean connecting;
+	char connecting_invite[GAME_LIST_INVITE_LENGTH + 1];
+	unsigned long connecting_time;
 } browser_screen;
 
 /* ---------- private code */
@@ -178,6 +208,102 @@ static void refresh(
 	xbox_game_list_request();
 }
 
+/* the first player in the game to be joined, with the profile System
+Link's Start would pick (as the desktop builds' screen, port/linux/game/
+browser_screen.c): the one last used, else the first saved */
+static void join_first_player(
+	void)
+{
+	long profile_index = player_ui_get_player1_last_used_profile_index();
+	struct player_profile profile;
+
+	player_ui_local_player_joined_multiplayer_game(0);
+	if (profile_index == NONE || !TEST_FLAG(profile_index, _saved_game_file_index_valid_bit))
+	{
+		long profile_indices[100];
+		word profile_count = NUMBEROF(profile_indices);
+
+		player_profiles_enumerate_available_to_local_player_index(0, &profile_count, profile_indices, FALSE);
+		profile_index = profile_count ? profile_indices[0] : NONE;
+	}
+	if (profile_index != NONE && TEST_FLAG(profile_index, _saved_game_file_index_valid_bit) &&
+		player_profile_get(profile_index, &profile))
+	{
+		player_ui_set_active_player_profile(0, profile_index, &profile);
+	}
+}
+
+/* an invite (its 64 digits) joined: the tunnel to its host, then its game
+once advertised through it (wait_for_host). The invite is never logged
+whole: its first digits only */
+static void join_invite(
+	char const *invite,
+	char const *name)
+{
+	char link[16 + GAME_LIST_INVITE_LENGTH];
+
+	if (!xbox_p2p_online())
+	{
+		set_status("Online play needs D:\\bypass_security.txt.");
+		error(_error_log, "online games: no internet play without D:\\bypass_security.txt");
+		return;
+	}
+	if (!global_network_game_client_get())
+	{
+		if (!create_global_network_game_client())
+		{
+			set_status("Could not start the network.");
+			return;
+		}
+		game_connection_set(_game_connection_network_client);
+	}
+	join_first_player();
+	snprintf(link, sizeof(link), "halo://join/%s", invite);
+	if (!p2p_join_invite(link))
+	{
+		set_status("Internet play is off.");
+		return;
+	}
+	browser_screen.connecting = TRUE;
+	csstrncpy(browser_screen.connecting_invite, invite, GAME_LIST_INVITE_LENGTH);
+	browser_screen.connecting_invite[GAME_LIST_INVITE_LENGTH] = 0;
+	browser_screen.connecting_time = system_milliseconds();
+	set_status("Connecting...");
+	error(_error_log, "online games: joining %s (invite %.8s...)", name, invite);
+}
+
+/* the picked game's host: its game joined once it is advertised, and its
+lobby opened */
+static void wait_for_host(
+	void)
+{
+	long joined = network_game_client_join_invite_host(browser_screen.connecting_invite);
+
+	if (joined > 0)
+	{
+		error(_error_log, "online games: the host's game was advertised through the tunnel; joining it");
+		browser_screen.connecting = FALSE;
+		browser_screen.active = FALSE;
+		ui_widgets_close_all();
+		ui_widget_load_by_name_or_tag(
+			"ui\\shell\\main_menu\\multiplayer_type_select\\connected\\pregame\\connected_pregame_screen",
+			NONE, NULL, NONE, NONE, NONE, NONE);
+	}
+	else if (joined < 0)
+	{
+		browser_screen.connecting = FALSE;
+		set_status("That game can't be joined from this version.");
+		error(_error_log, "online games: the host's game is not one this version joins");
+	}
+	else if (system_milliseconds() - browser_screen.connecting_time > CONNECT_TIMEOUT)
+	{
+		browser_screen.connecting = FALSE;
+		set_status("The host did not answer.");
+		error(_error_log, "online games: the host's game was not advertised within %d seconds",
+			(int)(CONNECT_TIMEOUT / 1000));
+	}
+}
+
 /* ---------- public code */
 
 boolean browser_screen_active(
@@ -197,8 +323,13 @@ void browser_screen_open(
 		browser_screen.rows = MAXIMUM_ROWS;
 	/* (the list, as it came at the start or last time; a fresh one asked for) */
 	browser_screen.lists = 0;
+	browser_screen.connecting = FALSE;
 	take_list();
 	refresh();
+	/* the network searching, as System Link's list starts it (the joined
+	host's advertisement comes to it through the tunnel) */
+	if (!ui_online_games_start_network())
+		set_status("Could not start the network.");
 	error(_error_log, "online games: opened, %d games listed", browser_screen.count);
 	/* (the menu's A, still queued, is not a pick) */
 	event_manager_flush();
@@ -233,11 +364,28 @@ void browser_screen_process(
 			case _gamepad_binary_button_dpad_left: move = -browser_screen.rows; break;
 			case _gamepad_binary_button_dpad_right: move = browser_screen.rows; break;
 			case _gamepad_analog_button_a:
-				if (system_milliseconds() - browser_screen.opened_time > OPEN_SETTLE && selected_game())
+				if (!browser_screen.connecting && system_milliseconds() - browser_screen.opened_time > OPEN_SETTLE &&
+					selected_game())
 				{
+					struct game_list_game const *game = selected_game();
+
 					ui_play_audio_feedback_sound(_browser_sound_forward);
-					set_status("Joining from the Xbox is coming.");
-					error(_error_log, "online games: %s selected (joining from the Xbox is coming)", selected_game()->name);
+					if (strcmp(game->state, "open"))
+						set_status("That game is not accepting players.");
+					else
+						join_invite(game->invite, game->name);
+				}
+				break;
+			case _gamepad_analog_button_y:
+				if (!browser_screen.connecting && system_milliseconds() - browser_screen.opened_time > OPEN_SETTLE)
+				{
+					char invite[XBOX_DIRECT_JOIN_INVITE_LENGTH + 1];
+
+					ui_play_audio_feedback_sound(_browser_sound_forward);
+					if (xbox_direct_join_invite(invite))
+						join_invite(invite, "the game in D:\\join.txt");
+					else
+						set_status("D:\\join.txt holds no invite.");
 				}
 				break;
 			case _gamepad_analog_button_x:
@@ -247,7 +395,14 @@ void browser_screen_process(
 				break;
 			case _gamepad_analog_button_b:
 				ui_play_audio_feedback_sound(_browser_sound_back);
-				browser_screen.active = FALSE;
+				/* (B stops a join under way; again, goes back) */
+				if (browser_screen.connecting)
+				{
+					browser_screen.connecting = FALSE;
+					set_status("Stopped.");
+				}
+				else
+					browser_screen.active = FALSE;
 				break;
 			default: break;
 			}
@@ -266,6 +421,8 @@ void browser_screen_process(
 		}
 	}
 	remember_selected();
+	if (browser_screen.active && browser_screen.connecting)
+		wait_for_host();
 	/* (the widgets behind take nothing while the screen is up) */
 	event_manager_flush();
 }
@@ -530,7 +687,8 @@ void browser_screen_render(
 		bounds.y1 = 472;
 		draw_string_set_draw_mode(font, NONE, _justify_center, 0, &text_color);
 		draw_string_and_hack_in_icons(&bounds, &bounds, NULL, 0,
-			L"%a-button Select   %x-button Refresh   %b-button Back", FALSE);
+			browser_screen.connecting ? L"Connecting...   %b-button Stop" :
+				L"%a-button Join   %x-button Refresh   %y-button join.txt   %b-button Back", FALSE);
 	}
 }
 

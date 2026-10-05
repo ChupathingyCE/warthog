@@ -6,6 +6,7 @@ addresses taken, and everything else refused. port/xbox/tests/run.sh.
 */
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "../include/xbox_direct_join.h"
@@ -72,6 +73,59 @@ int main(void)
 	}
 	if (xbox_direct_join_parse(NULL, 4, (unsigned long *)buffer))
 		failures++;
+
+	/* invites */
+	{
+		static const char digits[] = "306400e0a7db2f4f737249587ea5d4c304360ce2006a1d01f04a197ead25e0ca";
+		static const char *const good[] =
+		{
+			"halo://join/306400e0a7db2f4f737249587ea5d4c304360ce2006a1d01f04a197ead25e0ca",
+			"  HALO://JOIN/306400E0A7DB2F4F737249587EA5D4C304360CE2006A1D01F04A197EAD25E0CA/ \r\n",
+			"306400e0a7db2f4f737249587ea5d4c304360ce2006a1d01f04a197ead25e0ca\nmore",
+		};
+		static const char *const bad[] =
+		{
+			"",
+			"halo://join/",
+			"halo://join/306400e0a7db2f4f737249587ea5d4c304360ce2006a1d01f04a197ead25e0c",
+			"halo://join/306400e0a7db2f4f737249587ea5d4c304360ce2006a1d01f04a197ead25e0ca0",
+			"halo://join/306400e0a7db2f4f737249587ea5d4c304360ce2006a1d01f04a197ead25e0cg",
+			"halo://joim/306400e0a7db2f4f737249587ea5d4c304360ce2006a1d01f04a197ead25e0ca",
+			"192.168.1.20",
+			"halo://join/3064 0e0a7db2f4f737249587ea5d4c304360ce2006a1d01f04a197ead25e0ca",
+		};
+		char invite[XBOX_DIRECT_JOIN_INVITE_LENGTH + 1];
+		unsigned long index, length;
+
+		for (index = 0; index < sizeof(good) / sizeof(good[0]); index++)
+		{
+			memset(invite, 'x', sizeof(invite));
+			if (!xbox_direct_join_parse_invite(good[index], (unsigned long)strlen(good[index]), invite) ||
+				strcmp(invite, digits))
+			{
+				failures++;
+				fprintf(stderr, "direct_join_test: invite %lu not taken\n", index);
+			}
+		}
+		for (index = 0; index < sizeof(bad) / sizeof(bad[0]); index++)
+		{
+			if (xbox_direct_join_parse_invite(bad[index], (unsigned long)strlen(bad[index]), invite))
+			{
+				failures++;
+				fprintf(stderr, "direct_join_test: bad invite %lu taken\n", index);
+			}
+		}
+		/* (every cut of a link, read no further than its size: ASan) */
+		for (length = 0; length < strlen(good[0]); length++)
+		{
+			char *exact = (char *)malloc(length ? length : 1);
+
+			memcpy(exact, good[0], length);
+			if (xbox_direct_join_parse_invite(exact, length, invite))
+				failures++;
+			free(exact);
+		}
+	}
 	if (failures)
 	{
 		fprintf(stderr, "direct_join_test: %d failed\n", failures);

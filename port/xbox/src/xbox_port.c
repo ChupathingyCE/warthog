@@ -4,8 +4,8 @@ XBOX_PORT.C
 What the shared sources ask of the native builds' platform layer
 (port/linux/src) that the console answers itself, until it has more of that
 layer: the settings (their defaults: there is no config.toml yet), the log,
-the screen (640x480, no widescreen), and none of the mouse, the high-res
-HUD and text, or internet play.
+the screen (640x480, no widescreen), and none of the mouse or the high-res
+HUD and text. Internet play's platform is port/xbox/src/xbox_p2p.c.
 */
 
 #include <stdarg.h>
@@ -16,6 +16,8 @@ HUD and text, or internet play.
 #include "../../linux/include/halo_ui_pointer.h"
 
 unsigned long __cdecl DbgPrint(const char *format, ...);
+/* the game's (cseries/errors.c) */
+void error(short priority, const char *format, ...);
 
 /* ---------- the C runtime's newer functions */
 
@@ -65,7 +67,30 @@ float rintf(float x)
 	return (float)rint(x);
 }
 
-/* ---------- the log */
+/* ---------- the log: the debug monitor at once, and debug.txt from the
+main thread (error() is the game's, not for other threads: internet play's
+thread's lines wait for the main loop, xbox_log_flush) */
+
+typedef struct
+{
+	volatile long state;
+	void *storage[8];
+} log_mutex_type;
+int pthread_mutex_lock(log_mutex_type *mutex);
+int pthread_mutex_unlock(log_mutex_type *mutex);
+__declspec(dllimport) unsigned long __stdcall GetCurrentThreadId(void);
+
+enum
+{
+	LOG_QUEUE_LINES = 32,
+	LOG_LINE_SIZE = 256,
+};
+
+static log_mutex_type log_lock;
+static char log_queue[LOG_QUEUE_LINES][LOG_LINE_SIZE];
+static long log_queue_count;
+static long log_queue_dropped;
+static unsigned long log_main_thread;
 
 void platform_log(const char *format, ...)
 {
@@ -76,6 +101,43 @@ void platform_log(const char *format, ...)
 	vsnprintf(text, sizeof(text), format, arguments);
 	va_end(arguments);
 	DbgPrint("halo: %s\n", text);
+	if (log_main_thread && GetCurrentThreadId() == log_main_thread)
+	{
+		error(3, "%s", text);
+		return;
+	}
+	pthread_mutex_lock(&log_lock);
+	if (log_queue_count < LOG_QUEUE_LINES)
+	{
+		strncpy(log_queue[log_queue_count], text, LOG_LINE_SIZE - 1);
+		log_queue[log_queue_count][LOG_LINE_SIZE - 1] = 0;
+		log_queue_count++;
+	}
+	else
+		log_queue_dropped++;
+	pthread_mutex_unlock(&log_lock);
+}
+
+/* the main loop's (main.c): the other threads' lines into debug.txt */
+void xbox_log_flush(void)
+{
+	char lines[LOG_QUEUE_LINES][LOG_LINE_SIZE];
+	long count, dropped, index;
+
+	log_main_thread = GetCurrentThreadId();
+	if (!log_queue_count)
+		return;
+	pthread_mutex_lock(&log_lock);
+	count = log_queue_count;
+	dropped = log_queue_dropped;
+	memcpy(lines, log_queue, (size_t)count * LOG_LINE_SIZE);
+	log_queue_count = 0;
+	log_queue_dropped = 0;
+	pthread_mutex_unlock(&log_lock);
+	for (index = 0; index < count; index++)
+		error(3, "%s", lines[index]);
+	if (dropped)
+		error(3, "(%ld more lines not logged)", dropped);
 }
 
 void platform_show_message(const char *title, const char *message)
@@ -147,7 +209,19 @@ static const struct
 	{ "debug.network_test_pickup_weapon", "" },
 	{ "display.direct_camera", "true" },
 	{ "game.console_log", "important" },
+	/* internet play (port/xbox/src/xbox_p2p.c): network.online is the
+	console's own (D:\\bypass_security.txt); no UPnP, the system's port */
+	{ "network.allow_upnp", "false" },
+	{ "network.tunnel_port", "0" },
+	{ "network.signalling_brokers", "broker.emqx.io:1883,broker.hivemq.com:1883,test.mosquitto.org:1883" },
+	{ "network.stun_servers", "stun.l.google.com:19302,stun.cloudflare.com:3478" },
+	{ "debug.hidden_window", "false" },
+	{ "debug.exit_after", "0.0" },
+	{ "debug.null_renderer", "false" },
+	{ "debug.log_addresses", "false" },
 };
+
+int xbox_p2p_online(void);
 
 static const char *setting(const char *name)
 {
@@ -164,6 +238,8 @@ static const char *setting(const char *name)
 
 int config_boolean(const char *name)
 {
+	if (!strcmp(name, "network.online"))
+		return xbox_p2p_online();
 	return !strcmp(setting(name), "true");
 }
 
@@ -292,29 +368,14 @@ void text_hires_register_atlas(const unsigned long *texture, unsigned long width
 	(void)height;
 }
 
-/* ---------- internet play (p2p.c): none yet; system link only */
+/* ---------- internet play: the desktop builds' p2p.c joins (port/xbox/src/
+xbox_p2p.c); what it leaves to p2p_lobby.c and p2p_discord.c, which the
+console does without */
 
-void p2p_hardware_id(char *hex, int size)
-{
-	if (size > 0)
-		hex[0] = 0;
-}
 
-void p2p_hardware_id_sanitize(char *destination, int size, const char *source)
-{
-	if (size <= 0)
-		return;
-	strncpy(destination, source ? source : "", (size_t)size - 1);
-	destination[size - 1] = 0;
-}
 
-void p2p_discord_identity(char *id, int id_size, char *name, int name_size)
-{
-	if (id_size > 0)
-		id[0] = 0;
-	if (name_size > 0)
-		name[0] = 0;
-}
+
+void p2p_hardware_id_sanitize(char *destination, int size, const char *source);
 
 void p2p_discord_sanitize(char *destination, int size, const char *source, int name)
 {
@@ -322,22 +383,8 @@ void p2p_discord_sanitize(char *destination, int size, const char *source, int n
 	p2p_hardware_id_sanitize(destination, size, source);
 }
 
-unsigned long p2p_peer_endpoint_address(unsigned long virtual_address)
-{
-	(void)virtual_address;
-	return 0;
-}
 
-void p2p_set_game_player_counts(int count, int maximum)
-{
-	(void)count;
-	(void)maximum;
-}
 
-void p2p_set_hosting_allowed(int allowed)
-{
-	(void)allowed;
-}
 
 void p2p_set_hosting_public(int public)
 {
@@ -354,6 +401,21 @@ void p2p_set_game_listing(const char *name, const char *map, const char *gametyp
 	(void)open;
 	(void)in_progress;
 	(void)has_teams;
+}
+
+const char *log_address(const unsigned char *bytes, int length, int port, char *text, int size);
+
+/* (log_address.h's, as port/linux/src/log_address.c has it: a sockaddr_in's
+address and port, as they are in memory) */
+const char *log_address_ipv4(unsigned long network_address, unsigned short network_port, char *text, int size)
+{
+	unsigned int value = (unsigned int)network_address;
+	unsigned char bytes[4];
+	unsigned char port[2];
+
+	memcpy(bytes, &value, 4);
+	memcpy(port, &network_port, 2);
+	return log_address(bytes, 4, network_port ? (port[0] << 8 | port[1]) : -1, text, size);
 }
 
 /* ---------- the menus: the Xbox's own (ui.map); the PC version's menus
