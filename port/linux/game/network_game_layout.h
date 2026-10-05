@@ -1,5 +1,5 @@
 /*
-XBOX_NETWORK_GAME_LAYOUT.H
+NETWORK_GAME_LAYOUT.H
 
 The game settings record (struct network_game, source/networking/
 network_game_manager.h) between the PC builds' layout (128 machines, 128
@@ -11,12 +11,18 @@ while every used slot, and every index a used entry names, fits; else it
 fails and nothing is guessed. Widening fills the new slots as the game
 leaves an empty one (network_game_invalidate_player).
 
+The game type states the host sends (game_engine_*_write_network_state)
+have arrays of one entry a player slot too: network_game_layout_fold_fields
+folds them the same way, field by field.
+
 Plain C on bytes, little-endian, built on the host too (port/xbox/tests).
-Not yet called by the game: see docs/cross-play.md, "What is built".
+A build with the console's limits (HALO_PORT_CONSOLE_LIMITS) folds what a
+PC host sends with these (network_client_message_handler.c,
+game_engine_slayer.c).
 */
 
-#ifndef __XBOX_NETWORK_GAME_LAYOUT_H
-#define __XBOX_NETWORK_GAME_LAYOUT_H
+#ifndef __NETWORK_GAME_LAYOUT_H
+#define __NETWORK_GAME_LAYOUT_H
 
 #define NETWORK_GAME_LAYOUT_PC_SLOTS 128
 #define NETWORK_GAME_LAYOUT_CONSOLE_SLOTS 16
@@ -61,4 +67,29 @@ int network_game_layout_convert(const unsigned char *from, int from_machines, in
 
 const char *network_game_layout_error_string(int error);
 
-#endif
+/* ---------- the game types' states */
+
+/* a field of a state laid out as a struct of them with no padding: of
+element_size bytes, one element a player slot (per_slot) or one alone;
+an element past the narrower layout's slots is empty while each of its
+bytes is blank */
+struct network_game_layout_field
+{
+	unsigned short element_size;
+	unsigned char per_slot;
+	unsigned char blank;
+};
+
+/* the state's size with this many slots */
+unsigned long network_game_layout_fields_size(const struct network_game_layout_field *fields, int field_count,
+	int slots);
+
+/* the state from (from_size bytes, which must be its size at from_slots)
+into to (to_size bytes, which must be its size at to_slots); slots past
+to_slots are dropped, and *dropped (if given) counts the elements dropped
+that were not empty. Returns NETWORK_GAME_LAYOUT_OK or _BAD_SIZE. */
+int network_game_layout_fold_fields(const unsigned char *from, unsigned long from_size, int from_slots,
+	unsigned char *to, unsigned long to_size, int to_slots, const struct network_game_layout_field *fields,
+	int field_count, int *dropped);
+
+#endif /* __NETWORK_GAME_LAYOUT_H */

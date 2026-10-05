@@ -1,13 +1,13 @@
 /*
-XBOX_NETWORK_GAME_LAYOUT.C
+NETWORK_GAME_LAYOUT.C
 
-The game settings record between the PC builds' and the console's slot
-counts (xbox_network_game_layout.h).
+The game settings record and the game types' states between the PC
+builds' and the console's slot counts (network_game_layout.h).
 */
 
 #include <string.h>
 
-#include "../include/xbox_network_game_layout.h"
+#include "network_game_layout.h"
 
 #define NONE_BYTE 0xFF
 
@@ -143,6 +143,68 @@ int network_game_layout_convert(const unsigned char *from, int from_machines, in
 		to[NETWORK_GAME_LAYOUT_MAXIMUM_PLAYERS_OFFSET] = (unsigned char)to_players;
 		if (clamped)
 			*clamped = 1;
+	}
+	return NETWORK_GAME_LAYOUT_OK;
+}
+
+/* ---------- the game types' states */
+
+unsigned long network_game_layout_fields_size(const struct network_game_layout_field *fields, int field_count,
+	int slots)
+{
+	unsigned long size = 0;
+	int index;
+
+	for (index = 0; index < field_count; index++)
+		size += (unsigned long)fields[index].element_size * (fields[index].per_slot ? (unsigned long)slots : 1);
+	return size;
+}
+
+int network_game_layout_fold_fields(const unsigned char *from, unsigned long from_size, int from_slots,
+	unsigned char *to, unsigned long to_size, int to_slots, const struct network_game_layout_field *fields,
+	int field_count, int *dropped)
+{
+	int index;
+
+	if (dropped)
+		*dropped = 0;
+	if (!from || !to || !fields || field_count <= 0 || !valid_slots(from_slots) || !valid_slots(to_slots) ||
+		from_size != network_game_layout_fields_size(fields, field_count, from_slots) ||
+		to_size != network_game_layout_fields_size(fields, field_count, to_slots))
+	{
+		return NETWORK_GAME_LAYOUT_BAD_SIZE;
+	}
+	for (index = 0; index < field_count; index++)
+	{
+		const struct network_game_layout_field *field = &fields[index];
+		unsigned long size = field->element_size;
+		int element;
+
+		if (!field->per_slot)
+		{
+			memmove(to, from, size);
+			from += size;
+			to += size;
+			continue;
+		}
+		for (element = 0; element < from_slots || element < to_slots; element++)
+		{
+			if (element < from_slots && element < to_slots)
+				memmove(to + element * size, from + element * size, size);
+			else if (element < to_slots)
+				memset(to + element * size, field->blank, size);
+			else if (dropped)
+			{
+				unsigned long offset;
+
+				for (offset = 0; offset < size && from[element * size + offset] == field->blank; offset++)
+					;
+				if (offset < size)
+					(*dropped)++;
+			}
+		}
+		from += size * (unsigned long)from_slots;
+		to += size * (unsigned long)to_slots;
 	}
 	return NETWORK_GAME_LAYOUT_OK;
 }

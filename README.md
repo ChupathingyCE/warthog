@@ -23,7 +23,7 @@ cache, physical memory, sound and effect pools, and the socket transport.
 | Original Xbox build (`ninja xbox`) | builds on macOS with OXDK, `build/xbox/default.xbe` |
 | Boots | the menus at a steady 30 fps on a devkit (October 4); XNet gets its address by DHCP and the game list comes over the internet |
 | Code | ChupathingyCE main of October 4, network version 11 |
-| System link with PC builds | not yet: see "Cross-play" |
+| System link with PC builds | the console joins a PC host's game (a dedicated server too) and plays it, tested on the host with the console's limits; not yet on the console: see "Cross-play" |
 | Online Games (the game list) | Multiplayer, ONLINE GAMES: the list on a screen of its own, read only; no joining yet: see "Online Games on the Xbox" |
 | Xbox 360 | planned: see "Xbox 360" |
 
@@ -105,6 +105,15 @@ stay the console's.
 The field-by-field analysis, the choice (the PCs' 128 player and machine
 slots on the console; object slots translated at the console's netcode)
 and what is built so far are in [docs/cross-play.md](docs/cross-play.md).
+
+What works first, without a bigger game state: the console as a client of
+a PC host. It folds the PCs' 128-slot game settings record and Slayer's
+state into its own 16 slots as they arrive, and leaves a game that grows
+past them as it leaves a full one. A copy of a desktop build with the
+console's limits (`configure.py --console-limits`) plays whole games
+against a PC dedicated server on one computer that way. On the console it
+finds a PC host's game in System Link, or joins the host in
+`D:\join.txt` directly (one line, the host's IPv4 address).
 
 The console's network stack also speaks the Xbox's secure system link
 unless XNet starts with `XNET_STARTUP_BYPASS_SECURITY`. The game has its

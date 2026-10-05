@@ -94,8 +94,8 @@ LIBRARIES = [
 XBOX_GAME_CXX_SOURCES = [Path("source/main/d3d_intimacy.cpp")]
 # port/linux/game's sources the console builds too
 XBOX_PORT_GAME_SOURCES = [
-    "hud_hires_tags.c", "network_damage.c", "network_distributed.c", "network_objects.c", "network_test.c",
-    "pal_tags.c", "render_interpolation.c",
+    "hud_hires_tags.c", "network_damage.c", "network_distributed.c", "network_game_layout.c", "network_objects.c",
+    "network_test.c", "pal_tags.c", "render_interpolation.c",
 ]
 # d3d_intimacy.cpp reads the device as the January library named it; the
 # kernel's build of the Aug 2001 library has it in its own namespace (the

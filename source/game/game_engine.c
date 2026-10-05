@@ -9178,7 +9178,24 @@ void game_engine_read_network_state(
 	/* (a state the game type refused is not had: the first it takes is,
 	whose events it only takes) */
 	if (!read)
+	{
+#ifdef HALO_PORT_CONSOLE_LIMITS
+		/* port: the console's limits (halo_port_limits.h): slayer's and
+		ctf's states from a PC host are read; the others' are the PCs' 128
+		slots, which this build does not yet fold, so their scores stay this
+		machine's own (told once a game type) */
+		static long told_types = 0;
+		long type = game_engine_get_type();
+
+		if (type >= 0 && type < 32 && !(told_types & (1L << type)))
+		{
+			told_types |= 1L << type;
+			error(3, "cross-play: the host's state of game type %ld (%ld bytes) is not one this build reads",
+				type, size);
+		}
+#endif
 		return;
+	}
 	game_engine_network_state_read = TRUE;
 	/* the game ended on the host (after what ended it is shown, as the host
 	shows it) */

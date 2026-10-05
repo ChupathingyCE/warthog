@@ -1874,6 +1874,14 @@ void network_game_client_accepted_into_game(
 	else
 	{
 		network_event("received a message_server_machine_accepted message with a bad machine_index");
+#ifdef HALO_PORT_CONSOLE_LIMITS
+		/* port: the console's limits (halo_port_limits.h): a PC host numbers
+		machines by its connection slots, up to 128; past this build's, the
+		game is left as a full one is, not waited on */
+		network_event("cross-play: leaving the host's game: it made this machine #%d, past this build's %d machines",
+			(int)message_packet->machine_index, (int)MAXIMUM_NETWORK_MACHINE_COUNT);
+		network_game_client_rejected_by_game(client, source_address, _rejection_code_game_is_full);
+#endif
 	}
 
 	return;
@@ -2228,6 +2236,11 @@ void network_game_client_reset(
 	return;
 }
 
+#ifdef HALO_XBOX_CONSOLE
+/* (network_game_client_direct_join) */
+static boolean network_game_client_direct_join_tried;
+#endif
+
 struct network_game_client *network_game_client_create(
 	void)
 {
@@ -2239,6 +2252,9 @@ struct network_game_client *network_game_client_create(
 		!network_game_client_dont_use_directly_in_use);
 
 	network_game_client_dont_use_directly_in_use = TRUE;
+#ifdef HALO_XBOX_CONSOLE
+	network_game_client_direct_join_tried = FALSE;
+#endif
 
 	csmemset(
 		&network_game_client_dont_use_directly,
@@ -2594,6 +2610,37 @@ static void network_game_client_update_precache_status(
 	return;
 }
 
+#ifdef HALO_XBOX_CONSOLE
+/* port: the console joins the host in D:\join.txt directly (port/xbox/src/
+xbox_direct_join.c): once each time System Link searches, without the
+host's advertisement, which a host broadcasts only on its own network */
+int xbox_direct_join_address(unsigned long *address);
+static boolean network_game_client_direct_join_tried = FALSE;
+
+static boolean network_game_client_direct_join(
+	struct network_game_client *client)
+{
+	struct network_advertised_game direct_game = {0};
+	struct network_join_parameters join_parameters;
+	struct transport_address server_address;
+	unsigned long address;
+
+	network_game_client_direct_join_tried = TRUE;
+	if (!xbox_direct_join_address(&address))
+		return TRUE;
+	server_address.address.long_words[0] = address;
+	server_address.port = NETWORK_GAME_SERVER_PORT;
+	server_address.address_length = IPV4_ADDRESS_LENGTH;
+	server_address.address_type = 0;
+	direct_game.platform = network_game_get_local_platform();
+	transport_get_nonce(direct_game.nonce, sizeof(direct_game.nonce));
+	csmemset(&join_parameters, 0, sizeof(join_parameters));
+	network_game_generate_join_game_token(join_parameters.join_token);
+	network_event("cross-play: joining the host in D:\\join.txt directly");
+	return network_game_client_initiate_join_game(client, &direct_game, &join_parameters, &server_address);
+}
+#endif
+
 static boolean network_game_client_idle_searching(
 	struct network_game_client *client)
 {
@@ -2642,6 +2689,14 @@ static boolean network_game_client_idle_searching(
 		{
 			network_event("network_game_client_process_incoming_messages() failed in network_game_client_idle_searching()");
 		}
+#ifdef HALO_XBOX_CONSOLE
+		/* (after the first search went out: the network is up) */
+		else if (!network_game_client_direct_join_tried && client->last_broadcast_search_time &&
+			!global_network_game_server_get())
+		{
+			success = network_game_client_direct_join(client);
+		}
+#endif
 		else if (now - client->last_broadcast_search_time > 2000)
 		{
 			if (!global_network_game_server_get())

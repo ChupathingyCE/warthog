@@ -177,18 +177,77 @@ translation layer, valid only where no peer computes anything different.
    and sends it in their four pieces, and allocates host objects below
    2,048 (its own limit), which every PC can take.
 
-## What is built (this pass)
+## What is built
 
-- `port/xbox/src/xbox_network_game_layout.c`: the settings record between
+### The console as a PC host's client (October 4)
+
+The first goal is narrower than the plan above: the console joins a
+PC dedicated server's game (network version 11, the PCs' protocol
+unchanged) and plays it. That needs neither the bigger game state nor the
+object table, only folding what a PC host sends into the console's slots
+and leaving cleanly what doesn't fold:
+
+- **Limits.** `halo_port_limits.h` names the network's slots
+  (`HALO_PORT_WIRE_NETWORK_PLAYERS`/`_MACHINES`, 128: the PCs', fixed) apart
+  from the build's own (16 on the console). `HALO_PORT_CONSOLE_LIMITS` is set
+  for the console, and for a desktop build made with `configure.py
+  --console-limits` (`HALO_CONSOLE_LIMITS`: the console's players, machines,
+  objects and effects on the desktop's game state), a test build only.
+- **The settings record.** `port/linux/game/network_game_layout.c` (moved
+  from `port/xbox/src`, built into every build, called only with the
+  console's limits). The client takes the PCs' 13,120-byte record in its
+  four pieces and folds it into its own
+  (`network_client_message_handler.c`). A record with a machine or player
+  in a slot past 16, or an entry naming one, is not taken: the console
+  leaves the game as a full one (`_rejection_code_game_is_full`, "the game
+  is full" on the main menu) and says why in `debug.txt` ("cross-play:
+  leaving the host's game: ..."). A host's maximum above 16 is held to 16.
+- **Joins and players in progress.** A machine index past 16 from the host
+  (`message_server_machine_accepted`), or a player added in progress in a
+  slot or from a machine past 16 (`message_server_add_player_ingame`),
+  leaves the game the same way; before, the first waited in "joining" for
+  nothing and the second made an invisible player.
+- **Game type states.** Slayer's (the [D] servers' only game type: 1,408
+  bytes from a PC, 176 on the console) is folded field by field
+  (`network_game_layout_fold_fields`); CTF's is the same size on both.
+  Oddball's, King's and Race's are not folded yet: their scores stay the
+  console's own, told once in `debug.txt`.
+- **Objects: measured, not translated.** The client logs how high the
+  host's object indices go (each time they pass another 256), and each
+  game's highest index, the creates that landed in the console's own half
+  (1,024 and up: they take the place of its projectiles and effects) and
+  past its 2,048 (not made). In the host-side runs below, two players on
+  Blood Gulch never went past index 102. The table of plan (b) waits for a
+  measurement on the console that needs it.
+- **Joining.** System Link finds a PC host on the console's LAN by its
+  broadcast advertisement, as it finds a console's. A host the broadcasts
+  don't reach is joined by address: `D:\join.txt`, one line, an IPv4
+  address; the console tries it once each time System Link opens
+  (`port/xbox/src/xbox_direct_join.c`), with the address never logged. The
+  [D] servers on the internet are reached only through the PCs' p2p tunnel
+  (their system link sockets are on loopback addresses of their own), so
+  for now the console plays a dedicated server on its LAN: the same server
+  program, run on a PC beside it.
+
+Tested on the host: `port/xbox/tests/run.sh` (the record's fold, round trip
+and refusals; the game type states' fold, Slayer's sizes, the entries
+dropped; `D:\join.txt`'s parse, every refusal, every cut short). And two
+copies on one Mac, on loopback addresses of their own: ChupathingyCE main's
+macOS build as a dedicated server and as a network-test host (`HALO_NETWORK_TEST=
+host:bloodgulch:slayer,slayer` with kills, shots and a vehicle), a
+`--console-limits` build of this branch joining with `HALO_NETWORK_TEST=join`.
+It joined, played, took the host's kills and scores (4 of 4, then 3 and 3
+over two games) and each game's end, with no failed creates.
+
+### The settings record (first pass)
+
+- `port/linux/game/network_game_layout.c`: the settings record between
   any two slot counts, byte for byte. A fold refuses any used machine or
   player slot, or index a used entry names, past the narrower layout (no
   guess), and holds the gametype's maximum to its slots. A widen fills the
   new slots as the game empties one. Tested on the host
   (`port/xbox/tests/network_game_layout_test.c`: the sizes the game
-  asserts, an exact round trip, every refusal). The game doesn't call it
-  yet: joining a PC game also needs the game state message and players
-  past slot 16, so a half-translated join would only fail later and less
-  clearly.
+  asserts, an exact round trip, every refusal).
 
 ## Next, in order
 
@@ -196,8 +255,9 @@ translation layer, valid only where no peer computes anything different.
    allocations) and the 128 MB layout's room; then 128 player and machine
    slots on the console, its game's maximum 16.
 2. The object translation table, at the decode and encode points listed
-   above, with a counter of refused creates in `debug.txt`.
-3. Two machines on one LAN: a PC build hosting Blood Gulch, the devkit
-   joining over system link (`bypass_security.txt` on), then the reverse.
+   above, if the console's measurements (`debug.txt`, "cross-play: ...
+   host's objects") show a PC host's indices reaching its own half.
+3. Two machines on one LAN: a PC build's dedicated server, the devkit
+   joining over system link (`bypass_security.txt` on); then the reverse.
 4. Internet joins through the PCs' p2p tunnel under
    `transport_endpoint_winsock.c` (the README's "Online Games on the Xbox").

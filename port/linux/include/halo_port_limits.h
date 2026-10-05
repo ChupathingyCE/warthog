@@ -18,15 +18,26 @@ a finishing place in 7 bits.
 
 /* ---------- session limits */
 
-#ifdef HALO_XBOX_CONSOLE
-/* the console (port/xbox) stays the Xbox: 16 players, though on as many
-machines as players, one each, as the native builds' players come */
+/* The console (port/xbox, HALO_XBOX_CONSOLE) stays the Xbox: 16 players,
+though on as many machines as players, one each, as the native builds'
+players come. HALO_CONSOLE_LIMITS gives a desktop build the console's
+limits, to test the console's side of cross-play against the PC builds on
+one computer (configure.py --console-limits); it is never a release. */
+#if defined(HALO_XBOX_CONSOLE) || defined(HALO_CONSOLE_LIMITS)
+#define HALO_PORT_CONSOLE_LIMITS 1
 #define HALO_PORT_MAXIMUM_NETWORK_PLAYERS 16
 #define HALO_PORT_MAXIMUM_NETWORK_MACHINES 16
 #else
 #define HALO_PORT_MAXIMUM_NETWORK_PLAYERS 128
 #define HALO_PORT_MAXIMUM_NETWORK_MACHINES 128
 #endif
+
+/* the slots on the network: the PC builds' (network version 11), which never
+change; a build with the console's limits folds the PCs' game settings
+record and game type states into its own slots as they arrive
+(port/linux/game/network_game_layout.c, docs/cross-play.md) */
+#define HALO_PORT_WIRE_NETWORK_PLAYERS 128
+#define HALO_PORT_WIRE_NETWORK_MACHINES 128
 
 /* a host polls its listening socket and one socket per machine; the Xbox's
 Winsock headers default to 64 (the prefix headers define FD_SETSIZE from
@@ -57,6 +68,10 @@ machines, 16 players) are 0x226 and 0x434. */
 #define HALO_PORT_NETWORK_GAME_VARIANT_OPTIONS_OFFSET (HALO_PORT_NETWORK_GAME_PLAYERS_END + 0xA)
 #define HALO_PORT_NETWORK_GAME_LOCAL_DATA_OFFSET (HALO_PORT_NETWORK_GAME_PLAYERS_END + 0x26)
 #define HALO_PORT_NETWORK_GAME_SIZE (HALO_PORT_NETWORK_GAME_PLAYERS_END + 0x2A)
+/* ... at the network's slots (13,120 bytes) */
+#define HALO_PORT_WIRE_NETWORK_GAME_SIZE (HALO_PORT_NETWORK_GAME_MACHINES_OFFSET + \
+	HALO_PORT_WIRE_NETWORK_MACHINES * HALO_PORT_NETWORK_MACHINE_SIZE + 2 + \
+	HALO_PORT_WIRE_NETWORK_PLAYERS * HALO_PORT_NETWORK_PLAYER_SIZE + 0x2A)
 
 /* ---------- system link protocol
 

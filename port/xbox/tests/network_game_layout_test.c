@@ -2,8 +2,9 @@
 NETWORK_GAME_LAYOUT_TEST.C
 
 The game settings record between the PC builds' and the console's layouts
-(port/xbox/src/xbox_network_game_layout.c) on the host: the sizes the game
-asserts, a round trip, and every reason a fold refuses.
+(port/linux/game/network_game_layout.c) on the host: the sizes the game
+asserts, a round trip, and every reason a fold refuses; and the game type
+states' fold (slayer's, as game_engine_slayer.c lays it out).
 port/xbox/tests/run.sh.
 */
 
@@ -11,7 +12,7 @@ port/xbox/tests/run.sh.
 #include <stdlib.h>
 #include <string.h>
 
-#include "../include/xbox_network_game_layout.h"
+#include "../../linux/game/network_game_layout.h"
 
 #define PC NETWORK_GAME_LAYOUT_PC_SLOTS
 #define CONSOLE NETWORK_GAME_LAYOUT_CONSOLE_SLOTS
@@ -157,6 +158,69 @@ int main(void)
 	CHECK(network_game_layout_convert(record, 129, PC, console, CONSOLE, CONSOLE, NULL) == NETWORK_GAME_LAYOUT_BAD_SIZE);
 	free(record);
 	CHECK(!strcmp(network_game_layout_error_string(99), "unknown error"));
+
+	/* a PC host's slayer state into the console's: team and individual
+	scores (longs), targets (bytes, 0xFF none) and speeds (words), each one a
+	slot; the sizes are docs/cross-play.md's 1,408 and 176 */
+	{
+		static const struct network_game_layout_field slayer[] =
+		{
+			{ 4, 1, 0 }, { 4, 1, 0 }, { 1, 1, 0xFF }, { 2, 1, 0 },
+		};
+		static const struct network_game_layout_field mixed[] =
+		{
+			{ 4, 0, 0 }, { 2, 1, 0 }, { 1, 0, 0 },
+		};
+		unsigned char wire[1408], local[176], wide[1408];
+		int dropped, slot;
+
+		CHECK(network_game_layout_fields_size(slayer, 4, PC) == 1408);
+		CHECK(network_game_layout_fields_size(slayer, 4, CONSOLE) == 176);
+		memset(wire, 0, sizeof(wire));
+		memset(wire + 1024, 0xFF, 128);
+		for (slot = 0; slot < CONSOLE; slot++)
+		{
+			wire[slot * 4] = (unsigned char)(slot + 1);
+			wire[512 + slot * 4 + 1] = (unsigned char)(slot + 2);
+			wire[1024 + slot] = (unsigned char)((slot + 1) % CONSOLE);
+			wire[1152 + slot * 2] = 0x40;
+		}
+		CHECK(network_game_layout_fold_fields(wire, sizeof(wire), PC, local, sizeof(local), CONSOLE, slayer, 4,
+			&dropped) == NETWORK_GAME_LAYOUT_OK);
+		CHECK(dropped == 0);
+		CHECK(local[15 * 4] == 16 && local[64 + 15 * 4 + 1] == 17 && local[128 + 15] == 0 && local[144 + 30] == 0x40);
+		/* (and back: the PCs' layout exactly) */
+		CHECK(network_game_layout_fold_fields(local, sizeof(local), CONSOLE, wide, sizeof(wide), PC, slayer, 4,
+			NULL) == NETWORK_GAME_LAYOUT_OK);
+		CHECK(!memcmp(wide, wire, sizeof(wire)));
+		/* a score, a target and a speed past slot 16: dropped and counted */
+		wire[20 * 4] = 3;
+		wire[1024 + 40] = 2;
+		wire[1152 + 100 * 2 + 1] = 1;
+		CHECK(network_game_layout_fold_fields(wire, sizeof(wire), PC, local, sizeof(local), CONSOLE, slayer, 4,
+			&dropped) == NETWORK_GAME_LAYOUT_OK);
+		CHECK(dropped == 3);
+		/* sizes that are not the layouts' */
+		CHECK(network_game_layout_fold_fields(wire, sizeof(wire) - 1, PC, local, sizeof(local), CONSOLE, slayer, 4,
+			NULL) == NETWORK_GAME_LAYOUT_BAD_SIZE);
+		CHECK(network_game_layout_fold_fields(wire, sizeof(wire), PC, local, sizeof(local) + 1, CONSOLE, slayer, 4,
+			NULL) == NETWORK_GAME_LAYOUT_BAD_SIZE);
+		CHECK(network_game_layout_fold_fields(local, sizeof(local), CONSOLE, wire, sizeof(wire), PC, slayer, 4,
+			NULL) == NETWORK_GAME_LAYOUT_OK);
+		/* fields of one element are copied whole */
+		CHECK(network_game_layout_fields_size(mixed, 3, PC) == 4 + 256 + 1);
+		{
+			unsigned char from[261], to[37];
+
+			memset(from, 0, sizeof(from));
+			from[0] = 9;
+			from[4] = 7;
+			from[260] = 5;
+			CHECK(network_game_layout_fold_fields(from, sizeof(from), PC, to, sizeof(to), CONSOLE, mixed, 3, &dropped) ==
+				NETWORK_GAME_LAYOUT_OK);
+			CHECK(to[0] == 9 && to[4] == 7 && to[36] == 5 && dropped == 0);
+		}
+	}
 
 	free(console);
 	free(back);

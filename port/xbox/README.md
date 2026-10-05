@@ -124,10 +124,14 @@ ChupathingyCE main's of October 4 (network version 11) and links; it is not
 yet booted. Known:
 
 - There is no Bink video (the movies are skipped) and no reverb.
-- The netcode is the PC builds' (distributed), but the console cannot yet
-  play with them: its session (16 machines) and object array (2,048) give a
-  different game settings record and object indices than theirs (128
-  machines, 8,192 objects). The top level README's "Cross-play" has the plan.
+- The netcode is the PC builds' (distributed). The console joins a PC
+  host's game as a client: it folds the PCs' 128-slot game settings record
+  and Slayer's state into its 16 slots, and leaves a game that grows past
+  them as a full one (docs/cross-play.md, "What is built"). It finds a PC
+  host on its LAN in System Link, or joins the host whose IPv4 address is
+  in `D:\join.txt` (one line; `src/xbox_direct_join.c`). It does not yet
+  host the PCs, and its object array (2,048) is the Xbox's: `debug.txt`
+  logs how high a PC host's object indices go ("cross-play:" lines).
 - The menus are the Xbox's; the PC menus and Online Games are not built.
   The game list is fetched and logged only ("The game list").
 - Campaign and multiplayer levels are not yet tested.

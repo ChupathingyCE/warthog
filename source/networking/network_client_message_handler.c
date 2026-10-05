@@ -200,6 +200,9 @@ symbols in this file:
 #include "networking/network_client_manager.h"
 #include "networking/network_client_message_handler.h"
 #include "networking/network_game_manager.h"
+#ifdef HALO_PORT_CONSOLE_LIMITS
+#include "networking/network_game_protocol.h"
+#endif
 #include "networking/network_messages.h"
 
 /* port/linux/game/network_distributed.c's */
@@ -919,12 +922,27 @@ static boolean network_game_client_handle_message_server_machine_rejected(
 
 /* the game settings record as its pieces arrive; it is applied once the last
 piece is in */
+#ifdef HALO_PORT_CONSOLE_LIMITS
+/* port: the console's limits (halo_port_limits.h). The host's record comes
+at the network's slots, the PC builds' 128 and 128, and is folded into this
+build's 16 and 16 (port/linux/game/network_game_layout.c); a game with a
+machine or player past them is left, as a full game is, never half taken */
+int network_game_layout_convert(const unsigned char *from, int from_machines, int from_players,
+	unsigned char *to, int to_machines, int to_players, int *clamped);
+const char *network_game_layout_error_string(int error);
+
+static byte network_game_client_settings_staging[HALO_PORT_WIRE_NETWORK_GAME_SIZE];
+static struct network_game network_game_client_settings_folded;
+static boolean network_game_client_settings_told_clamped = FALSE;
+#else
 static struct network_game network_game_client_settings_staging;
+#endif
 static long network_game_client_settings_staging_size = 0;
 
 static boolean network_game_client_receive_game_settings_piece(
 	struct network_game_client *client,
-	struct message_server_game_settings_update const *piece)
+	struct message_server_game_settings_update const *piece,
+	struct transport_address *source_address)
 {
 	boolean result = TRUE;
 
@@ -958,7 +976,33 @@ static boolean network_game_client_receive_game_settings_piece(
 			if (network_game_client_settings_staging_size == piece->total_size)
 			{
 				network_game_client_settings_staging_size = 0;
+#ifdef HALO_PORT_CONSOLE_LIMITS
+				{
+					int clamped;
+					int error = network_game_layout_convert(network_game_client_settings_staging,
+						HALO_PORT_WIRE_NETWORK_MACHINES, HALO_PORT_WIRE_NETWORK_PLAYERS,
+						(unsigned char *)&network_game_client_settings_folded, MAXIMUM_NETWORK_MACHINE_COUNT,
+						MAXIMUM_NUMBER_OF_PLAYERS, &clamped);
+
+					if (error)
+					{
+						network_event("cross-play: leaving the host's game: its settings have %s (this build takes %d machines and %d players)",
+							network_game_layout_error_string(error), (int)MAXIMUM_NETWORK_MACHINE_COUNT,
+							(int)MAXIMUM_NUMBER_OF_PLAYERS);
+						network_game_client_rejected_by_game(client, source_address, _rejection_code_game_is_full);
+						return TRUE;
+					}
+					if (clamped && !network_game_client_settings_told_clamped)
+					{
+						network_game_client_settings_told_clamped = TRUE;
+						network_event("cross-play: the host's game takes more players than this build's %d; held to them",
+							(int)MAXIMUM_NUMBER_OF_PLAYERS);
+					}
+				}
+				result = network_game_client_game_settings_updated(client, &network_game_client_settings_folded);
+#else
 				result = network_game_client_game_settings_updated(client, &network_game_client_settings_staging);
+#endif
 				if (!result)
 				{
 					network_event("network_game_client_game_settings_updated() failed");
@@ -998,7 +1042,7 @@ static boolean network_game_client_handle_message_server_game_settings_update(
 				&packet_version,
 				_network_game_packet_class_pregame))
 			{
-				result = network_game_client_receive_game_settings_piece(client, &piece);
+				result = network_game_client_receive_game_settings_piece(client, &piece, source_address);
 			}
 			else
 			{
@@ -1325,6 +1369,21 @@ static boolean network_game_client_handle_message_server_add_player_ingame(
 				&packet_version,
 				_network_game_packet_class_ingame))
 			{
+#ifdef HALO_PORT_CONSOLE_LIMITS
+				/* port: the console's limits (halo_port_limits.h): a player the
+				PC host put in a slot past this build's (its datum, which every
+				machine shares) would not exist here, an invisible player; the
+				game is left as a full one is */
+				if ((player.player_list_index != NONE && !VALID_INDEX(player.player_list_index, MAXIMUM_NUMBER_OF_PLAYERS)) ||
+					!VALID_INDEX(player.machine_index, MAXIMUM_NETWORK_MACHINE_COUNT))
+				{
+					network_event("cross-play: leaving the host's game: a player joined in slot %d from machine #%d, past this build's %d players and %d machines",
+						(int)player.player_list_index, (int)player.machine_index, (int)MAXIMUM_NUMBER_OF_PLAYERS,
+						(int)MAXIMUM_NETWORK_MACHINE_COUNT);
+					network_game_client_rejected_by_game(client, source_address, _rejection_code_game_is_full);
+					return TRUE;
+				}
+#endif
 				/* (the distributed netcode: a player this machine cannot add
 				does not end its game) */
 				if (!network_game_client_add_player_to_game(client, &player))
