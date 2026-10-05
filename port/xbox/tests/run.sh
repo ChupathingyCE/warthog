@@ -9,6 +9,8 @@
 #   port/xbox/tests/run.sh --fuzz 300    and libFuzzer for 300 seconds (LLVM's clang)
 #   port/xbox/tests/run.sh --fetch       and the fetch of the real list, over the
 #                                        host's sockets (warthog.milenko.org)
+#   port/xbox/tests/run.sh --xbox        and the Xbox build's own checks
+#                                        (xbox_check.sh: va_start, formats)
 #
 # CC picks the compiler (default: Homebrew's clang if there, else cc). The
 # binaries and libFuzzer's corpus go to build/xbox-tests.
@@ -48,8 +50,12 @@ while [ $# -gt 0 ]; do
 		"$OUT/game_list_fetch_test"
 		shift
 		;;
+	--xbox)
+		sh port/xbox/tests/xbox_check.sh
+		shift
+		;;
 	*)
-		echo "usage: $0 [--fuzz SECONDS] [--fetch]" >&2
+		echo "usage: $0 [--fuzz SECONDS] [--fetch] [--xbox]" >&2
 		exit 2
 		;;
 	esac

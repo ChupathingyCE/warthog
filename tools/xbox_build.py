@@ -77,6 +77,12 @@ SUPPORT_FLAGS = [
     "-Wno-deprecated-declarations", "-Wno-writable-strings", "-Wno-microsoft-cast",
     "-Wno-unknown-pragmas", "-Wno-extra-tokens", "-Wno-nonportable-include-path",
     "-Wno-typedef-redefinition", "-Wno-missing-prototype-for-cc", "-Wno-comment",
+    # clang's va_start in place of the SDK's address arithmetic, which breaks
+    # once a variadic function is inlined (port/xbox/include/xbox_stdarg.h)
+    "-include", "port/xbox/include/xbox_stdarg.h",
+    # a format and its arguments that disagree are errors (the console's C
+    # runtime has no %z, %ll, %j or %hh either)
+    "-Wformat", "-Werror=format",
 ]
 SUPPORT_CXX_FLAGS = ["-fno-exceptions", "-fno-rtti", "-fno-threadsafe-statics"]
 

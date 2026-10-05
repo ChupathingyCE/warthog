@@ -28,7 +28,7 @@ the C99 one) */
 int snprintf(char *buffer, size_t size, const char *format, ...);
 
 /* to D:\debug.txt and the debug monitor; never an address (log_address.h) */
-void platform_log(const char *format, ...);
+void platform_log(const char *format, ...) __attribute__((format(printf, 1, 2)));
 /* where the hand-off socket's file would be (unused on the console) */
 const char *platform_data_root(void);
 
