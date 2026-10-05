@@ -48,6 +48,7 @@ renamed in the game's units, the SDK's declarations of them included */
 #define getpeername halo_xbox_getpeername
 #define select halo_xbox_select
 #define XNetXnAddrToInAddr halo_xbox_XNetXnAddrToInAddr
+#define XNetGetTitleXnAddr halo_xbox_XNetGetTitleXnAddr
 #define XNetRegisterKey halo_xbox_XNetRegisterKey
 #define XNetUnregisterKey halo_xbox_XNetUnregisterKey
 

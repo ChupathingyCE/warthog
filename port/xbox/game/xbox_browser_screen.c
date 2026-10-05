@@ -289,6 +289,12 @@ static void wait_for_host(
 			"ui\\shell\\main_menu\\multiplayer_type_select\\connected\\pregame\\connected_pregame_screen",
 			NONE, NULL, NONE, NONE, NONE, NONE);
 	}
+	else if (joined == -2)
+	{
+		browser_screen.connecting = FALSE;
+		set_status("Could not connect to the host.");
+		error(_error_log, "online games: the connection to the host's game failed");
+	}
 	else if (joined < 0)
 	{
 		browser_screen.connecting = FALSE;

@@ -3322,7 +3322,13 @@ long network_game_client_join_invite_host(
 		if (!address.address.long_words[0] || !address.port)
 			return 0;
 		network_game_generate_join_game_token(join_parameters.join_token);
+#ifdef HALO_XBOX_CONSOLE
+		/* port: the console's screen tells a connection that failed (-2)
+		from a host of another version (-1) */
+		return network_game_client_initiate_join_game(client, game, &join_parameters, &address) ? 1 : -2;
+#else
 		return network_game_client_initiate_join_game(client, game, &join_parameters, &address) ? 1 : -1;
+#endif
 	}
 	return 0;
 }

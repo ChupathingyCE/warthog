@@ -389,11 +389,22 @@ int WSAAPI halo_xbox_connect(SOCKET socket, const struct sockaddr *address, int 
 	int result;
 	int error;
 
-	if (address && address->sa_family == AF_INET && address_length >= (int)sizeof(target) &&
-		is_virtual(((const struct sockaddr_in *)address)->sin_addr.s_addr) &&
-		outgoing(socket_type(socket) == SOCK_STREAM, (int)socket, &address, address_length, &target) < 0)
+	if (address && address->sa_family == AF_INET && address_length >= (int)sizeof(target))
 	{
-		return SOCKET_ERROR;
+		static int logged;
+		int virtual_address = is_virtual(((const struct sockaddr_in *)address)->sin_addr.s_addr);
+		int redirect = virtual_address ?
+			outgoing(socket_type(socket) == SOCK_STREAM, (int)socket, &address, address_length, &target) : 0;
+
+		if (logged++ < 8)
+			platform_log("tunnel: the game connects (%s) to port %u: %s",
+				socket_type(socket) == SOCK_STREAM ? "stream" : "datagram",
+				(unsigned)ntohs(((const struct sockaddr_in *)address)->sin_port),
+				!virtual_address ? "not a tunnel peer's address, through XNet" :
+					redirect > 0 ? "a tunnel peer's, to its stand-in" :
+					redirect < 0 ? "a tunnel peer's, not reachable now" : "a tunnel peer's, but no stand-in");
+		if (redirect < 0)
+			return SOCKET_ERROR;
 	}
 	result = connect(socket, address, address_length);
 	error = result != 0 ? WSAGetLastError() : 0;
@@ -577,18 +588,74 @@ int WSAAPI halo_xbox_sendto(SOCKET socket, const char *buffer, int length, int f
 	return result;
 }
 
+/* ---------- XNADDR: the game's and the SDK's
+
+The game (port/include/xdk, from its 2002 SDK) has a 12-byte XNADDR:
+bSizeOfStruct, bFlags, abEnet[6], ina. It is on the wire, in every
+advertisement, as the PC builds have it. The 5933 SDK the console links has
+a 36-byte one (ina, inaOnline, wPortOnline, abEnet, abOnline). So the game's
+calls that take an XNADDR come here (halo_xbox_prefix.h) and are turned
+into the SDK's and back; without this XNetGetTitleXnAddr wrote 36 bytes
+into the game's 12 (global_address, and the globals after it), and the
+abEnet the game advertised and the one this file compared were others'. */
+
+struct game_xnaddr
+{
+	unsigned char size;
+	unsigned char flags;
+	unsigned char enet[6];
+	IN_ADDR ina;
+};
+
+typedef char game_xnaddr_size_assert[sizeof(struct game_xnaddr) == 12 ? 1 : -1];
+
+DWORD WSAAPI halo_xbox_XNetGetTitleXnAddr(struct game_xnaddr *address)
+{
+	XNADDR sdk;
+	DWORD result;
+
+	memset(&sdk, 0, sizeof(sdk));
+	result = XNetGetTitleXnAddr(&sdk);
+	if (address)
+	{
+		memset(address, 0, sizeof(*address));
+		address->size = (unsigned char)sizeof(*address);
+		memcpy(address->enet, sdk.abEnet, sizeof(address->enet));
+		address->ina = sdk.ina;
+	}
+	return result;
+}
+
 /* a peer's XNADDR (its abEnet the tunnel's identifier) gives its virtual
 address; any other, XNet's */
-INT WSAAPI halo_xbox_XNetXnAddrToInAddr(const XNADDR *address, const XNKID *key_identifier, IN_ADDR *result)
+INT WSAAPI halo_xbox_XNetXnAddrToInAddr(const struct game_xnaddr *address, const XNKID *key_identifier,
+	IN_ADDR *result)
 {
+	static int logged;
 	unsigned long peer;
+	XNADDR sdk;
+	INT error;
 
-	if (address && result && p2p_peer_address(address->abEnet, &peer))
+	if (!address || !result)
+		return XNetXnAddrToInAddr(NULL, key_identifier, result);
+	if (p2p_peer_address(address->enet, &peer))
 	{
+		if (logged++ < 6)
+			platform_log("tunnel: the host %02x%02x%02x%02x%02x%02x is a tunnel peer: reached at its virtual address",
+				address->enet[0], address->enet[1], address->enet[2], address->enet[3], address->enet[4],
+				address->enet[5]);
 		result->s_addr = peer;
 		return 0;
 	}
-	return XNetXnAddrToInAddr(address, key_identifier, result);
+	memset(&sdk, 0, sizeof(sdk));
+	sdk.ina = address->ina;
+	memcpy(sdk.abEnet, address->enet, sizeof(sdk.abEnet));
+	error = XNetXnAddrToInAddr(&sdk, key_identifier, result);
+	if (logged++ < 6)
+		platform_log("tunnel: the host %02x%02x%02x%02x%02x%02x is not a tunnel peer: XNet's address for it (%d)",
+			address->enet[0], address->enet[1], address->enet[2], address->enet[3], address->enet[4],
+			address->enet[5], (int)error);
+	return error;
 }
 
 /* Winsock started (after XNet: transport_endpoint_set_winsock.c): internet
