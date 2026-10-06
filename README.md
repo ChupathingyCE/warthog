@@ -83,6 +83,16 @@ needs the user's own MCPX boot ROM, flash image and hard disk image.
 **Xbox 360.** Xenia first (unsigned XEX files run there), then an RGH or
 JTAG console through a launcher such as Aurora.
 
+## Memory and XLink Kai
+
+The game reads the console's memory at the start and logs its class (64,
+128 or 256 MB). The game's limits stay the Xbox's on every console; a
+128 MB console may take a larger texture cache (`D:\large_caches.txt`), and
+a feature that needs 128 MB shows a message instead of failing
+(`port/xbox/README.md`, "Memory"). `debug.txt` also says whether the
+console's address is XLink Kai's for its MAC; the XLink mode that would set
+it is a design ([docs/xlink.md](docs/xlink.md)).
+
 ## Cross-play
 
 The goal is system link and internet games with the PC builds at network

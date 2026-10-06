@@ -46,10 +46,10 @@ from the disc.
 Put the files on the console's hard disk in one folder, for example:
 
 ```
-E:\Games\HaloBeta\default.xbe
-E:\Games\HaloBeta\maps\ui.map
-E:\Games\HaloBeta\maps\loading.tga
-E:\Games\HaloBeta\maps\a10.map ...
+E:\Games\Warthog\default.xbe
+E:\Games\Warthog\maps\ui.map
+E:\Games\Warthog\maps\loading.tga
+E:\Games\Warthog\maps\a10.map ...
 ```
 
 `D:\` is the folder of the XBE when the game runs, and the game writes its
@@ -81,9 +81,15 @@ The files in `port/xbox/src` supply what the later SDK does not:
   reverb.
 - `xbox_d3dx.c`: the four D3DX functions that the game calls. The SDK's
   D3DX library needs the SDK's own Direct3D.
-- `xbox_support.cpp`: `fast_ftol_C` (not yet in the reconstruction), and the debug monitor's module functions. A title that
-  imports `xbdm.dll` does not start on a retail console, so the game finds
-  no modules.
+- `xbox_support.cpp`: `fast_ftol_C` (not yet in the reconstruction), and
+  the debug monitor's module functions. A title that imports `xbdm.dll`
+  does not start on a retail console, so the game finds no modules.
+- `xbox_winsock_hooks.c`: the game's 12-byte `XNADDR` (the 2002 SDK's, and
+  the wire's) to and from the 5933 SDK's 36-byte one, and
+  `XNetStartupParams` at the 5933 library's 12 bytes (`port/include/xdk`).
+  The other SDK structures the game hands the libraries have the same size
+  in both; `XNetGetConfigStatus`'s is in no header, so the game's copy has
+  room to spare.
 
 `tools/xbox_sources.py` makes the pooled globals and the Bink stub from the
 Linux port's files. `port/linux/game/msvc_comdat.c` supplies the header
@@ -95,7 +101,7 @@ At the start, once the network is up, a thread of the game's own gets the
 game list from `http://warthog.milenko.org/v1/console/games` (plain HTTP:
 the console has no TLS) and the game logs it, to the debug monitor as
 `halo: game list:` lines and to `debug.txt` as `game list:` lines. Nothing
-waits on it. The menus do not show it yet.
+waits on it. Multiplayer's ONLINE GAMES shows it (`game/xbox_browser_screen.c`).
 
 - `src/xbox_game_list_fetch.c`: HTTP/1.0 over XNet's Winsock. The host is
   looked up with `XNetDnsLookup`; if it does not resolve, `D:\game_list.txt`
@@ -116,12 +122,49 @@ waits on it. The menus do not show it yet.
 XNet speaks only to other consoles unless it starts insecure, so the list,
 like play with the PCs, needs an empty `D:\bypass_security.txt`.
 
+## Files beside default.xbe
+
+The console has no config file yet; these switches are empty files (or one
+line) in the game's folder (`D:\`):
+
+| File | What it does |
+|---|---|
+| `bypass_security.txt` | XNet starts insecure: the internet, the game list and play with PCs need it (`tools/xbox_package.py` writes it) |
+| `game_list.txt` | the list's server (host or address, `:port` optional) when `warthog.milenko.org` does not resolve |
+| `join.txt` | a host's LAN address (System Link joins it directly) or an invite (ONLINE GAMES' Y joins it) |
+| `trace.txt` | the bring-up traces: the main loop each second, every hop of an internet join, the advertisements seen. They name hosts by their Ethernet addresses: read a traced log before posting it |
+| `large_caches.txt` | on a 128 MB console, a 44 MB texture cache (64 MB on a 256 MB one); on a 64 MB console, a message and the Xbox's 22 MB |
+
+## Memory
+
+`src/xbox_memory.c` reads the console's memory at the start
+(`GlobalMemoryStatus`, else the kernel's `MmQueryStatistics`) and logs it
+with its class: 64 MB (a stock Xbox), 128 MB (a devkit, or the common
+upgrade) or 256 MB (the bigger mods). The XBE does not limit itself to 64 MB
+(`cxbe -LIMIT64MB:no`), so a console whose kernel knows the upper 64 MB
+reports it.
+
+The class sets only what the console can safely change at run time: the
+texture cache (`large_caches.txt`, above). The game's limits (players,
+machines, objects, the game state) stay the Xbox's on every console, so all
+of them play the same game; docs/cross-play.md has why the bigger game
+state needs more than a bigger console. `xbox_memory_require` is how a
+feature that needs 128 MB says so: a message at the main menu, and the
+game goes on without it. `xbox_memory_delta_class` is the hook for Delta
+Peer's platform key (`memory_class`) once Delta is built for the console.
+
+## XLink Kai
+
+At the start `debug.txt` says whether the console's address is XLink
+Kai's for its MAC (`10.252.EE.FF`, mask `255.255.0.0`). The "XLink mode"
+that would set it is a design (docs/xlink.md).
+
 ## Status
 
-The October 2 build started on a modified retail console and on a
-development kit: the menus, the menu music and profiles. This code is
-ChupathingyCE main's of October 4 (network version 11) and links; it is not
-yet booted. Known:
+The build boots on a development kit (October 4): the menus at a steady 30
+fps, the menu music and profiles, DHCP, the game list and ONLINE GAMES. The
+October 2 build also started on a modified retail console. This code is ChupathingyCE main's of October 4 (network
+version 11). Known:
 
 - There is no Bink video (the movies are skipped) and no reverb.
 - The netcode is the PC builds' (distributed). The console joins a PC
@@ -132,11 +175,11 @@ yet booted. Known:
   the invite in `D:\join.txt`), through the desktop builds' tunnel
   (`port/linux/src/p2p*.c`, built as they are; `src/xbox_p2p.c` and
   `src/xbox_winsock_hooks.c` are its platform), with
-  `D:\bypass_security.txt`. On a LAN it finds a PC host in System Link, or
-  joins the host whose IPv4 address is in `D:\join.txt`
-  (`src/xbox_direct_join.c`). It does not yet host the PCs, and its object
-  array (2,048) is the Xbox's: `debug.txt` logs how high a PC host's object
-  indices go ("cross-play:" lines).
-- The menus are the Xbox's; the PC menus and Online Games are not built.
-  The game list is fetched and logged only ("The game list").
+  `D:\bypass_security.txt`; that join is built but not yet seen working on
+  a console. On a LAN it finds a PC host in System Link, or joins the host
+  whose IPv4 address is in `D:\join.txt` (`src/xbox_direct_join.c`). It
+  does not yet host the PCs, and its object array (2,048) is the Xbox's:
+  `debug.txt` logs how high a PC host's object indices go ("cross-play:"
+  lines).
+- The menus are the Xbox's; the PC menus are not built.
 - Campaign and multiplayer levels are not yet tested.
