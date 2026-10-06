@@ -617,6 +617,9 @@ DWORD WSAAPI halo_xbox_XNetGetTitleXnAddr(struct game_xnaddr *address)
 	return result;
 }
 
+/* (below: the key ids of hosts XNet doesn't key, the tunnel's and PCs') */
+static int is_tunnel_key(const XNKID *key_identifier);
+
 /* a peer's XNADDR (its abEnet the tunnel's identifier) gives its virtual
 address; any other, XNet's */
 INT WSAAPI halo_xbox_XNetXnAddrToInAddr(const struct game_xnaddr *address, const XNKID *key_identifier,
@@ -639,6 +642,16 @@ INT WSAAPI halo_xbox_XNetXnAddrToInAddr(const struct game_xnaddr *address, const
 				log_ethernet(address->enet, tag, sizeof(tag)));
 		}
 		result->s_addr = peer;
+		return 0;
+	}
+	/* (a PC host on the LAN, its key not XNet's (halo_xbox_XNetRegisterKey):
+	XNet would give an address of its key exchange, which the PC has none
+	of; the PC advertises its own address in ina, and is reached there) */
+	if (address->ina.s_addr && is_tunnel_key(key_identifier))
+	{
+		if (logged++ < 6)
+			platform_log("system link: the PC host is reached at the address it advertised");
+		*result = address->ina;
 		return 0;
 	}
 	memset(&sdk, 0, sizeof(sdk));
