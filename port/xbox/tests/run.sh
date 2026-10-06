@@ -5,7 +5,7 @@
 #   port/xbox/tests/run.sh               the parsers', the screen's words', the
 #                                        settings record and game type state
 #                                        layouts', D:\join.txt's and the memory
-#                                        class's tests,
+#                                        class's and XLink's tests,
 #                                        and 200,000 mutations
 #   port/xbox/tests/run.sh --fuzz 300    and libFuzzer for 300 seconds (LLVM's clang)
 #   port/xbox/tests/run.sh --fetch       and the fetch of the real list, over the
@@ -38,6 +38,8 @@ $CC -std=c89 -pedantic -Wall -Wextra -Werror $SAN port/xbox/tests/direct_join_te
 $CC -std=c89 -pedantic -Wall -Wextra -Werror $SAN port/xbox/tests/memory_test.c $SRC/xbox_memory.c \
 	-o "$OUT/memory_test"
 "$OUT/memory_test"
+$CC -std=c89 -pedantic -Wall -Wextra -Werror $SAN port/xbox/tests/xlink_test.c $SRC/xbox_xlink.c -o "$OUT/xlink_test"
+"$OUT/xlink_test"
 while [ $# -gt 0 ]; do
 	case "$1" in
 	--fuzz)

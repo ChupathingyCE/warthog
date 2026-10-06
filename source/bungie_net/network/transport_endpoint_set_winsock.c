@@ -397,6 +397,26 @@ short transport_initialize(
 				(address_status & XNET_GET_XNADDR_GATEWAY) ? " gateway" : " (no gateway)",
 				(address_status & XNET_GET_XNADDR_DNS) ? " dns" : " (no dns servers)");
 		}
+		{
+			/* port: whether the console's address is XLink Kai's for its MAC
+			(10.252.EE.FF, port/xbox/src/xbox_xlink.c, docs/xlink.md), so a
+			player setting up system link over Kai sees what to set; a
+			private address, never the MAC itself */
+			extern int xbox_xlink_address(unsigned char const *mac, unsigned long *address, unsigned long *mask);
+			unsigned long xlink_address, xlink_mask;
+			unsigned long address = ((unsigned long)((unsigned char const *)&global_address.ina)[0] << 24) |
+				((unsigned long)((unsigned char const *)&global_address.ina)[1] << 16) |
+				((unsigned long)((unsigned char const *)&global_address.ina)[2] << 8) |
+				(unsigned long)((unsigned char const *)&global_address.ina)[3];
+
+			if (xbox_xlink_address(global_address.abEnet, &xlink_address, &xlink_mask))
+			{
+				error(_error_log, "xlink: %s (XLink Kai's address for this console is %lu.%lu.%lu.%lu, mask 255.255.0.0)",
+					address == xlink_address ? "this console's address is XLink Kai's" :
+						"this console's address is not XLink Kai's; for system link over Kai, set it in the dashboard",
+					xlink_address >> 24, (xlink_address >> 16) & 0xFF, (xlink_address >> 8) & 0xFF, xlink_address & 0xFF);
+			}
+		}
 #endif
 
 		XNetRandom(global_nonce, sizeof(global_nonce));
