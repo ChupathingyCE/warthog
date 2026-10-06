@@ -5,9 +5,12 @@
 <p align="center"><b>Halo: Combat Evolved back on the original Xbox: ChupathingyCE's console line, playing online with the PC builds.</b></p>
 
 <p align="center">
+<a href="https://github.com/ChupathingyCE/chupathingyce">ChupathingyCE</a> ·
 <a href="https://halo.milenko.org">Games online now</a> ·
 <a href="https://discord.gg/4BUm2FwuCB">Discord</a>
 </p>
+
+> Warthog follows ChupathingyCE: the shared game code comes from there, and this repository adds only the consoles' own code. You need your own copy of Halo; no SDK or game files are included.
 
 > **Built on ChupathingyCE with [OpenCE](https://github.com/OpenCommunityEdition/OpenCE) build-133 through build-138 (network version 20).** Warthog joins games hosted on network versions 11 through 20, by ChupathingyCE and OpenCE builds alike, with up to 16 players. There's no release yet: Warthog is in development, and for now it runs on development kits and modified consoles.
 
@@ -47,15 +50,19 @@ PC builds. Expect rough edges, and please report them.
 
 ## You need your own copy of Halo
 
-Warthog doesn't include the game's maps, sounds or art, and never will: we
-don't provide maps, disc images or ISOs, and we don't link to them. You
-need your own Xbox disc of Halo: Combat Evolved. Warthog plays the maps of
-the North American release (NTSC, 01.10.12.2276), as every ChupathingyCE
-build and dedicated server does; the PAL disc's maps work too.
+Warthog doesn't include the game's maps, sounds or art. You need your own
+Xbox disc of Halo: Combat Evolved. Warthog plays the maps of the North
+American release (NTSC, 01.10.12.2276), as every ChupathingyCE build and
+dedicated server does; the PAL disc's maps work too.
 
-Copy the `maps` folder from your own disc, then lay the game out for the
-console's hard disk with `tools/xbox_package.py` (see "Build") and copy that
-folder over, for example to `E:\Games\Warthog\`.
+1. Copy the `maps` folder from your own disc (about 2 GB) to your computer.
+2. Lay the game out for the console's hard disk: `tools/xbox_package.py`
+   puts `default.xbe` beside your maps in one folder (see "Build").
+3. Copy that folder to the console, for example to `E:\Games\Warthog\`, and
+   start `default.xbe`.
+
+Warthog never provides game files: we don't provide maps, disc images or
+other copyrighted game data, and we don't link to them.
 
 ## Playing online
 

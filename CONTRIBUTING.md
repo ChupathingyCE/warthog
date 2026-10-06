@@ -6,6 +6,20 @@ console line: the original Xbox today, other consoles later
 first; Warthog takes its main regularly (README, "Keeping in step with
 ChupathingyCE").
 
+## How changes flow
+
+Code moves one way: ChupathingyCE -> Warthog. Warthog is rebased onto
+ChupathingyCE's main, so a fix to the shared game, network or desktop code
+goes to ChupathingyCE first and arrives here with the next rebase. Pull
+requests here are for console-specific changes only: `port/<console>/`, the
+console build tools, and shared-code changes behind the console's define
+(`HALO_XBOX_CONSOLE`) that leave the desktop builds unchanged.
+
+Never commit, attach or link SDK files (Microsoft's, Sony's, Nintendo's:
+headers, libraries, tools, d3d8ntpr.lib, xnet) or game data (maps, sounds,
+movies, ui.map, disc images, keys). The SDK and the game are always the
+user's own.
+
 ## Pull requests
 
 - **Open them against `ChupathingyCE/warthog`'s `main`.** With the GitHub
