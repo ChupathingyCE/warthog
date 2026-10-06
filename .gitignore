@@ -22,6 +22,27 @@ compile_commands.json
 /xbox/
 !source/**/xbox/
 
+# Console SDKs and what they build: libraries, objects and executables
+# come from the user's own SDK or toolchain, and console packages may
+# hold the user's maps (never commit)
+*.lib
+*.obj
+*.xbe
+*.xex
+*.rpx
+*.wuhb
+*.nro
+*.nsp
+*.pkg
+*.self
+
+# Disc images and the game's own files (never commit)
+*.iso
+*.xiso
+*.map
+*.bik
+*.xmv
+
 # Locally extracted proprietary game data (never commit)
 /assets
 # (but the high-res assets, drawn for the port: tools/hud_assets.py)
