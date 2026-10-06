@@ -103,6 +103,12 @@ P2P_SOURCES = [
     LINUX_SRC / "p2p.c", LINUX_SRC / "p2p_signal.c", LINUX_SRC / "p2p_crypto.c", KCP_DIR / "ikcp.c",
     MONOCYPHER_DIR / "monocypher.c", MONOCYPHER_DIR / "monocypher-ed25519.c",
 ]
+# the port's zlib (tools/linux_build.py's ZLIB_*): what the game's map
+# decompression inflates with (cache_files_decompress_windows.c), its names
+# prefixed z_
+ZLIB_DIR = Path("port/third_party/zlib")
+ZLIB_SOURCES = ("adler32.c", "crc32.c", "inffast.c", "inflate.c", "inftrees.c", "uncompr.c", "zutil.c")
+ZLIB_DEFINES = ("-DZ_PREFIX", "-Dz_errmsg=z_port_errmsg")
 # the game's C++ sources (game_sources has its C only)
 XBOX_GAME_CXX_SOURCES = [Path("source/main/d3d_intimacy.cpp")]
 # port/linux/game's sources the console builds too
@@ -247,6 +253,9 @@ def generate_xbox_build(n: Writer, sln: Any) -> None:
         # the port's own headers (halo_menus.h, halo_keyboard.h), after the
         # SDK's so its C runtime headers win
         f"-idirafter {_quote(PORT_LINUX_INCLUDE)}",
+        # the PC port's game headers the shared sources include (network
+        # co-op's: port/xbox/game/xbox_coop.c answers them on the console)
+        f"-idirafter {_quote(Path('port/linux/game'))}",
     ])
     for source in game_sources(config):
         add_object(source, f"-std=gnu89 {game_cflags}", [semantics_header, prefix_header],
@@ -279,6 +288,10 @@ def generate_xbox_build(n: Writer, sln: Any) -> None:
         n.build(outputs=generated, rule="xbox_source", inputs=source, implicit=[Path("tools/xbox_sources.py")],
                 variables={"kind": kind})
         add_object(generated, support_cflags)
+
+    zlib_cflags = " ".join([*SUPPORT_FLAGS, *ZLIB_DEFINES, "-w", f"-I{_quote(xdk / 'include')}"])
+    for name in ZLIB_SOURCES:
+        add_object(ZLIB_DIR / name, zlib_cflags)
 
     # internet play (the desktop builds' tunnel, joining only: port/xbox/src/
     # xbox_p2p.c is its platform layer), its sources as they are, with

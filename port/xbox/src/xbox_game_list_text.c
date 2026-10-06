@@ -145,20 +145,60 @@ static int before(const struct game_list *list, int a, int b)
 	return a < b;
 }
 
+/* the Xbox's campaign levels: a game on one is network co-op */
+static const char *const campaign_maps[] =
+{
+	"a10", "a30", "a50", "b30", "b40", "c10", "c20", "c40", "d20", "d40",
+};
+
+int game_list_is_coop(const struct game_list_game *game)
+{
+	const char *gametype = game->gametype;
+	const char *base = game->map;
+	const char *cursor;
+	unsigned int index;
+
+	/* (the host's co-op variant is named "Co-op": network_server_manager.c) */
+	if (lower((unsigned char)gametype[0]) == 'c' && lower((unsigned char)gametype[1]) == 'o' &&
+		(gametype[2] == '-' ? lower((unsigned char)gametype[3]) == 'o' && lower((unsigned char)gametype[4]) == 'p' &&
+			!gametype[5] : lower((unsigned char)gametype[2]) == 'o' && lower((unsigned char)gametype[3]) == 'p' &&
+			!gametype[4]))
+	{
+		return 1;
+	}
+	if (game->engine > 0)
+		return 0;
+	for (cursor = game->map; *cursor; cursor++)
+	{
+		if (*cursor == '\\' || *cursor == '/')
+			base = cursor + 1;
+	}
+	for (index = 0; index < sizeof(campaign_maps) / sizeof(campaign_maps[0]); index++)
+	{
+		if (!strcmp(base, campaign_maps[index]))
+			return 1;
+	}
+	return 0;
+}
+
 int game_list_order(const struct game_list *list, unsigned char *order)
 {
-	int count = list->count, index, place;
+	int count = list->count, index, place, shown = 0;
 
 	if (count < 0)
 		count = 0;
 	if (count > GAME_LIST_MAXIMUM_GAMES)
 		count = GAME_LIST_MAXIMUM_GAMES;
-	/* (an insertion sort: 64 games at most) */
+	/* (an insertion sort: 64 games at most; co-op games left out, which the
+	console does not play: port/xbox/game/xbox_coop.c) */
 	for (index = 0; index < count; index++)
 	{
-		for (place = index; place > 0 && before(list, index, order[place - 1]); place--)
+		if (game_list_is_coop(&list->games[index]))
+			continue;
+		for (place = shown; place > 0 && before(list, index, order[place - 1]); place--)
 			order[place] = order[place - 1];
 		order[place] = (unsigned char)index;
+		shown++;
 	}
-	return count;
+	return shown;
 }

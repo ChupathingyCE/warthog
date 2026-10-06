@@ -7487,6 +7487,7 @@ void render_ui_widgets(
 				}
 			}
 		}
+#ifndef HALO_XBOX_CONSOLE
 		if (first_players_render && !ui_mouse_targets_settled)
 		{
 			/* fit the legends while the rows are still targets (merging
@@ -7497,6 +7498,7 @@ void render_ui_widgets(
 			ui_mouse_widen_values();
 			ui_mouse_targets_settled = TRUE;
 		}
+#endif
 		if (widget_globals.fade_to_black >= 0.0f &&
 			widget_globals.fade_to_black <= 1.0f)
 		{
@@ -7526,7 +7528,9 @@ void render_ui_widgets(
 	if (browser_screen_active())
 		browser_screen_render();
 #endif
+#ifndef HALO_XBOX_CONSOLE
 	ui_debug_draw_targets(first_players_render);
+#endif
 
 	return;
 }

@@ -122,8 +122,11 @@ int game_list_map_name(const char *map, char *text, unsigned long size);
 const char *game_list_type_name(const struct game_list_game *game);
 /* a game's state ("open", ...) in words */
 const char *game_list_state_name(const char *state);
-/* the games in the screen's order (most players first, then by name), as
-indices into list->games in order; their count */
+/* whether a game is network co-op (its gametype "Co-op", or no engine on a
+campaign level), which the console does not play */
+int game_list_is_coop(const struct game_list_game *game);
+/* the games in the screen's order (most players first, then by name), co-op
+games left out, as indices into list->games in order; their count */
 int game_list_order(const struct game_list *list, unsigned char *order);
 
 /* ---------- the fetch (xbox_game_list_fetch.c) */

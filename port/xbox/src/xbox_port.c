@@ -230,6 +230,7 @@ static const struct
 	console's own (D:\\bypass_security.txt); no UPnP, the system's port */
 	{ "network.allow_upnp", "false" },
 	{ "network.tunnel_port", "0" },
+	{ "network.brokers_file", "brokers.txt" },
 	{ "network.signalling_brokers", "broker.emqx.io:1883,broker.hivemq.com:1883,test.mosquitto.org:1883" },
 	{ "network.stun_servers", "stun.l.google.com:19302,stun.cloudflare.com:3478" },
 	{ "debug.hidden_window", "false" },
@@ -485,6 +486,40 @@ void pc_menu_game_data_function_invoke(struct widget_instance *widget, long func
 {
 	(void)widget;
 	(void)function;
+}
+
+struct bitmap_data;
+
+boolean_type pc_menu_frame_placement(struct bitmap_data const *bitmap, short *x, short *y, short *width,
+	short *height)
+{
+	(void)bitmap;
+	(void)x;
+	(void)y;
+	(void)width;
+	(void)height;
+	return 0;
+}
+
+/* ---------- the desktop renderer's options (d3d8_gl.c): the Xbox's own
+renderer has none of them; shadows at the Xbox's 128 texels */
+
+long halo_shadow_map_scale(void)
+{
+	return 1;
+}
+
+void halo_vertex_shader_lighting(unsigned long handle)
+{
+	(void)handle;
+}
+
+void halo_screen_anti_alias(short x0, short y0, short x1, short y1)
+{
+	(void)x0;
+	(void)y0;
+	(void)x1;
+	(void)y1;
 }
 
 /* ---------- the keyboard and the desktop's settings: none on the console */

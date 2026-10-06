@@ -23,6 +23,7 @@ writes them through log_address (port/xbox/src/xbox_port.c).
 
 #include <xtl.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "../p2p/pthread.h"
@@ -53,6 +54,42 @@ int xbox_p2p_online(void)
 const char *platform_data_root(void)
 {
 	return "d:";
+}
+
+/* (port_config.h's: the signalling brokers' list, D:\brokers.txt, as the
+desktop builds read theirs beside config.toml) */
+void config_folder(char *path, size_t size)
+{
+	if (size)
+		snprintf(path, size, "d:\\");
+}
+
+enum
+{
+	/* (a settings file is small: the brokers' list) */
+	CONFIG_FILE_MAXIMUM_SIZE = 16384,
+};
+
+char *config_file_read(const char *path, size_t *size)
+{
+	FILE *file = fopen(path, "rb");
+	char *text;
+	size_t length;
+
+	if (!file)
+		return NULL;
+	text = (char *)malloc(CONFIG_FILE_MAXIMUM_SIZE + 1);
+	if (!text)
+	{
+		fclose(file);
+		return NULL;
+	}
+	length = fread(text, 1, CONFIG_FILE_MAXIMUM_SIZE, file);
+	fclose(file);
+	text[length] = 0;
+	if (size)
+		*size = length;
+	return text;
 }
 
 /* ---------- threads */

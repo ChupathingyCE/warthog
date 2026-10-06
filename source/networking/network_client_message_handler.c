@@ -376,6 +376,10 @@ whether a message came through its tunnel, from a peer's virtual address
 in 100.64.0.0/10 */
 int xbox_trace_enabled(void);
 
+/* (port/xbox/game/xbox_coop.c; interface/ui_widget.c) */
+boolean xbox_coop_game(long engine_type);
+void display_error_text_deferred(wchar_t const *text, short local_player_index);
+
 static boolean network_game_client_from_tunnel(
 	struct transport_address const *source_address)
 {
@@ -838,6 +842,19 @@ static boolean network_game_client_handle_message_server_game_advertise(
 
 					xbox_winsock_tunnel_key(&advertisement.key_id);
 				}
+				/* port: no network co-op on the console (port/xbox/game/
+				xbox_coop.c): a co-op game is not listed, so not joined */
+				if (xbox_coop_game(advertisement.engine_type))
+				{
+					static boolean told = FALSE;
+
+					if (!told)
+					{
+						told = TRUE;
+						network_event("co-op: a host's co-op game left out of the list (no network co-op on the original Xbox)");
+					}
+				}
+				else
 #endif
 				network_game_client_new_advertised_game(client, &advertisement);
 			}
@@ -1002,6 +1019,18 @@ const char *network_game_layout_error_string(int error);
 
 static byte network_game_client_settings_staging[HALO_PORT_WIRE_NETWORK_GAME_SIZE];
 static struct network_game network_game_client_settings_folded;
+/* (the fold's offsets, network_game_layout.h's, against this build's record,
+network version 20's: co-op's cooperative_flags in the Xbox's padding byte
+at 0x10C, which the fold copies with the header) */
+typedef char network_game_layout_header_assert[
+	offsetof(struct network_game, cooperative_flags) == 0x10C &&
+	offsetof(struct network_game, maximum_players) == 0x10E &&
+	offsetof(struct network_game, machine_count) == 0x112 &&
+	offsetof(struct network_game, machines) == 0x114 ? 1 : -1];
+typedef char network_game_layout_size_assert[
+	sizeof(struct network_game) == 0x114 + MAXIMUM_NETWORK_MACHINE_COUNT * 0x44 + 2 +
+		MAXIMUM_NUMBER_OF_PLAYERS * 0x20 + 0x2A ? 1 : -1];
+typedef char network_game_layout_wire_assert[HALO_PORT_WIRE_NETWORK_GAME_SIZE == 13120 ? 1 : -1];
 static boolean network_game_client_settings_told_clamped = FALSE;
 #else
 static struct network_game network_game_client_settings_staging;
@@ -1077,6 +1106,18 @@ static boolean network_game_client_receive_game_settings_piece(
 							(int)network_game_client_settings_folded.machine_count,
 							(int)network_game_client_settings_folded.player_count);
 				}
+				/* port: no network co-op on the console (port/xbox/game/
+				xbox_coop.c): a game that turns co-op (its host set it in the
+				lobby, or a listing missed it) is left, and the player told */
+#ifdef HALO_XBOX_CONSOLE
+				if (xbox_coop_game(network_game_client_settings_folded.variant.game_engine_index))
+				{
+					network_event("co-op: leaving the host's game: it is co-op, which the original Xbox does not play");
+					display_error_text_deferred(L"This game is network co-op,\r\nwhich the original Xbox\r\ndoesn't play yet.", NONE);
+					network_game_client_rejected_by_game(client, source_address, _rejection_code_game_is_closed);
+					return TRUE;
+				}
+#endif
 				result = network_game_client_game_settings_updated(client, &network_game_client_settings_folded);
 #else
 				result = network_game_client_game_settings_updated(client, &network_game_client_settings_staging);

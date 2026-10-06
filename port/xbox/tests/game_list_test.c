@@ -419,6 +419,25 @@ static void test_text(void)
 		CHECK(list.games[order[index - 1]].players >= list.games[order[index]].players);
 	list.count = 1000;
 	CHECK(game_list_order(&list, order) == GAME_LIST_MAXIMUM_GAMES);
+
+	/* co-op games left out: the "Co-op" gametype, or no engine on a campaign
+	level; a multiplayer map's engine-less game stays */
+	memset(&list, 0, sizeof(list));
+	list.count = 4;
+	strcpy(list.games[0].name, "slayer");
+	strcpy(list.games[0].map, "bloodgulch");
+	list.games[0].engine = 2;
+	strcpy(list.games[1].name, "coop");
+	strcpy(list.games[1].map, "a30");
+	strcpy(list.games[1].gametype, "Co-op");
+	strcpy(list.games[2].name, "campaign");
+	strcpy(list.games[2].map, "levels\\b30\\b30");
+	strcpy(list.games[3].name, "unknown");
+	strcpy(list.games[3].map, "dangercanyon");
+	CHECK(game_list_is_coop(&list.games[1]) && game_list_is_coop(&list.games[2]));
+	CHECK(!game_list_is_coop(&list.games[0]) && !game_list_is_coop(&list.games[3]));
+	CHECK(game_list_order(&list, order) == 2);
+	CHECK((order[0] == 0 && order[1] == 3) || (order[0] == 3 && order[1] == 0));
 }
 
 static void fuzz(long iterations)
