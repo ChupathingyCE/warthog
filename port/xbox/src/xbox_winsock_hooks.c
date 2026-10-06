@@ -759,6 +759,9 @@ void xbox_winsock_tunnel_key(const void *key_identifier)
 	memcpy(&tunnel_keys[tunnel_key_next++ % MAXIMUM_TUNNEL_KEYS], key_identifier, sizeof(XNKID));
 }
 
+/* (xbox_p2p.c: XNet started insecure, D:\bypass_security.txt) */
+int xbox_p2p_online(void);
+
 INT WSAAPI halo_xbox_XNetRegisterKey(const XNKID *key_identifier, const XNKEY *key)
 {
 	INT result;
@@ -774,7 +777,20 @@ INT WSAAPI halo_xbox_XNetRegisterKey(const XNKID *key_identifier, const XNKEY *k
 	}
 	result = XNetRegisterKey(key_identifier, key);
 	if (result != 0)
+	{
+		/* (a PC host's key on a LAN: random bytes too, which XNet refuses
+		as a key id. With XNet's security bypassed (bypass_security.txt),
+		the PC is reached at its address as a tunnel host is, so its key
+		is remembered as one, neither registered nor unregistered, and the
+		join goes on; with security on, the refusal stands) */
+		if (xbox_p2p_online())
+		{
+			platform_log("system link: the host's key is a PC's, not XNet's (%d); reached at its address", (int)result);
+			xbox_winsock_tunnel_key(key_identifier);
+			return 0;
+		}
 		platform_log("tunnel: XNetRegisterKey refused a LAN host's key (%d)", (int)result);
+	}
 	return result;
 }
 
