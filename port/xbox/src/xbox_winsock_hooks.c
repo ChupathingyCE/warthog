@@ -484,6 +484,31 @@ int WSAAPI halo_xbox_recvfrom(SOCKET socket, char *buffer, int length, int flags
 	return result;
 }
 
+/* a connected datagram socket's read (the game's endpoints once a game runs:
+transport_endpoint_winsock.c reads them with recv, not recvfrom): a peer's
+datagram queued for its port is taken first, as recvfrom does; a stream
+socket's reads are never the inbox's (a stream can share a datagram's port
+number) */
+int WSAAPI halo_xbox_recv(SOCKET socket, char *buffer, int length, int flags)
+{
+	if (socket_type(socket) == SOCK_DGRAM)
+	{
+		unsigned short from_port;
+		int result = inbox_take(socket, buffer, length, &from_port);
+
+		if (result >= 0)
+		{
+			long since;
+
+			if (hop_log(_hop_read, &since))
+				platform_log("tunnel: the game read %ld peer datagram(s) (this one %d bytes, on its connected socket)",
+					since, result);
+			return result;
+		}
+	}
+	return recv(socket, buffer, length, flags);
+}
+
 int WSAAPI halo_xbox_getpeername(SOCKET socket, struct sockaddr *address, int *address_length)
 {
 	int result = getpeername(socket, address, address_length);

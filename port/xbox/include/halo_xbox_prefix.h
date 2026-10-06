@@ -44,6 +44,7 @@ renamed in the game's units, the SDK's declarations of them included */
 #define listen halo_xbox_listen
 #define accept halo_xbox_accept
 #define recvfrom halo_xbox_recvfrom
+#define recv halo_xbox_recv
 #define sendto halo_xbox_sendto
 #define getpeername halo_xbox_getpeername
 #define select halo_xbox_select
