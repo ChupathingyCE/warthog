@@ -2615,7 +2615,6 @@ static void network_game_client_update_precache_status(
 xbox_direct_join.c): once each time System Link searches, without the
 host's advertisement, which a host broadcasts only on its own network */
 int xbox_direct_join_address(unsigned long *address);
-static boolean network_game_client_direct_join_tried = FALSE;
 
 static boolean network_game_client_direct_join(
 	struct network_game_client *client)
@@ -3249,13 +3248,16 @@ long network_game_client_join_invite_host(
 	long game_index;
 
 #ifdef HALO_XBOX_CONSOLE
+	/* port: with D:\trace.txt (port/xbox/src/xbox_port.c), why the
+	console's join is not under way yet, every 5 seconds */
 	{
 		extern void platform_log(char const *format, ...);
+		extern int xbox_trace_enabled(void);
 		static unsigned long state_logged_time;
 		unsigned long now = system_milliseconds();
 
-		if (!client || client->state != _network_game_client_state_searching || client->join_in_progress ||
-			!client->connection || network_connection_connected(client->connection))
+		if (xbox_trace_enabled() && (!client || client->state != _network_game_client_state_searching ||
+			client->join_in_progress || !client->connection || network_connection_connected(client->connection)))
 		{
 			if (!state_logged_time || now - state_logged_time >= 5000)
 			{
@@ -3274,14 +3276,16 @@ long network_game_client_join_invite_host(
 	if (!network_game_client_invite_identifier(invite, identifier))
 		return -1;
 #ifdef HALO_XBOX_CONSOLE
-	/* port: what is looked for, and what has been advertised, every 5
-	seconds while the console waits (its internet play's last hop) */
+	/* port: with D:\trace.txt, what is looked for, and what has been
+	advertised, every 5 seconds while the console waits (its internet
+	play's last hop) */
 	{
 		extern void platform_log(char const *format, ...);
+		extern int xbox_trace_enabled(void);
 		static unsigned long logged_time;
 		unsigned long now = system_milliseconds();
 
-		if (!logged_time || now - logged_time >= 5000)
+		if (xbox_trace_enabled() && (!logged_time || now - logged_time >= 5000))
 		{
 			long valid = 0;
 

@@ -14,6 +14,7 @@ HUD and text. Internet play's platform is port/xbox/src/xbox_p2p.c.
 #include <string.h>
 
 #include "../../linux/include/halo_ui_pointer.h"
+#include "../p2p/pthread.h"
 
 unsigned long __cdecl DbgPrint(const char *format, ...);
 /* the game's (cseries/errors.c) */
@@ -71,13 +72,6 @@ float rintf(float x)
 main thread (error() is the game's, not for other threads: internet play's
 thread's lines wait for the main loop, xbox_log_flush) */
 
-typedef struct
-{
-	volatile long state;
-	void *storage[8];
-} log_mutex_type;
-int pthread_mutex_lock(log_mutex_type *mutex);
-int pthread_mutex_unlock(log_mutex_type *mutex);
 __declspec(dllimport) unsigned long __stdcall GetCurrentThreadId(void);
 
 enum
@@ -86,7 +80,7 @@ enum
 	LOG_LINE_SIZE = 256,
 };
 
-static log_mutex_type log_lock;
+static pthread_mutex_t log_lock = PTHREAD_MUTEX_INITIALIZER;
 static char log_queue[LOG_QUEUE_LINES][LOG_LINE_SIZE];
 static long log_queue_count;
 static long log_queue_dropped;
@@ -145,6 +139,28 @@ void platform_show_message(const char *title, const char *message)
 	DbgPrint("halo: %s: %s\n", title, message);
 }
 
+/* ---------- the trace switch: D:\trace.txt (an empty file beside
+default.xbe, as bypass_security.txt) turns on the bring-up traces, the main
+loop's progress each second and every hop of internet play's join
+("tunnel:" lines), which also name hosts by their Ethernet addresses. Off,
+the log has what a player's report needs: stalls, failures, the game's
+own events */
+
+int xbox_trace_enabled(void)
+{
+	static int known = -1;
+
+	if (known < 0)
+	{
+		FILE *file = fopen("d:\\trace.txt", "r");
+
+		known = file != NULL;
+		if (file)
+			fclose(file);
+	}
+	return known;
+}
+
 /* ---------- the bring-up watchdog: the main loop's progress (main.c's
 MAIN_STAGE), to the debug output once a second, and where it is when a
 pass takes more than three seconds */
@@ -175,8 +191,9 @@ static unsigned long __stdcall xbox_watchdog(void *parameter)
 		else
 		{
 			still = 0;
-			DbgPrint("halo: main loop %lu (%lu a second), at '%s'\n", xbox_main_loops, xbox_main_loops - last_loops,
-				xbox_main_stage);
+			if (xbox_trace_enabled())
+				DbgPrint("halo: main loop %lu (%lu a second), at '%s'\n", xbox_main_loops, xbox_main_loops - last_loops,
+					xbox_main_stage);
 		}
 		last_loops = xbox_main_loops;
 	}
@@ -371,9 +388,6 @@ void text_hires_register_atlas(const unsigned long *texture, unsigned long width
 /* ---------- internet play: the desktop builds' p2p.c joins (port/xbox/src/
 xbox_p2p.c); what it leaves to p2p_lobby.c and p2p_discord.c, which the
 console does without */
-
-
-
 
 void p2p_hardware_id_sanitize(char *destination, int size, const char *source);
 

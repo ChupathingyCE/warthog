@@ -30,7 +30,7 @@ writes them through log_address (port/xbox/src/xbox_port.c).
 #include "../../linux/src/p2p.h"
 
 int snprintf(char *buffer, size_t size, const char *format, ...);
-
+int xbox_trace_enabled(void);
 
 /* ---------- settings: xbox_port.c's, with network.online this */
 
@@ -299,7 +299,7 @@ int posix_socket_accept(int descriptor, void *address, int *address_length)
 	{
 		static int logged;
 
-		if (logged++ < 6)
+		if (xbox_trace_enabled() && logged++ < 6)
 			platform_log("tunnel: a stand-in took a connection from %s",
 				address && ((struct sockaddr_in *)address)->sin_addr.s_addr == htonl(INADDR_LOOPBACK) ?
 					"this console (the game's)" : "elsewhere (not the game's: refused)");
@@ -443,7 +443,6 @@ int posix_socket_select(int *read, int *read_count, int *write, int *write_count
 	/* (large: the tunnel's lists hold up to 256: port/xbox/p2p/platform.h) */
 	static fd_set read_set, write_set, error_set;
 	struct timeval timeout;
-	int zero = 0;
 	int result;
 
 	select_fill(&read_set, read, read_count ? *read_count : 0);
@@ -474,7 +473,6 @@ int posix_socket_select(int *read, int *read_count, int *write, int *write_count
 		select_keep(write, write_count, &write_set);
 	if (error_count)
 		select_keep(error_list, error_count, &error_set);
-	(void)zero;
 	return result;
 }
 
@@ -665,8 +663,8 @@ void p2p_lobby_slot_topic(const unsigned char *key_hash, char *topic, int size)
 }
 
 /* ---------- what becomes of the peers' datagrams for the game (p2p.c's
-datagram_received, P2P_TRACE_DATAGRAMS): a few logged, then one in ten
-seconds, each outcome on its own */
+datagram_received, P2P_TRACE_DATAGRAMS), with D:\trace.txt: a few logged,
+then one in ten seconds, each outcome on its own */
 
 void p2p_trace_datagram(unsigned short source_port, unsigned short port, int size, int result)
 {
@@ -686,7 +684,7 @@ void p2p_trace_datagram(unsigned short source_port, unsigned short port, int siz
 	int outcome = result + 2;
 	unsigned long now = GetTickCount();
 
-	if (outcome < 0 || outcome > 3)
+	if (outcome < 0 || outcome > 3 || !xbox_trace_enabled())
 		return;
 	traced[outcome].count++;
 	if (traced[outcome].logged < 4 || now - traced[outcome].time >= 10000)
@@ -700,7 +698,8 @@ void p2p_trace_datagram(unsigned short source_port, unsigned short port, int siz
 }
 
 /* each packet the tunnel opened from a peer: counted by type, logged every
-10 seconds (types: 1 ping, 2 pong, 3 datagram, 4 stream, others by number) */
+10 seconds with D:\trace.txt (types: 1 ping, 2 pong, 3 datagram, 4 stream,
+others by number) */
 void p2p_trace_packet(int type, int size)
 {
 	static long counts[8];
@@ -708,6 +707,8 @@ void p2p_trace_packet(int type, int size)
 	static unsigned long time;
 	unsigned long now = GetTickCount();
 
+	if (!xbox_trace_enabled())
+		return;
 	counts[type >= 0 && type < 8 ? type : 7]++;
 	bytes += size;
 	if (!time)

@@ -373,21 +373,20 @@ short transport_initialize(
 				address_status = XNetGetTitleXnAddr(&global_address);
 			}
 			{
-				/* (the address and what XNet was told: a LAN address only,
-				never logged when public) */
+				/* (the address through the log's one formatter, port/xbox/src/
+				xbox_port.c's log_address: a LAN address whole, a public one
+				as a tag; and whether XNet was given a gateway and DNS) */
+				extern char const *log_address(unsigned char const *bytes, int length, int port, char *text, int size);
 				XNetConfigStatus config;
-				const unsigned char *a = (const unsigned char *)&global_address.ina;
-				const unsigned char *g, *d;
+				char address_text[56];
+				unsigned char const *g, *d;
 
 				memset(&config, 0, sizeof(config));
 				XNetGetConfigStatus(&config);
-				g = (const unsigned char *)&config.inaGateway;
-				d = (const unsigned char *)&config.inaDnsPrimary;
-				error(_error_log, "xbox title address %s%u.%u.%u.%u, config flags 0x%08lx, gateway %s, dns %s",
-					(a[0] == 10 || (a[0] == 192 && a[1] == 168) || (a[0] == 172 && (a[1] & 0xf0) == 16) ||
-						a[0] == 0 || a[0] == 169) ? "" : "(public, hidden) ",
-					(a[0] == 10 || (a[0] == 192 && a[1] == 168) || (a[0] == 172 && (a[1] & 0xf0) == 16) ||
-						a[0] == 0 || a[0] == 169) ? a[0] : 0, a[1], a[2], a[3],
+				g = (unsigned char const *)&config.inaGateway;
+				d = (unsigned char const *)&config.inaDnsPrimary;
+				error(_error_log, "xbox title address %s, config flags 0x%08lx, gateway %s, dns %s",
+					log_address((unsigned char const *)&global_address.ina, 4, -1, address_text, sizeof(address_text)),
 					(unsigned long)config.dwFlags, (g[0] | g[1] | g[2] | g[3]) ? "set" : "none",
 					(d[0] | d[1] | d[2] | d[3]) ? "set" : "none");
 			}

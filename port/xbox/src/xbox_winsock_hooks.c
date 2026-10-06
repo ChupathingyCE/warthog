@@ -24,9 +24,10 @@ renames the calls the game makes to these, which call XNet's own.
   p2p_incoming turns into the peer's). XNet's loopback is then not needed
   for the game's datagrams (it is for its connections, as the game's own
   host-joins-itself connection always used).
-- Every hop is logged, a few times then once in a while ("tunnel:" lines):
-  the system link search going to the peers, the peers' datagrams handed to
-  the game, the game reading them.
+- With D:\trace.txt (xbox_port.c's xbox_trace_enabled), every hop is
+  logged, a few times then once in a while ("tunnel:" lines): the system
+  link search going to the peers, the peers' datagrams handed to the game,
+  the game reading them. Without it, only failures are.
 
 Without internet play (no D:\bypass_security.txt, or the tunnel off), every
 p2p_ call answers "not a peer's", and these are XNet's calls as they were.
@@ -43,6 +44,7 @@ prefix does not set it) */
 #include "../../linux/src/p2p.h"
 
 void platform_log(const char *format, ...) __attribute__((format(printf, 1, 2)));
+int xbox_trace_enabled(void);
 
 /* (the socket types the game made, by socket: XNet's SO_TYPE is not relied on) */
 enum
@@ -80,12 +82,15 @@ static struct
 	unsigned long time;
 } hops[NUMBER_OF_HOPS];
 
-/* whether to log this hop now; *since: how many there were since the last */
+/* whether to log this hop now (only with D:\trace.txt); *since: how many
+there were since the last */
 static int hop_log(int hop, long *since)
 {
 	unsigned long now = GetTickCount();
 
 	hops[hop].count++;
+	if (!xbox_trace_enabled())
+		return 0;
 	if (hops[hop].logged < 3 || now - hops[hop].time >= 10000)
 	{
 		*since = hops[hop].count;
@@ -396,7 +401,7 @@ int WSAAPI halo_xbox_connect(SOCKET socket, const struct sockaddr *address, int 
 		int redirect = virtual_address ?
 			outgoing(socket_type(socket) == SOCK_STREAM, (int)socket, &address, address_length, &target) : 0;
 
-		if (logged++ < 8)
+		if (xbox_trace_enabled() && logged++ < 8)
 			platform_log("tunnel: the game connects (%s) to port %u: %s",
 				socket_type(socket) == SOCK_STREAM ? "stream" : "datagram",
 				(unsigned)ntohs(((const struct sockaddr_in *)address)->sin_port),
@@ -413,7 +418,7 @@ int WSAAPI halo_xbox_connect(SOCKET socket, const struct sockaddr *address, int 
 	{
 		static int logged;
 
-		if (logged++ < 6)
+		if (xbox_trace_enabled() && logged++ < 6)
 			platform_log("tunnel: the game connects to the host's stand-in (port %u): %s (%d)",
 				(unsigned)ntohs(target.sin_port), result == 0 ? "connected" : "under way or failed", error);
 	}
@@ -511,22 +516,6 @@ int WSAAPI halo_xbox_sendto(SOCKET socket, const char *buffer, int length, int f
 			source_port = socket_port(socket);
 			if (source_port)
 				note_socket_port(socket, 0);
-		}
-		/* (the first search's bytes, to compare with the desktop builds') */
-		{
-			static int dumped;
-
-			if (!dumped && length > 0)
-			{
-				char hex[3 * 48 + 1];
-				int index;
-
-				dumped = 1;
-				for (index = 0; index < length && index < 48; index++)
-					_snprintf(hex + 3 * index, 4, " %02x", (unsigned char)buffer[index]);
-				hex[3 * (length < 48 ? length : 48)] = 0;
-				platform_log("tunnel: the game's first broadcast, %d bytes:%s", length, hex);
-			}
 		}
 		if (source_port)
 		{
@@ -640,7 +629,7 @@ INT WSAAPI halo_xbox_XNetXnAddrToInAddr(const struct game_xnaddr *address, const
 		return XNetXnAddrToInAddr(NULL, key_identifier, result);
 	if (p2p_peer_address(address->enet, &peer))
 	{
-		if (logged++ < 6)
+		if (xbox_trace_enabled() && logged++ < 6)
 			platform_log("tunnel: the host %02x%02x%02x%02x%02x%02x is a tunnel peer: reached at its virtual address",
 				address->enet[0], address->enet[1], address->enet[2], address->enet[3], address->enet[4],
 				address->enet[5]);
@@ -651,7 +640,7 @@ INT WSAAPI halo_xbox_XNetXnAddrToInAddr(const struct game_xnaddr *address, const
 	sdk.ina = address->ina;
 	memcpy(sdk.abEnet, address->enet, sizeof(sdk.abEnet));
 	error = XNetXnAddrToInAddr(&sdk, key_identifier, result);
-	if (logged++ < 6)
+	if (xbox_trace_enabled() && logged++ < 6)
 		platform_log("tunnel: the host %02x%02x%02x%02x%02x%02x is not a tunnel peer: XNet's address for it (%d)",
 			address->enet[0], address->enet[1], address->enet[2], address->enet[3], address->enet[4],
 			address->enet[5], (int)error);

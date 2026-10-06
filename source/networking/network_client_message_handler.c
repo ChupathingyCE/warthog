@@ -370,6 +370,20 @@ struct message_server_graceful_game_exit_postgame
 
 /* ---------- prototypes */
 
+#ifdef HALO_XBOX_CONSOLE
+/* port: the console's internet play (port/xbox/src/xbox_winsock_hooks.c):
+whether a message came through its tunnel, from a peer's virtual address
+in 100.64.0.0/10 */
+int xbox_trace_enabled(void);
+
+static boolean network_game_client_from_tunnel(
+	struct transport_address const *source_address)
+{
+	return source_address && source_address->address_length == IPV4_ADDRESS_LENGTH &&
+		(source_address->address.long_words[0] & 0xFFC00000UL) == 0x64400000UL;
+}
+#endif
+
 static boolean network_game_client_handle_message_server_game_advertise(
 	struct network_game_client *client,
 	word *message,
@@ -769,9 +783,11 @@ static boolean network_game_client_handle_message_server_game_advertise(
 			_network_game_packet_class_advertisement))
 		{
 #ifdef HALO_XBOX_CONSOLE
-			/* port: each host's advertisement, a few times then every 10
-			seconds (the console's internet play: port/xbox/src/
-			xbox_winsock_hooks.c logs the hops before this) */
+			/* port: with D:\trace.txt (port/xbox/src/xbox_port.c), each
+			host's advertisement, a few times then every 10 seconds (the
+			console's internet play: port/xbox/src/xbox_winsock_hooks.c
+			traces the hops before this) */
+			if (xbox_trace_enabled())
 			{
 				extern void platform_log(char const *format, ...);
 				static unsigned long logged_time;
@@ -791,7 +807,7 @@ static boolean network_game_client_handle_message_server_game_advertise(
 						(int)advertisement.machine_count, (int)advertisement.flags,
 						advertisement.reserved[0] | advertisement.reserved[1] << 8,
 						transport_is_nonce(&advertisement, TRANSPORT_NONCE_LENGTH) ? "" :
-							source_address && (source_address->address.long_words[0] & 0xFFC00000UL) == 0x64400000UL ?
+							network_game_client_from_tunnel(source_address) ?
 								" (another machine's search's answer, through the tunnel: taken)" :
 								" (no nonce: ignored)");
 				}
@@ -809,15 +825,14 @@ static boolean network_game_client_handle_message_server_game_advertise(
 				is still found by its identifier (network_game_client_join_
 				invite_host); a LAN advertisement still needs this machine's
 				nonce */
-				|| (source_address && source_address->address_length == IPV4_ADDRESS_LENGTH &&
-					(source_address->address.long_words[0] & 0xFFC00000UL) == 0x64400000UL)
+				|| network_game_client_from_tunnel(source_address)
 #endif
 				)
 			{
 #ifdef HALO_XBOX_CONSOLE
 				/* (its key is the tunnel's: not XNet's to register,
 				port/xbox/src/xbox_winsock_hooks.c) */
-				if (source_address && (source_address->address.long_words[0] & 0xFFC00000UL) == 0x64400000UL)
+				if (network_game_client_from_tunnel(source_address))
 				{
 					extern void xbox_winsock_tunnel_key(void const *key_identifier);
 
@@ -830,13 +845,6 @@ static boolean network_game_client_handle_message_server_game_advertise(
 		else
 		{
 			network_event("failed to decode a message_server_game_advertise packet");
-#ifdef HALO_XBOX_CONSOLE
-			{
-				extern void platform_log(char const *format, ...);
-
-				platform_log("tunnel: an advertisement did not decode (%d bytes)", (int)message_size);
-			}
-#endif
 		}
 	}
 	else
