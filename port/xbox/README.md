@@ -161,10 +161,14 @@ that would set it is a design (docs/xlink.md).
 
 ## Status
 
-The build boots on a development kit (October 4): the menus at a steady 30
-fps, the menu music and profiles, DHCP, the game list and ONLINE GAMES. The
-October 2 build also started on a modified retail console. This code is ChupathingyCE main's of October 4 (network
-version 11). Known:
+The build booted on a development kit on October 4: the menus at a steady
+30 fps, the menu music and profiles, DHCP, the game list and ONLINE GAMES.
+The October 2 build also started on a modified retail console. The code is
+now ChupathingyCE's with OpenCE build-138 (network version 20; it joins
+hosts of 11 through 20), not yet booted on a console since that rebase.
+Network co-op is not built for the console (`game/xbox_coop.c`): co-op
+games are left out of its lists, and a game that turns co-op is left with
+a message. Known:
 
 - There is no Bink video (the movies are skipped) and no reverb.
 - The netcode is the PC builds' (distributed). The console joins a PC

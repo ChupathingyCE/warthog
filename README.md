@@ -1,50 +1,133 @@
+<p align="center"><img src="docs/icon-160.png" width="120" alt=""></p>
+
 <h1 align="center">Warthog</h1>
 
-<p align="center"><b>ChupathingyCE's Halo: Combat Evolved for the original Xbox, and later other consoles.</b></p>
+<p align="center"><b>Halo: Combat Evolved back on the original Xbox: ChupathingyCE's console line, playing online with the PC builds.</b></p>
 
-Warthog is the Halo CE decompilation built back for the console it was
-written for, on the same code as [ChupathingyCE](https://github.com/ChupathingyCE/chupathingyce)
-(the desktop and Android builds). The goal: boot on a real Xbox and play
-online with OpenCE and ChupathingyCE players, 16 players or fewer, on the
-traditional maps.
+<p align="center">
+<a href="https://halo.milenko.org">Games online now</a> ·
+<a href="https://discord.gg/4BUm2FwuCB">Discord</a>
+</p>
 
-Warthog stays Halo as it shipped on the Xbox: its memory, caches and limits
-are the console's. Only the platform code differs from ChupathingyCE.
-Game logic and netcode are ChupathingyCE's (the distributed netcode the PC
-builds play), with the console's own code back in place under
-`HALO_XBOX_CONSOLE` where upstream's cleanup (4adc3a87) removed it:
-the rasterizer's fixed 640x480 targets, frame timing, input, the file
-cache, physical memory, sound and effect pools, and the socket transport.
+> **Built on ChupathingyCE with [OpenCE](https://github.com/OpenCommunityEdition/OpenCE) build-133 through build-138 (network version 20).** Warthog joins games hosted on network versions 11 through 20, by ChupathingyCE and OpenCE builds alike, with up to 16 players. There's no release yet: Warthog is in development, and for now it runs on development kits and modified consoles.
+
+Warthog is the Halo: Combat Evolved decompilation built back for the console
+it was written for, on the same code as
+[ChupathingyCE](https://github.com/ChupathingyCE/chupathingyce) (the
+Windows, Mac, Linux and Android builds). The goal: Halo as it shipped on the
+Xbox, with its memory, caches and limits, that also plays online with the
+PC builds. Expect rough edges, and please report them.
 
 ## Status
 
-| | |
-|---|---|
-| Original Xbox build (`ninja xbox`) | builds on macOS with OXDK, `build/xbox/default.xbe` |
-| Boots | the menus at a steady 30 fps on a devkit (October 4); XNet gets its address by DHCP and the game list comes over the internet |
-| Code | ChupathingyCE main of October 4, network version 11. Main is at version 18 (OpenCE build-129) since October 6, so until Warthog takes it, the console plays only with PC builds of version 11 |
-| System link with PC builds | the console joins a PC host's game (a dedicated server too) and plays it, tested on the host with the console's limits; not yet on the console: see "Cross-play" |
-| Online Games (the game list) | Multiplayer, ONLINE GAMES: the list on a screen of its own; A joins a game by its invite (internet play's tunnel), not yet tested on a console |
-| Xbox 360, Wii U, Switch | planned: scaffolding only, a stub per console that logs a line; none of the game builds for them yet ([docs/consoles.md](docs/consoles.md)) |
+**On the original Xbox (in development)**
+- Boots to the menus at a steady 30 fps on a development kit, with the
+  menu music and profiles
+- Gets its address by DHCP, and the game list from the internet
+- **ONLINE GAMES** in the Multiplayer menu: the game list on a screen of its
+  own, joining a game by its invite through the PCs' own tunnel (built, not
+  yet seen working on a console)
+- **System Link** with PC builds: joins a PC host's game, a [D] dedicated
+  server's too, at the console's 16 slots (tested with a desktop build at the
+  console's limits; not yet on a console)
+- Reads the console's memory (64, 128 or 256 MB) at the start, and can use
+  more on a bigger one
+- Not yet: hosting PC players, Bink movies, reverb, network co-op
 
-## Prerequisites
+**Consoles**
+
+| Console | Status |
+| --- | --- |
+| Original Xbox | In development: this page |
+| Xbox 360 | Next, with the Wii U alongside: both are big-endian, so the byte-order groundwork is shared. Scaffolding only so far |
+| Wii U | Alongside the Xbox 360. Scaffolding only so far |
+| Switch | thelinkin3000's port, being brought in |
+
+[docs/consoles.md](docs/consoles.md) has where each stands.
+
+## You need your own copy of Halo
+
+Warthog doesn't include the game's maps, sounds or art, and never will: we
+don't provide maps, disc images or ISOs, and we don't link to them. You
+need your own Xbox disc of Halo: Combat Evolved. Warthog plays the maps of
+the North American release (NTSC, 01.10.12.2276), as every ChupathingyCE
+build and dedicated server does; the PAL disc's maps work too.
+
+Copy the `maps` folder from your own disc, then lay the game out for the
+console's hard disk with `tools/xbox_package.py` (see "Build") and copy that
+folder over, for example to `E:\Games\Warthog\`.
+
+## Playing online
+
+| You want to | Do this |
+| --- | --- |
+| Join a game online | **Multiplayer → ONLINE GAMES**, pick a game, press **A**. Needs `bypass_security.txt` (below), which the packaging script writes. |
+| Join a game on your network | **Multiplayer → System Link**, as on the disc. PC hosts on your network show up too. |
+| Join one host directly | Put its LAN address (`192.168.1.20`) or its invite link in `D:\join.txt`; System Link joins the address, ONLINE GAMES' **Y** the invite. |
+| See your stats | Not yet on the console. |
+
+What to know:
+
+- **16 players.** The console plays games of up to 16 players, as the Xbox
+  did. It leaves a game that grows past that, as it leaves a full one. With
+  Delta (below), hosts will know the console's limit and keep room for it.
+- **No network co-op.** OpenCE's network co-op isn't built for the
+  original Xbox for now. Co-op games are left out of the console's lists,
+  and a game that turns co-op is left with a message. Split screen and the
+  campaign on the console itself play as they always did.
+- **Network versions.** The console joins hosts of network versions 11
+  through 20. A host of another version is refused with the reason.
+- **Your address stays private.** The game's log never shows a public IP
+  address, only a tag.
+
+## Settings on the console
+
+The console has no settings file yet. Its switches are small text files in
+the game's folder (`D:\`, beside `default.xbe`): an empty file turns a
+switch on.
+
+| File | What it does |
+| --- | --- |
+| `bypass_security.txt` | Starts the network in its open mode, which the internet and the PC builds need. The packaging script writes it; `--secure` leaves it out for console-only System Link. |
+| `game_list.txt` | One line, a host or address (`:port` optional): where to get the game list if `warthog.milenko.org` doesn't resolve. |
+| `join.txt` | One line: a host's LAN address, or an invite (`halo://join/…`). |
+| `trace.txt` | Detailed network traces in `debug.txt`, for reporting a join that fails. They name hosts by their network cards' addresses, so read a traced log before you post it. |
+| `large_caches.txt` | On a 128 MB console, a bigger texture cache (44 MB; 64 MB on a 256 MB console). On a stock 64 MB console it shows a message and keeps the Xbox's own. |
+| `brokers.txt` | The signalling servers internet play uses, one `host:port` a line, if the built-in ones can't be reached. |
+| `xlink.txt` | Planned: XLink Kai addressing ([docs/xlink.md](docs/xlink.md)). Today `debug.txt` says whether the console's address is already Kai's. |
+
+The game writes its log to `D:\debug.txt`; attach it to bug reports.
+
+## Warthog, ChupathingyCE and Delta
+
+- **ChupathingyCE to Warthog, one way.** Warthog is rebased on
+  ChupathingyCE: changes flow from ChupathingyCE into Warthog, never back
+  through it. Fixes to the shared game code go to ChupathingyCE first (and
+  from there to OpenCE). Warthog keeps only what the console needs on top.
+- **Playing together.** The game protocol is the PC builds', byte for byte:
+  the console adapts to their network version and their 128-slot game
+  settings, never the other way ([docs/cross-play.md](docs/cross-play.md)).
+- **Delta.** ChupathingyCE's network family ([docs/delta.md](docs/delta.md)):
+  everything our machines and services say beyond OpenCE's protocol. Warthog
+  is to be a full Delta machine: Delta Peer with an `xbox` platform key (its
+  16-player and no-co-op caveats, its memory class), the signed legacy
+  table, a signed game list so the console needs no TLS, and later stats
+  and profile links. The plan: [docs/warthog-delta.md](docs/warthog-delta.md).
+
+## Building it yourself
 
 Nothing from Microsoft's SDKs is in this repository, and none of it may be
 committed. You supply it, as with [OXDK](https://github.com/MrMilenko/OXDK):
 
-- Python 3, [ninja](https://ninja-build.org/) and LLVM 22 or later (clang
-  and lld-link). On macOS: `brew install llvm ninja`. The build looks in
-  `LLVM_DIR`, then in Homebrew's folder.
+- Python 3, [ninja](https://ninja-build.org/) and LLVM (clang and lld-link).
+  On macOS: `brew install llvm lld ninja`. The build looks in `LLVM_DIR`,
+  then in Homebrew's folder, then on `PATH`.
 - [OXDK](https://github.com/MrMilenko/OXDK) in `~/OXDK` (or `--oxdk DIR`,
   or `OXDK_DIR`), with its `cxbe` built.
-- The Xbox SDK's libraries and headers, in OXDK's `xbox/xdk/lib` and
-  `xbox/xdk/include`, set up as OXDK's instructions say.
+- The Xbox SDK's libraries and headers (the 5933 SDK), in OXDK's
+  `xbox/xdk/lib` and `xbox/xdk/include`, set up as OXDK's instructions say.
 - An Aug 2001 Direct3D library, `d3d8ntpr.lib` (`port/xbox/README.md`,
   "Direct3D").
-- The North American (NTSC, 01.10.12.2276) disc's maps, which every
-  ChupathingyCE build and dedicated server plays.
-
-## Build
 
 ```sh
 python3 configure.py --xbox-d3d8 /path/to/d3d8ntpr.lib
@@ -54,167 +137,89 @@ python3 tools/xbox_package.py --maps /path/to/maps --out ~/Downloads/Warthog-xbo
 
 `xbox_package.py` lays out `default.xbe` and `maps/` as one folder for the
 console's hard disk (hard links where it can, so the maps take no more
-space), with an empty `bypass_security.txt` (XNet's insecure mode, which
-the internet and the PCs need; `--secure` leaves it out) and, with
-`--game-list-server HOST`, a `game_list.txt` for a console whose DNS can't
-find the list's host. The Linux, Windows and macOS targets in `configure.py` are
-ChupathingyCE's. `xbox` is the console build; `xbox360`, `wiiu` and
-`switch` build the other consoles' stubs where their toolchains are
-installed (docs/consoles.md).
+space), with an empty `bypass_security.txt` (`--secure` leaves it out) and,
+with `--game-list-server HOST`, a `game_list.txt`. The Linux, Windows and
+macOS targets in `configure.py` are ChupathingyCE's. `xbox360`, `wiiu`
+and `switch` build the other consoles' stubs where their toolchains are
+installed ([docs/consoles.md](docs/consoles.md)).
 
 ## Testing
 
-**Devkit or modified retail console.** Copy the folder to the hard disk,
-e.g. `E:\Games\Warthog\` (FTP, or the devkit's tools), and launch
-`default.xbe`. The game logs `halo:` lines to the debug monitor (XBDM)
-and writes `D:\debug.txt`. It is a debug build: an assertion stops it and
-shows the error on screen and in `debug.txt`. A watchdog reports a main
-loop that stalls. An empty `D:\trace.txt` beside `default.xbe` turns on the
-bring-up traces: the main loop's progress each second and every hop of an
-internet join ("tunnel:" lines, which name hosts by their Ethernet
-addresses: read a traced log before posting it).
+**Development kit or modified console.** Copy the folder to the hard disk
+(FTP, or the development kit's tools) and launch `default.xbe`. The game
+logs `halo:` lines to the debug monitor (XBDM) and writes `D:\debug.txt`.
+It is a debug build: an assertion stops it and shows the error on screen
+and in `debug.txt`. A watchdog reports a main loop that stalls;
+`D:\trace.txt` turns on the bring-up traces.
 
 **xemu.** vsod99's fork of OpenCE (`vsod99/halo-ce-universal`, branch
 `xbox-backport`, CC0) has a development loop, `tools/xbox_dev.py`: it packs
-an ISO, boots it in xemu at 128 MB with NAT and streams the serial log.
-It builds with nxdk, but its ISO and xemu steps work for any XBE. xemu
-needs the user's own MCPX boot ROM, flash image and hard disk image.
+an ISO, boots it in xemu at 128 MB with NAT and streams the serial log. Its
+ISO and xemu steps work for any XBE. xemu needs the user's own MCPX boot
+ROM, flash image and hard disk image.
 
-**Xbox 360.** Xenia first (unsigned XEX files run there), then an RGH or
-JTAG console through a launcher such as Aurora.
-
-## Memory and XLink Kai
-
-The game reads the console's memory at the start and logs its class (64,
-128 or 256 MB). The game's limits stay the Xbox's on every console; a
-128 MB console may take a larger texture cache (`D:\large_caches.txt`), and
-a feature that needs 128 MB shows a message instead of failing
-(`port/xbox/README.md`, "Memory"). `debug.txt` also says whether the
-console's address is XLink Kai's for its MAC; the XLink mode that would set
-it is a design ([docs/xlink.md](docs/xlink.md)).
+**On the host.** `port/xbox/tests/run.sh` builds the console's parsers
+(the game list, the settings record's fold, `join.txt`, the memory class,
+XLink's addressing) on the computer under AddressSanitizer, with a fuzzer;
+`--xbox` adds the Xbox build's own checks.
 
 ## Cross-play
 
-The goal is system link and internet games with the PC builds at network
-version 11. Two things stand in the way today, and both are capacities the
-network carries, not code:
+The console builds 16 players on 16 machines and the Xbox's 2,048 objects;
+the PCs build 128, 128 and 8,192, and both send their game settings whole
+(13,120 bytes at 128 slots, unchanged in network version 20). As a client
+of a PC host, the console folds the PCs' 128-slot game settings record and
+Slayer's state into its own 16 slots as they arrive, checks the record's
+layout against its own at compile time, and leaves a game that grows past
+its slots. A desktop build with the console's limits
+(`configure.py --console-limits`) plays whole games against a PC dedicated
+server on one computer that way.
 
-- **Session size.** The console builds 16 players on 16 machines
-  (`halo_port_limits.h`); the PCs build 128 and 128. The game settings
-  record (`struct network_game`) is sent whole, and its size follows from
-  those limits (13,120 bytes at 128), so the two cannot read each other's.
-  The console needs the PCs' layout, with the 16 player limit kept as the
-  game's own maximum.
-- **Object indices.** The distributed netcode names objects by their index
-  in the object array, and a client puts its own objects in the array's
-  upper half. The console's array has 2,048 entries, the PCs' 8,192.
+Hosting PC players, and the PCs' object indices past 2,048, need a bigger
+game state than the Xbox's (its pools fill all but 948 bytes of 0x305000
+bytes): the route is the game state as ordinary virtual memory on a 128 MB
+console. The field-by-field analysis and the plan are in
+[docs/cross-play.md](docs/cross-play.md).
 
-Both need a bigger game state, and the Xbox's is full: its pools fill all
-but 948 bytes of the 0x305000 bytes at 0x80061000, and maps are linked to
-the tag cache right after it. vsod99's memory probe found the route: the
-game state as ordinary virtual memory (at 0x40000000) on a 128 MB console,
-with the tag cache and texture and sound caches kept contiguous in the low
-64 MB. Only the index space has to match the PCs; the pools behind it can
-stay the console's.
-
-The field-by-field analysis, the choice (the PCs' 128 player and machine
-slots on the console; object slots translated at the console's netcode)
-and what is built so far are in [docs/cross-play.md](docs/cross-play.md).
-
-What works first, without a bigger game state: the console as a client of
-a PC host. It folds the PCs' 128-slot game settings record and Slayer's
-state into its own 16 slots as they arrive, and leaves a game that grows
-past them as it leaves a full one. A copy of a desktop build with the
-console's limits (`configure.py --console-limits`) plays whole games
-against a PC dedicated server on one computer that way. On the console it
-joins an internet game as the PCs do, by its invite, through their own
-tunnel code (`port/linux/src/p2p.c`, built for the console): ONLINE GAMES'
-A on a listed game, such as a [D] server, or Y for the invite in
-`D:\join.txt`. On a LAN it finds a PC host's game in System Link, or
-joins the host whose IPv4 address is in `D:\join.txt`.
-
-The console's network stack also speaks the Xbox's secure system link
-unless XNet starts with `XNET_STARTUP_BYPASS_SECURITY`. The game has its
-own switch for that (`D:\bypass_security.txt`). The PCs speak plain UDP,
-so cross-play needs it on.
-
-## Online Games on the Xbox
-
-ChupathingyCE's Online Games list (`port/linux/src/browser.c`) and internet
-play (`p2p.c`, `p2p_signal.c`, `p2p_lobby.c`, KCP, STUN) are the desktop
-platform layer's, on POSIX sockets, threads and Mbed TLS. The console has
-none of that layer; its game talks to XNet directly. The pieces:
-
-1. **The list (first milestone, done).** The console has no TLS, so the
-   site serves it a list of its own over plain HTTP, read only:
-   `http://warthog.milenko.org/v1/console/games`, ASCII, a tab-separated
-   line a game. `port/xbox/src/xbox_game_list*.c`: an HTTP/1.0 client on
-   XNet's Winsock (`XNetDnsLookup`, or `D:\game_list.txt`), on a thread of
-   its own, and bounded parsers for the response and the list, fuzzed on
-   the host (`port/xbox/tests/run.sh`). At the start the game fetches the
-   list and logs it. Announcing and reports, which carry the player key,
-   stay on the desktop builds' TLS.
-2. **The screen (done, read only).** The Multiplayer menu's ONLINE GAMES
-   item is the desktop builds' (`interface/ui_widget.c`: a copy of System
-   Link's item, under `HALO_XBOX_CONSOLE` as well as `HALO_GAME_BROWSER`).
-   Their screen (`port/linux/game/browser_screen.c`) draws through their
-   platform layer (SDL, its overlay and fonts) and joins through the p2p
-   tunnel, so the console has its own, `port/xbox/game/xbox_browser_screen.c`:
-   drawn like the virtual keyboard, in the menus' own fonts and button
-   icons, over the menus. Each game's name, map (the menus' names), type,
-   players and region; the selected game's details and map picture below.
-   D-pad or stick to pick (left and right turn the page), X refreshes, B
-   goes back; A joins (below), Y joins the invite in `D:\join.txt`. The
-   list is fetched on its own thread and the main loop takes a whole copy
-   (about 14 KB) for the screen; the 64 KB response buffer lives only
-   while a fetch runs.
-3. **Joining (built, not yet tested on a console).** The PCs' tunnel
-   itself, `p2p.c`, `p2p_signal.c` and `p2p_crypto.c` with KCP and
-   Monocypher, built for the console as they are (joining only: no UPnP,
-   Discord or public listing), with `port/xbox/src/xbox_p2p.c` as its
-   platform (XNet's Winsock, DNS and random numbers) and
-   `port/xbox/src/xbox_winsock_hooks.c` in the game's socket calls, as the
-   desktop's `xnet.c`. A on a listed game joins its invite: the tunnel to
-   its host, then the host's game, advertised through it, and its lobby.
-   Needs `D:\bypass_security.txt`. docs/cross-play.md has the details.
-4. **Invites.** No clipboard: the list itself is the invite (choose a game
-   and join), plus Link Profile (the
-   desktop builds' QR code, which links the game to a profile from another
-   device).
-
-## Xbox 360
-
-Scaffolding only (`port/xbox360`, a stub). The plan, from Milenko's 360 ports (QSS-M,
-doomretro-x360) and OXDK360:
-
-- **Toolchain:** OXDK360's patched clang (`~/llvm-xenon`) and `cxex`, with
-  the user's own Xbox 360 SDK, not committed, the same line as OXDK.
-- **Endianness first.** Maps, saved games and network messages are
-  little-endian Xbox data. Swap at load (tag data swapped by its field
-  definitions as each tag loads), and swap network fields in the message codec, which already
-  encodes field by field. Not a big-endian aware loader everywhere.
-- **Alignment.** PowerPC traps on misaligned multi-byte reads from byte
-  buffers; audit the cache file and network readers for `*(long *)` reads.
-- **Memory:** 512 MB, so the PCs' capacities fit and cross-play needs no
-  special layout.
-- **Renderer:** Xenos through the SDK's Direct3D 9, starting from the
-  desktop builds' renderer (`d3d8_gl.c` maps the game's Direct3D 8 calls),
-  not the original Xbox's push buffer code.
-- **First milestone:** a XEX that logs a line in Xenia.
+Internet games go through the PCs' own tunnel (`port/linux/src/p2p.c`,
+built for the console as a joiner), which needs XNet in its open mode
+(`D:\bypass_security.txt`). Memory detection and the console's switches are in
+`port/xbox/README.md`; XLink Kai is in
+[docs/xlink.md](docs/xlink.md).
 
 ## Keeping in step with ChupathingyCE
 
-Warthog takes ChupathingyCE main by pull request: each merge on main's
-first parent is replayed here as one commit (`git cherry-pick -m 1`),
-which keeps main's own conflict resolutions, and names the pull request,
-its commits and their authors (`Co-authored-by` trailers for contributors).
-Only pull requests that change nothing but the README are left out. Then
-`ninja xbox` must build. Making `chupathingyce` a submodule, with only
-`port/xbox` and the console's gates here, is the later plan once the gates
-live in ChupathingyCE's own shared code.
+Warthog is rebased on ChupathingyCE: its own commits are replayed
+(`git cherry-pick`) onto ChupathingyCE's newest main, conflicts resolved in
+favor of ChupathingyCE's code with the console's switches kept, and
+`ninja xbox`, the desktop builds and the host tests must pass. Each
+console switch Warthog keeps in a shared file is work at every rebase;
+[docs/warthog-upstreaming.md](docs/warthog-upstreaming.md) lists the ones
+that could move into ChupathingyCE itself, compiled out of the desktop
+builds.
 
-## Licensing
+## Credits
 
-The code is the decompilation's and ChupathingyCE's (CC0, with the
-third-party notices in `port/third_party`). Never commit Microsoft SDK
-files, game files or maps.
+- The decompilation: [punpckhdq/halo](https://github.com/punpckhdq/halo) and
+  [bnunu/halo-1](https://github.com/bnunu/halo-1), of the Xbox build 2342.
+- The port: [OpenCE](https://github.com/OpenCommunityEdition/OpenCE) and
+  its contributors, and [ChupathingyCE](https://github.com/ChupathingyCE/chupathingyce).
+- Warthog: [Milenko](https://github.com/MrMilenko) and contributors. The
+  toolchain: [OXDK](https://github.com/MrMilenko/OXDK).
+- Libraries: KCP and Monocypher (internet play), zlib, and the
+  ChupathingyCE libraries the shared code uses. Their licenses are beside
+  them in `port/third_party`.
+
+### Contributors
+
+- [thelinkin3000](https://github.com/thelinkin3000): the Nintendo Switch
+  port, being brought into Warthog.
+- CrunchBite (XLink Kai's developer): XLink Kai's addressing for consoles
+  (docs/xlink.md), and the idea of checking the console's memory and saying
+  so on screen instead of crashing.
+- vsod99: the xemu development loop and the memory probe behind the
+  cross-play plan.
+
+Halo is a trademark of Microsoft. Warthog is a fan project, not made or
+endorsed by Microsoft, Bungie or 343 Industries, and includes none of the
+game's content. The code is released under [CC0](LICENSE.md).

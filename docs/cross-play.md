@@ -1,6 +1,7 @@
 # Cross-play: the console and the PC builds on one network
 
-Warthog is to play system link with the PC builds (network version 11) on
+Warthog is to play system link with the PC builds (network version 11 when
+this was written; 20 since the rebase, with the same layout) on
 one LAN, then internet games. The PCs' protocol is fixed: the console
 matches them, never the other way round. This is what stands between them,
 field by field, and the plan. (File and line references are this
