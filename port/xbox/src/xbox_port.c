@@ -14,6 +14,7 @@ HUD and text. Internet play's platform is port/xbox/src/xbox_p2p.c.
 #include <string.h>
 
 #include "../../linux/include/halo_ui_pointer.h"
+#include "../include/xbox_log_tag.h"
 #include "../p2p/pthread.h"
 
 unsigned long __cdecl DbgPrint(const char *format, ...);
@@ -556,9 +557,19 @@ unsigned long config_changes(void)
 }
 
 /* ---------- addresses in the log (port/linux/src/log_address.h): the
-private ranges whole, a public address only as a tag salted per run */
+private ranges whole, a public address only as a tag salted per run; and
+other machines' Ethernet addresses only as tags, with the same salt */
 
 __declspec(dllimport) unsigned long __stdcall GetTickCount(void);
+
+static unsigned long log_salt(void)
+{
+	static unsigned long salt;
+
+	if (!salt)
+		salt = GetTickCount() * 2654435761UL | 1;
+	return salt;
+}
 
 static int log_address_private(const unsigned char *bytes, int length)
 {
@@ -571,7 +582,6 @@ static int log_address_private(const unsigned char *bytes, int length)
 
 const char *log_address(const unsigned char *bytes, int length, int port, char *text, int size)
 {
-	static unsigned long salt;
 	char host[48];
 	char port_text[8] = "";
 
@@ -582,17 +592,14 @@ const char *log_address(const unsigned char *bytes, int length, int port, char *
 	if (length == 4 && log_address_private(bytes, length))
 		snprintf(host, sizeof(host), "%u.%u.%u.%u", bytes[0], bytes[1], bytes[2], bytes[3]);
 	else
-	{
-		unsigned long hash;
-		int index;
-
-		if (!salt)
-			salt = GetTickCount() * 2654435761UL | 1;
-		hash = 2166136261UL ^ salt;
-		for (index = 0; index < length; index++)
-			hash = (hash ^ bytes[index]) * 16777619UL;
-		snprintf(host, sizeof(host), "addr#%06lx", hash & 0xFFFFFF);
-	}
+		xbox_log_tag("addr", bytes, length, log_salt(), host, sizeof(host));
 	snprintf(text, (size_t)size, "%s%s", host, port_text);
 	return text;
+}
+
+/* another machine's Ethernet address (6 bytes: an XNADDR's abEnet, or a
+tunnel peer's identifier), only ever as a tag */
+const char *log_ethernet(const unsigned char *bytes, char *text, int size)
+{
+	return xbox_log_tag("enet", bytes, 6, log_salt(), text, size);
 }

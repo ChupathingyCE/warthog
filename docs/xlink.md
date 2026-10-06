@@ -20,17 +20,20 @@ internet play tunnel the PC builds use.
 Only the rule and a check (the "small hooks"):
 
 - `port/xbox/src/xbox_xlink.c`: `xbox_xlink_address` gives the address and
-  mask for a MAC, `xbox_xlink_matches` says whether an address is it.
-  Tested on the host (`port/xbox/tests/run.sh`, `xlink_test`).
+  mask for a MAC, `xbox_xlink_matches` says whether an address is it, and
+  `xbox_xlink_report` writes the log's line. Tested on the host
+  (`port/xbox/tests/run.sh`, `xlink_test`).
 - At the start, `transport_initialize` (in
   `source/bungie_net/network/transport_endpoint_set_winsock.c`) writes one
   line to `debug.txt`: whether the console's address is Kai's for its MAC,
-  and what Kai's would be. The MAC itself is never logged; the address is
-  a private one, which the logging rules allow (`log_address.h`).
+  yes or no. What Kai's would be is in the line only with `D:\trace.txt`,
+  since it carries the MAC's last two bytes. The MAC itself is never
+  logged.
 
 So today a player who wants Kai sets the static address in the dashboard's
 network settings (address `10.252.EE.FF`, mask `255.255.0.0`, the gateway
-and DNS of their network as before), and the log confirms it.
+and DNS of their network as before), and the log confirms it (a traced
+log gives the address to set).
 
 ## XLink mode (not built)
 

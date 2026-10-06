@@ -6,6 +6,7 @@ port/xbox/tests/run.sh.
 */
 
 #include <stdio.h>
+#include <string.h>
 
 #include "../include/xbox_xlink.h"
 
@@ -39,6 +40,39 @@ int main(void)
 	{
 		failures++;
 		fprintf(stderr, "xlink_test: a LAN address matched\n");
+	}
+	/* debug.txt's line: yes or no by default, Kai's address only detailed */
+	{
+		char text[192];
+
+		if (!xbox_xlink_report(example, 0x0AFCEEFFUL, 0, text, sizeof(text)) ||
+			strcmp(text, "xlink: this console's address is XLink Kai's"))
+		{
+			failures++;
+			fprintf(stderr, "xlink_test: matching report: %s\n", text);
+		}
+		if (!xbox_xlink_report(example, 0xC0A80114UL, 0, text, sizeof(text)) || strstr(text, "10.252") ||
+			!strstr(text, "is not XLink Kai's"))
+		{
+			failures++;
+			fprintf(stderr, "xlink_test: default report: %s\n", text);
+		}
+		if (!xbox_xlink_report(example, 0xC0A80114UL, 1, text, sizeof(text)) ||
+			!strstr(text, "10.252.238.255, mask 255.255.0.0"))
+		{
+			failures++;
+			fprintf(stderr, "xlink_test: detailed report: %s\n", text);
+		}
+		if (xbox_xlink_report(broadcast, 0xC0A80114UL, 1, text, sizeof(text)))
+		{
+			failures++;
+			fprintf(stderr, "xlink_test: a report with no Kai address\n");
+		}
+		if (!xbox_xlink_report(example, 0xC0A80114UL, 1, text, 8) || strlen(text) != 7)
+		{
+			failures++;
+			fprintf(stderr, "xlink_test: a report not cut to its buffer\n");
+		}
 	}
 	if (failures)
 		return 1;

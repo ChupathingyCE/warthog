@@ -800,13 +800,15 @@ static boolean network_game_client_handle_message_server_game_advertise(
 
 				if (logged < 4 || now - logged_time >= 10000)
 				{
+					extern char const *log_ethernet(unsigned char const *bytes, char *text, int size);
 					byte const *host = (byte const *)&advertisement.xnaddr + 2;
+					char tag[24];
 
 					logged++;
 					logged_time = now;
-					platform_log("tunnel: advertisement from host %02x%02x%02x%02x%02x%02x: version %d, %d of %d players, "
+					platform_log("tunnel: advertisement from host %s: version %d, %d of %d players, "
 						"%d machines, flags 0x%x, network version %d%s",
-						host[0], host[1], host[2], host[3], host[4], host[5], (int)advertisement.version,
+						log_ethernet(host, tag, sizeof(tag)), (int)advertisement.version,
 						(int)advertisement.player_count, (int)advertisement.maximum_player_count,
 						(int)advertisement.machine_count, (int)advertisement.flags,
 						advertisement.reserved[0] | advertisement.reserved[1] << 8,

@@ -45,6 +45,8 @@ prefix does not set it) */
 
 void platform_log(const char *format, ...) __attribute__((format(printf, 1, 2)));
 int xbox_trace_enabled(void);
+/* (xbox_port.c's: another machine's Ethernet address as a tag) */
+const char *log_ethernet(const unsigned char *bytes, char *text, int size);
 
 /* (the socket types the game made, by socket: XNet's SO_TYPE is not relied on) */
 enum
@@ -630,9 +632,12 @@ INT WSAAPI halo_xbox_XNetXnAddrToInAddr(const struct game_xnaddr *address, const
 	if (p2p_peer_address(address->enet, &peer))
 	{
 		if (xbox_trace_enabled() && logged++ < 6)
-			platform_log("tunnel: the host %02x%02x%02x%02x%02x%02x is a tunnel peer: reached at its virtual address",
-				address->enet[0], address->enet[1], address->enet[2], address->enet[3], address->enet[4],
-				address->enet[5]);
+		{
+			char tag[24];
+
+			platform_log("tunnel: the host %s is a tunnel peer: reached at its virtual address",
+				log_ethernet(address->enet, tag, sizeof(tag)));
+		}
 		result->s_addr = peer;
 		return 0;
 	}
@@ -641,9 +646,12 @@ INT WSAAPI halo_xbox_XNetXnAddrToInAddr(const struct game_xnaddr *address, const
 	memcpy(sdk.abEnet, address->enet, sizeof(sdk.abEnet));
 	error = XNetXnAddrToInAddr(&sdk, key_identifier, result);
 	if (xbox_trace_enabled() && logged++ < 6)
-		platform_log("tunnel: the host %02x%02x%02x%02x%02x%02x is not a tunnel peer: XNet's address for it (%d)",
-			address->enet[0], address->enet[1], address->enet[2], address->enet[3], address->enet[4],
-			address->enet[5], (int)error);
+	{
+		char tag[24];
+
+		platform_log("tunnel: the host %s is not a tunnel peer: XNet's address for it (%d)",
+			log_ethernet(address->enet, tag, sizeof(tag)), (int)error);
+	}
 	return error;
 }
 

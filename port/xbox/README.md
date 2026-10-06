@@ -132,7 +132,7 @@ line) in the game's folder (`D:\`):
 | `bypass_security.txt` | XNet starts insecure: the internet, the game list and play with PCs need it (`tools/xbox_package.py` writes it) |
 | `game_list.txt` | the list's server (host or address, `:port` optional) when `warthog.milenko.org` does not resolve |
 | `join.txt` | a host's LAN address (System Link joins it directly) or an invite (ONLINE GAMES' Y joins it) |
-| `trace.txt` | the bring-up traces: the main loop each second, every hop of an internet join, the advertisements seen. They name hosts by their Ethernet addresses: read a traced log before posting it |
+| `trace.txt` | the bring-up traces: the main loop each second, every hop of an internet join, the advertisements seen, other hosts only as `enet#` tags (salted per run), never their Ethernet addresses; and XLink Kai's address for the console |
 | `large_caches.txt` | on a 128 MB console, a 44 MB texture cache (64 MB on a 256 MB one); on a 64 MB console, a message and the Xbox's 22 MB |
 
 ## Memory
@@ -156,8 +156,10 @@ Peer's platform key (`memory_class`) once Delta is built for the console.
 ## XLink Kai
 
 At the start `debug.txt` says whether the console's address is XLink
-Kai's for its MAC (`10.252.EE.FF`, mask `255.255.0.0`). The "XLink mode"
-that would set it is a design (docs/xlink.md).
+Kai's for its MAC: yes or no. Kai's address itself (`10.252.EE.FF`, mask
+`255.255.0.0`, from the MAC's last two bytes) is logged only with
+`D:\trace.txt`. The "XLink mode" that would set it is a design
+(docs/xlink.md).
 
 ## Status
 

@@ -404,21 +404,22 @@ short transport_initialize(
 		{
 			/* port: whether the console's address is XLink Kai's for its MAC
 			(10.252.EE.FF, port/xbox/src/xbox_xlink.c, docs/xlink.md), so a
-			player setting up system link over Kai sees what to set; a
-			private address, never the MAC itself */
-			extern int xbox_xlink_address(unsigned char const *mac, unsigned long *address, unsigned long *mask);
-			unsigned long xlink_address, xlink_mask;
+			player setting up system link over Kai sees what to set: yes or
+			no, and Kai's address (from the MAC's last two bytes) only with
+			D:\trace.txt; never the MAC itself */
+			extern int xbox_xlink_report(unsigned char const *mac, unsigned long address, int detailed, char *text,
+				int size);
+			extern int xbox_trace_enabled(void);
+			char xlink_text[192];
 			unsigned long address = ((unsigned long)((unsigned char const *)&global_address.ina)[0] << 24) |
 				((unsigned long)((unsigned char const *)&global_address.ina)[1] << 16) |
 				((unsigned long)((unsigned char const *)&global_address.ina)[2] << 8) |
 				(unsigned long)((unsigned char const *)&global_address.ina)[3];
 
-			if (xbox_xlink_address(global_address.abEnet, &xlink_address, &xlink_mask))
+			if (xbox_xlink_report(global_address.abEnet, address, xbox_trace_enabled(), xlink_text,
+				sizeof(xlink_text)))
 			{
-				error(_error_log, "xlink: %s (XLink Kai's address for this console is %lu.%lu.%lu.%lu, mask 255.255.0.0)",
-					address == xlink_address ? "this console's address is XLink Kai's" :
-						"this console's address is not XLink Kai's; for system link over Kai, set it in the dashboard",
-					xlink_address >> 24, (xlink_address >> 16) & 0xFF, (xlink_address >> 8) & 0xFF, xlink_address & 0xFF);
+				error(_error_log, "%s", xlink_text);
 			}
 		}
 #endif

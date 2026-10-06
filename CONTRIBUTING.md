@@ -41,8 +41,8 @@ user's own.
 Use the bug report form, or #warthog-support on the
 [Discord](https://discord.gg/4BUm2FwuCB). Attach `D:\debug.txt`; for a
 join that fails, run once with an empty `D:\trace.txt` beside
-`default.xbe` (it names hosts by their Ethernet addresses, so read it
-before you post it).
+`default.xbe` (it shows other hosts only as tags, never their Ethernet
+addresses).
 
 ## SDK and game files
 

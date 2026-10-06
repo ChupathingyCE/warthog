@@ -98,10 +98,10 @@ switch on.
 | `bypass_security.txt` | Starts the network in its open mode, which the internet and the PC builds need. The packaging script writes it; `--secure` leaves it out for console-only System Link. |
 | `game_list.txt` | One line, a host or address (`:port` optional): where to get the game list if `warthog.milenko.org` doesn't resolve. |
 | `join.txt` | One line: a host's LAN address, or an invite (`halo://join/…`). |
-| `trace.txt` | Detailed network traces in `debug.txt`, for reporting a join that fails. They name hosts by their network cards' addresses, so read a traced log before you post it. |
+| `trace.txt` | Detailed network traces in `debug.txt`, for reporting a join that fails. Other hosts appear only as tags (`enet#` and six hex digits), never by their network cards' addresses; with it, `debug.txt` also gives XLink Kai's address for the console. |
 | `large_caches.txt` | On a 128 MB console, a bigger texture cache (44 MB; 64 MB on a 256 MB console). On a stock 64 MB console it shows a message and keeps the Xbox's own. |
 | `brokers.txt` | The signalling servers internet play uses, one `host:port` a line, if the built-in ones can't be reached. |
-| `xlink.txt` | Planned: XLink Kai addressing ([docs/xlink.md](docs/xlink.md)). Today `debug.txt` says whether the console's address is already Kai's. |
+| `xlink.txt` | Planned: XLink Kai addressing ([docs/xlink.md](docs/xlink.md)). Today `debug.txt` says whether the console's address is already Kai's (yes or no; Kai's address itself with `trace.txt`). |
 
 The game writes its log to `D:\debug.txt`; attach it to bug reports.
 

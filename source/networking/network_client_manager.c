@@ -3282,6 +3282,9 @@ long network_game_client_join_invite_host(
 	{
 		extern void platform_log(char const *format, ...);
 		extern int xbox_trace_enabled(void);
+		/* (port/xbox/src/xbox_port.c's: hosts' Ethernet addresses as tags) */
+		extern char const *log_ethernet(unsigned char const *bytes, char *text, int size);
+		char tag[24];
 		static unsigned long logged_time;
 		unsigned long now = system_milliseconds();
 
@@ -3297,12 +3300,11 @@ long network_game_client_join_invite_host(
 				if (!network_game_client_advertised_game_is_valid(game))
 					continue;
 				valid++;
-				platform_log("tunnel: advertised game %ld: host %02x%02x%02x%02x%02x%02x, open %d",
-					game_index, game->xnaddr.data[2], game->xnaddr.data[3], game->xnaddr.data[4], game->xnaddr.data[5],
-					game->xnaddr.data[6], game->xnaddr.data[7], (int)game->open);
+				platform_log("tunnel: advertised game %ld: host %s, open %d",
+					game_index, log_ethernet(game->xnaddr.data + 2, tag, sizeof(tag)), (int)game->open);
 			}
-			platform_log("tunnel: looking for host %02x%02x%02x%02x%02x%02x among %ld advertised game(s)",
-				identifier[0], identifier[1], identifier[2], identifier[3], identifier[4], identifier[5], valid);
+			platform_log("tunnel: looking for host %s among %ld advertised game(s)",
+				log_ethernet(identifier, tag, sizeof(tag)), valid);
 		}
 	}
 #endif
