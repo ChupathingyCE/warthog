@@ -123,32 +123,51 @@ The game writes its log to `D:\debug.txt`; attach it to bug reports.
 
 ## Building it yourself
 
-Nothing from Microsoft's SDKs is in this repository, and none of it may be
-committed. You supply it, as with [OXDK](https://github.com/MrMilenko/OXDK):
+Warthog builds on macOS today, with [OXDK](https://github.com/MrMilenko/OXDK),
+clang and lld-link (Linux should work the same way, untested). Nothing from
+Microsoft's SDKs is in this repository, and none of it may be committed:
+you supply your own.
 
-- Python 3, [ninja](https://ninja-build.org/) and LLVM (clang and lld-link).
-  On macOS: `brew install llvm lld ninja`. The build looks in `LLVM_DIR`,
-  then in Homebrew's folder, then on `PATH`.
+- Python 3, [ninja](https://ninja-build.org/) and LLVM (clang and
+  lld-link). On macOS: `brew install llvm lld ninja`.
 - [OXDK](https://github.com/MrMilenko/OXDK) in `~/OXDK` (or `--oxdk DIR`,
-  or `OXDK_DIR`), with its `cxbe` built.
-- The Xbox SDK's libraries and headers (the 5933 SDK), in OXDK's
-  `xbox/xdk/lib` and `xbox/xdk/include`, set up as OXDK's instructions say.
-- An Aug 2001 Direct3D library, `d3d8ntpr.lib` (`port/xbox/README.md`,
-  "Direct3D").
+  or `OXDK_DIR`), with its `cxbe` built, and the 5933 Xbox SDK's libraries
+  and headers in OXDK's `xbox/xdk/lib` and `xbox/xdk/include`, as OXDK's
+  README says.
+- An Aug 2001 Direct3D library, `d3d8ntpr.lib` (the `aug01` i386 build),
+  given to `configure.py --xbox-d3d8`.
 
 ```sh
 python3 configure.py --xbox-d3d8 /path/to/d3d8ntpr.lib
-ninja xbox
-python3 tools/xbox_package.py --maps /path/to/maps --out ~/Downloads/Warthog-xbox
+ninja xbox                       # build/xbox/default.xbe
+port/xbox/tests/run.sh --xbox    # the host tests
+python3 tools/xbox_package.py --maps /path/to/your/maps --out ~/Downloads/Warthog-xbox
 ```
 
-`xbox_package.py` lays out `default.xbe` and `maps/` as one folder for the
-console's hard disk (hard links where it can, so the maps take no more
-space), with an empty `bypass_security.txt` (`--secure` leaves it out) and,
-with `--game-list-server HOST`, a `game_list.txt`. The Linux, Windows and
-macOS targets in `configure.py` are ChupathingyCE's. `xbox360`, `wiiu`
-and `switch` build the other consoles' stubs where their toolchains are
-installed ([docs/consoles.md](docs/consoles.md)).
+`xbox_package.py` lays out `default.xbe` and your own `maps/` as one folder
+for the console's hard disk, with an empty `bypass_security.txt` (`--secure`
+leaves it out). Copy it to the console (FTP on a modified console), for
+example to `E:\Games\Warthog\`, and start `default.xbe`.
+[docs/building.md](docs/building.md) has every step, the versions tested
+and the options. `xbox360`, `wiiu` and `switch` build the other consoles'
+stubs where their toolchains are installed
+([docs/consoles.md](docs/consoles.md)).
+
+## Help wanted: Windows tooling
+
+Milenko, Warthog's maintainer, doesn't use Windows, so Warthog builds on
+macOS with OXDK and clang today, and the Windows side is open. If you know
+the Xbox's Windows tools, we'd love your help to set up and document:
+
+- a Windows build path: a Visual Studio project or solution, or the same
+  clang and OXDK build run on Windows;
+- the official XDK and RDK tooling: what installs where, and how the build
+  finds it;
+- debugging through XBDM on a development kit;
+- a Windows CI job or a written build recipe that others can follow.
+
+Say hello in #warthog-dev on the [Discord](https://discord.gg/4BUm2FwuCB)
+so we can coordinate, and see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Testing
 

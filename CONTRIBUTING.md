@@ -20,6 +20,17 @@ headers, libraries, tools, d3d8ntpr.lib, xnet) or game data (maps, sounds,
 movies, ui.map, disc images, keys). The SDK and the game are always the
 user's own.
 
+## Help wanted: Windows tooling
+
+Milenko, the maintainer, doesn't use Windows, so Warthog builds on macOS
+with OXDK and clang today (docs/building.md). We need someone to set up and
+document the Windows side: a Visual Studio project or solution, or another
+Windows build path; the official XDK and RDK tooling; XBDM and debugging on
+a development kit; and a Windows CI job or build recipe. Coordinate in
+#warthog-dev on the [Discord](https://discord.gg/4BUm2FwuCB) before you
+start, so the work isn't duplicated. The SDK rules below apply: describe
+where the SDK's files go, never commit them.
+
 ## Pull requests
 
 - **Open them against `ChupathingyCE/warthog`'s `main`.** With the GitHub
