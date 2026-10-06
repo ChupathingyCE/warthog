@@ -1,41 +1,57 @@
-name: Bug report
-description: Something in ChupathingyCE doesn't work as it should.
+name: Console Bug Report
+description: Something in Warthog doesn't work as it should.
 labels: [bug]
 body:
   - type: markdown
     attributes:
       value: |
-        Thanks for reporting. One bug per issue, please. ChupathingyCE never provides game files, so please don't attach maps or disc images.
+        Thanks for reporting.
+        Please submit one bug per issue. Warthog never provides game files or proprietary SDK files,
+        so please do not attach maps, disc images, or SDK binaries.
   - type: dropdown
     id: platform
     attributes:
-      label: Platform
-      options: [Windows, macOS (Apple Silicon), macOS (Intel), Linux, Steam Deck, Android, Xbox]
+      label: Target Platform / Environment
+      options:
+        - "Original Xbox: development kit"
+        - "Original Xbox: modified retail console"
+        - "Original Xbox: xemu"
+        - "Other console (scaffolding, docs/consoles.md)"
     validations:
       required: true
   - type: input
     id: version
     attributes:
-      label: Version
-      description: The release you're on (for example v0.5.3b), or nightly and its date.
+      label: Commit / Version
+      description: The git commit SHA or build version you tested.
     validations:
       required: true
   - type: dropdown
     id: area
     attributes:
-      label: Area
-      options: [Crash, Online play, Online Games list, Halo PC maps, Campaign, Menus, Controls, Graphics, Sound, Other]
+      label: Subsystem Area
+      options:
+        - Crash / Assertion Failure
+        - Online Games List
+        - System Link / Cross-Play
+        - Controller / Gamepad Input
+        - Graphics / Shaders
+        - Audio / DirectSound / AX
+        - Memory Pools / Texture Cache
+        - Menus & HUD
+        - Campaign / SP Levels
+        - Other
     validations:
       required: true
   - type: textarea
     id: what
     attributes:
-      label: What happened
-      description: Steps to get there, what you saw, and what you expected instead.
+      label: Description and Reproduction Steps
+      description: What happened, step-by-step instructions to reproduce, and what you expected to see.
     validations:
       required: true
   - type: textarea
     id: logs
     attributes:
-      label: Logs
-      description: For a crash, attach debug.txt from the game's data folder, and on macOS the crash report from ~/Library/Logs/DiagnosticReports (halo-*.ips).
+      label: Debug Logs
+      description: Attach relevant log output (debug.txt, XBDM logs, xenia.log, Cemu log.txt, or terminal output).

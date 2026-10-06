@@ -1,6 +1,6 @@
 <h1 align="center">Warthog</h1>
 
-<p align="center"><b>ChupathingyCE's Halo: Combat Evolved for the original Xbox, and later the Xbox 360.</b></p>
+<p align="center"><b>ChupathingyCE's Halo: Combat Evolved for the original Xbox, and later other consoles.</b></p>
 
 Warthog is the Halo CE decompilation built back for the console it was
 written for, on the same code as [ChupathingyCE](https://github.com/ChupathingyCE/chupathingyce)
@@ -22,10 +22,10 @@ cache, physical memory, sound and effect pools, and the socket transport.
 |---|---|
 | Original Xbox build (`ninja xbox`) | builds on macOS with OXDK, `build/xbox/default.xbe` |
 | Boots | the menus at a steady 30 fps on a devkit (October 4); XNet gets its address by DHCP and the game list comes over the internet |
-| Code | ChupathingyCE main of October 4, network version 11 |
+| Code | ChupathingyCE main of October 4, network version 11. Main is at version 18 (OpenCE build-129) since October 6, so until Warthog takes it, the console plays only with PC builds of version 11 |
 | System link with PC builds | the console joins a PC host's game (a dedicated server too) and plays it, tested on the host with the console's limits; not yet on the console: see "Cross-play" |
 | Online Games (the game list) | Multiplayer, ONLINE GAMES: the list on a screen of its own; A joins a game by its invite (internet play's tunnel), not yet tested on a console |
-| Xbox 360 | planned: see "Xbox 360" |
+| Xbox 360, Wii U, Switch | planned: scaffolding only, a stub per console that logs a line; none of the game builds for them yet ([docs/consoles.md](docs/consoles.md)) |
 
 ## Prerequisites
 
@@ -58,7 +58,9 @@ space), with an empty `bypass_security.txt` (XNet's insecure mode, which
 the internet and the PCs need; `--secure` leaves it out) and, with
 `--game-list-server HOST`, a `game_list.txt` for a console whose DNS can't
 find the list's host. The Linux, Windows and macOS targets in `configure.py` are
-ChupathingyCE's; Warthog only builds `xbox`.
+ChupathingyCE's. `xbox` is the console build; `xbox360`, `wiiu` and
+`switch` build the other consoles' stubs where their toolchains are
+installed (docs/consoles.md).
 
 ## Testing
 
@@ -66,8 +68,11 @@ ChupathingyCE's; Warthog only builds `xbox`.
 e.g. `E:\Games\Warthog\` (FTP, or the devkit's tools), and launch
 `default.xbe`. The game logs `halo:` lines to the debug monitor (XBDM)
 and writes `D:\debug.txt`. It is a debug build: an assertion stops it and
-shows the error on screen and in `debug.txt`. A bring-up watchdog prints
-the main loop's progress once a second.
+shows the error on screen and in `debug.txt`. A watchdog reports a main
+loop that stalls. An empty `D:\trace.txt` beside `default.xbe` turns on the
+bring-up traces: the main loop's progress each second and every hop of an
+internet join ("tunnel:" lines, which name hosts by their Ethernet
+addresses: read a traced log before posting it).
 
 **xemu.** vsod99's fork of OpenCE (`vsod99/halo-ce-universal`, branch
 `xbox-backport`, CC0) has a development loop, `tools/xbox_dev.py`: it packs
@@ -169,7 +174,7 @@ none of that layer; its game talks to XNet directly. The pieces:
 
 ## Xbox 360
 
-Not started in this pass. The plan, from Milenko's 360 ports (QSS-M,
+Scaffolding only (`port/xbox360`, a stub). The plan, from Milenko's 360 ports (QSS-M,
 doomretro-x360) and OXDK360:
 
 - **Toolchain:** OXDK360's patched clang (`~/llvm-xenon`) and `cxex`, with

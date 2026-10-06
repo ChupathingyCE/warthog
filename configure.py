@@ -18,6 +18,9 @@ from tools.macos_build import generate_macos_build, macos_configure_inputs
 from tools.server_build import generate_server_build, server_configure_inputs
 from tools.windows_build import generate_windows_build, windows_configure_inputs
 from tools.xbox_build import generate_xbox_build, xbox_configure_inputs
+from tools.xbox360_build import generate_xbox360_build, xbox360_configure_inputs
+from tools.wiiu_build import generate_wiiu_build, wiiu_configure_inputs
+from tools.switch_build import generate_switch_build, switch_configure_inputs
 
 # arguments
 parser = argparse.ArgumentParser()
@@ -104,6 +107,42 @@ parser.add_argument(
     type=Path,
     help="OXDK checkout for `ninja xbox` (default: OXDK_DIR, or ~/OXDK)",
 )
+parser.add_argument(
+    "--oxdk360",
+    metavar="DIR",
+    type=Path,
+    help="OXDK360 checkout for `ninja xbox360` (default: OXDK360_DIR, ~/OXDK360, or ~/OXDK/xbox360)",
+)
+parser.add_argument(
+    "--llvm-xenon",
+    metavar="DIR",
+    type=Path,
+    help="patched LLVM directory for `ninja xbox360` (default: LLVM_XENON_DIR or ~/llvm-xenon)",
+)
+parser.add_argument(
+    "--devkitppc",
+    metavar="DIR",
+    type=Path,
+    help="devkitPPC directory for `ninja wiiu` (default: DEVKITPPC or /opt/devkitpro/devkitPPC)",
+)
+parser.add_argument(
+    "--wut",
+    metavar="DIR",
+    type=Path,
+    help="wut directory for `ninja wiiu` (default: /opt/devkitpro/wut)",
+)
+parser.add_argument(
+    "--devkita64",
+    metavar="DIR",
+    type=Path,
+    help="devkitA64 directory for `ninja switch` (default: DEVKITA64 or /opt/devkitpro/devkitA64)",
+)
+parser.add_argument(
+    "--libnx",
+    metavar="DIR",
+    type=Path,
+    help="libnx directory for `ninja switch` (default: /opt/devkitpro/libnx)",
+)
 args = parser.parse_args()
 
 # the settings the builds read
@@ -122,6 +161,12 @@ sln = SimpleNamespace(
     android_guest_cc=args.android_guest_cc,
     xbox_d3d8=args.xbox_d3d8,
     oxdk_dir=args.oxdk,
+    oxdk360_dir=args.oxdk360,
+    llvm_xenon=args.llvm_xenon,
+    devkitppc_dir=args.devkitppc,
+    wut_dir=args.wut,
+    devkita64_dir=args.devkita64,
+    libnx_dir=args.libnx,
 )
 
 
@@ -151,6 +196,9 @@ generate_windows_build(n, sln)
 generate_macos_build(n, sln)
 generate_server_build(n, sln)
 generate_xbox_build(n, sln)
+generate_xbox360_build(n, sln)
+generate_wiiu_build(n, sln)
+generate_switch_build(n, sln)
 
 n.comment("Reconfigure on change")
 n.rule(
@@ -172,6 +220,9 @@ n.build(
         *macos_configure_inputs(),
         *server_configure_inputs(),
         *xbox_configure_inputs(),
+        *xbox360_configure_inputs(),
+        *wiiu_configure_inputs(),
+        *switch_configure_inputs(),
     ],
 )
 n.newline()
