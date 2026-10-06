@@ -272,12 +272,16 @@ void transport_pop_key(
 
 #ifdef HALO_XBOX_CONSOLE
 /* (an XNet export the XDK leaves out of its headers: what the network
-settings and DHCP gave the console) */
+settings and DHCP gave the console. Its layout is a guess no header
+confirms, so it has room to spare past the fields read here: a larger
+structure in the library writes into that, not past it. To be measured
+against xnetd.lib, as XNetStartupParams and XNADDR were) */
 typedef struct
 {
 	DWORD dwFlags;
 	IN_ADDR ina, inaMask, inaGateway, inaDnsPrimary, inaDnsSecondary, inaDhcpServer;
 	char achPppServer[4][64];
+	char reserved[512];
 } XNetConfigStatus;
 long __stdcall XNetGetConfigStatus(XNetConfigStatus *status);
 #endif
