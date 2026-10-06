@@ -3292,6 +3292,13 @@ void main_loop(
 			xbox_main_loops++;
 			xbox_game_list_update();
 			{
+				/* (a memory class message, once the main menu is up:
+				port/xbox/src/xbox_memory.c) */
+				extern void xbox_memory_update(void);
+
+				xbox_memory_update();
+			}
+			{
 				/* (other threads' lines into debug.txt: internet play's) */
 				extern void xbox_log_flush(void);
 

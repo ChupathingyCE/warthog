@@ -52,8 +52,19 @@ symbols in this file:
 #define GAME_STATE_VERIFY_SIZE 0x305000
 #endif
 #define TAG_CACHE_BASE_ADDRESS 0x803A6000
+#ifndef HALO_XBOX_CONSOLE
 /* (the native builds': halo_port_capacity.h) */
 #define TEXTURE_CACHE_SIZE HALO_PORT_TEXTURE_CACHE_SIZE
+#define TEXTURE_CACHE_MAXIMUM_ADDRESS -1
+#else
+/* port: the console's, by its memory class (port/xbox/src/xbox_memory.c);
+a raised cache is kept in the low 128 MB */
+unsigned long xbox_memory_texture_cache_size(void);
+unsigned long xbox_memory_texture_cache_maximum_address(void);
+
+#define TEXTURE_CACHE_SIZE xbox_memory_texture_cache_size()
+#define TEXTURE_CACHE_MAXIMUM_ADDRESS xbox_memory_texture_cache_maximum_address()
+#endif
 #define SOUND_CACHE_SIZE 0x400000
 
 /* ---------- macros */
@@ -97,7 +108,7 @@ void physical_memory_allocate(
 	match_assert(__FILE__, __LINE__, (unsigned long)physical_memory_map_globals.tag_cache_base_address==TAG_CACHE_BASE_ADDRESS);
 #endif
 
-	physical_memory_map_globals.texture_cache_base_address = XPhysicalAlloc(TEXTURE_CACHE_SIZE, -1, 0, PAGE_READWRITE | PAGE_WRITECOMBINE);
+	physical_memory_map_globals.texture_cache_base_address = XPhysicalAlloc(TEXTURE_CACHE_SIZE, TEXTURE_CACHE_MAXIMUM_ADDRESS, 0, PAGE_READWRITE | PAGE_WRITECOMBINE);
 #line 55 "c:\\halo\\SOURCE\\cache\\physical_memory_map.c"
 	match_assert(__FILE__, __LINE__, physical_memory_map_globals.texture_cache_base_address);
 

@@ -174,6 +174,11 @@ maps yet, so its cache stays the Xbox's, as the console's does
 #else
 #define HALO_PORT_TEXTURE_CACHE_SIZE 0x1600000 /* (0x1600000) */
 #endif
+#ifdef HALO_XBOX_CONSOLE
+/* the console's cache is HALO_PORT_TEXTURE_CACHE_SIZE on a 64 MB Xbox; a
+128 MB one may take more (port/xbox/src/xbox_memory.c), up to this */
+#define HALO_PORT_TEXTURE_CACHE_MAXIMUM_SIZE 0x4000000
+#endif
 
 /* ---------- structure rendering
 
