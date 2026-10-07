@@ -2842,6 +2842,9 @@ symbols in this file:
 #include "units/units.h"
 #include "units/vehicles.h"
 #include "coop_scripts.h" /* port: port/linux/game/coop_scripts.c */
+#ifdef HALO_BIG_ENDIAN
+#include "console_endian.h" /* port: the maps' byte order (hs_syntax_data_byte_swap) */
+#endif
 
 /* ---------- constants */
 
@@ -3006,7 +3009,7 @@ static void evaluator( \
 	if (arguments) \
 	{ \
 		union hs_real_value result; \
-		result.real_value = function(arguments[0]); \
+		result.real_value = function(*HS_SLOT(unsigned short, arguments)); \
 		hs_return(thread_index, result.long_value); \
 	} \
 	return; \
@@ -3268,7 +3271,7 @@ static void evaluator( \
 struct hs_object_list_get_element_arguments
 {
 	long object_list_index;
-	unsigned short element_index;
+	HS_SLOT_MEMBER(unsigned short, element_index)
 };
 
 union hs_real_value
@@ -3279,7 +3282,7 @@ union hs_real_value
 
 union hs_short_result
 {
-	short short_value;
+	HS_UNION_SLOT(short, short_value)
 	long value;
 };
 
@@ -3287,9 +3290,9 @@ union hs_evaluation_argument
 {
 	long long_value;
 	real real_value;
-	short short_value;
-	unsigned short unsigned_short_value;
-	boolean boolean_value;
+	HS_UNION_SLOT(short, short_value)
+	HS_UNION_SLOT(unsigned short, unsigned_short_value)
+	HS_UNION_SLOT(boolean, boolean_value)
 	XPTR(char const) string_value; /* script values are 32 bits: an Xbox address */
 };
 
@@ -3299,7 +3302,7 @@ typedef char hs_evaluation_argument_size_assert[sizeof(union hs_evaluation_argum
 
 struct hs_arguments_boolean
 {
-	boolean value;
+	HS_SLOT_MEMBER(boolean, value)
 };
 
 struct hs_arguments_long
@@ -3309,20 +3312,20 @@ struct hs_arguments_long
 
 struct hs_arguments_word
 {
-	word value;
+	HS_SLOT_MEMBER(word, value)
 };
 
 struct hs_arguments_short_long
 {
-	short value0;
-	word pad0;
+	HS_SLOT_MEMBER(short, value0)
+	HS_SLOT_TRAILING_PAD(word pad0;)
 	long value1;
 };
 
 struct hs_arguments_long_word
 {
 	long value0;
-	word value1;
+	HS_SLOT_MEMBER(word, value1)
 };
 
 struct hs_arguments_string
@@ -3351,9 +3354,9 @@ struct hs_arguments_long_long_string
 
 struct hs_arguments_short_word
 {
-	short value0;
-	word pad0;
-	word value1;
+	HS_SLOT_MEMBER(short, value0)
+	HS_SLOT_TRAILING_PAD(word pad0;)
+	HS_SLOT_MEMBER(word, value1)
 };
 
 struct hs_arguments_long_long_long
@@ -3414,7 +3417,7 @@ struct hs_arguments_long_long_string_word
 	long value0;
 	long value1;
 	XPTR(char const) value2; /* script values are 32 bits: an Xbox address */
-	word value3;
+	HS_SLOT_MEMBER(word, value3)
 };
 
 struct hs_arguments_long_long_long_boolean
@@ -3422,7 +3425,7 @@ struct hs_arguments_long_long_long_boolean
 	long value0;
 	long value1;
 	XPTR(char const) value2; /* script values are 32 bits: an Xbox address */
-	boolean value3;
+	HS_SLOT_MEMBER(boolean, value3)
 };
 
 struct hs_arguments_long_long_long_boolean_word
@@ -3430,9 +3433,9 @@ struct hs_arguments_long_long_long_boolean_word
 	long value0;
 	long value1;
 	XPTR(char const) value2; /* script values are 32 bits: an Xbox address */
-	boolean value3;
-	byte pad3[3];
-	word value4;
+	HS_SLOT_MEMBER(boolean, value3)
+	HS_SLOT_TRAILING_PAD(byte pad3[3];)
+	HS_SLOT_MEMBER(word, value4)
 };
 
 struct hs_arguments_real
@@ -3463,21 +3466,21 @@ struct hs_arguments_real_real_real_real
 
 struct hs_arguments_word_word_word_real
 {
-	word value0;
-	word pad0;
-	word value1;
-	word pad1;
-	word value2;
-	word pad2;
+	HS_SLOT_MEMBER(word, value0)
+	HS_SLOT_TRAILING_PAD(word pad0;)
+	HS_SLOT_MEMBER(word, value1)
+	HS_SLOT_TRAILING_PAD(word pad1;)
+	HS_SLOT_MEMBER(word, value2)
+	HS_SLOT_TRAILING_PAD(word pad2;)
 	real value3;
 };
 
 struct hs_arguments_word_word_long_real
 {
-	word value0;
-	word pad0;
-	word value1;
-	word pad1;
+	HS_SLOT_MEMBER(word, value0)
+	HS_SLOT_TRAILING_PAD(word pad0;)
+	HS_SLOT_MEMBER(word, value1)
+	HS_SLOT_TRAILING_PAD(word pad1;)
 	long value2;
 	real value3;
 };
@@ -3488,8 +3491,8 @@ struct hs_arguments_real_real_real_real_boolean_real
 	real value1;
 	real value2;
 	real value3;
-	boolean value4;
-	byte pad4[3];
+	HS_SLOT_MEMBER(boolean, value4)
+	HS_SLOT_TRAILING_PAD(byte pad4[3];)
 	real value5;
 };
 
@@ -3497,7 +3500,7 @@ struct hs_arguments_long_real_word
 {
 	long value0;
 	real value1;
-	word value2;
+	HS_SLOT_MEMBER(word, value2)
 };
 
 struct hs_arguments_long_real_real
@@ -3512,15 +3515,15 @@ struct hs_arguments_real_real_real_word
 	real value0;
 	real value1;
 	real value2;
-	word value3;
+	HS_SLOT_MEMBER(word, value3)
 };
 
 struct hs_arguments_short_word_real_real_real
 {
-	short value0;
-	word pad0;
-	word value1;
-	word pad1;
+	HS_SLOT_MEMBER(short, value0)
+	HS_SLOT_TRAILING_PAD(word pad0;)
+	HS_SLOT_MEMBER(word, value1)
+	HS_SLOT_TRAILING_PAD(word pad1;)
 	real value2;
 	real value3;
 	real value4;
@@ -3528,33 +3531,33 @@ struct hs_arguments_short_word_real_real_real
 
 struct hs_arguments_word_word_word
 {
-	word value0;
-	word pad0;
-	word value1;
-	word pad1;
-	word value2;
+	HS_SLOT_MEMBER(word, value0)
+	HS_SLOT_TRAILING_PAD(word pad0;)
+	HS_SLOT_MEMBER(word, value1)
+	HS_SLOT_TRAILING_PAD(word pad1;)
+	HS_SLOT_MEMBER(word, value2)
 };
 
 struct hs_arguments_word_word_long
 {
-	word value0;
-	word pad0;
-	word value1;
-	word pad1;
+	HS_SLOT_MEMBER(word, value0)
+	HS_SLOT_TRAILING_PAD(word pad0;)
+	HS_SLOT_MEMBER(word, value1)
+	HS_SLOT_TRAILING_PAD(word pad1;)
 	long value2;
 };
 
 struct hs_arguments_long_word_boolean
 {
 	long value0;
-	word value1;
-	word pad1;
-	boolean value2;
+	HS_SLOT_MEMBER(word, value1)
+	HS_SLOT_TRAILING_PAD(word pad1;)
+	HS_SLOT_MEMBER(boolean, value2)
 };
 
 union hs_boolean_result
 {
-	boolean boolean;
+	HS_UNION_SLOT(boolean, boolean)
 	long value;
 };
 
@@ -12612,6 +12615,48 @@ data array too (which hs_scenario_postprocess and the data array code go by,
 the nodes' count above all): inside the tag cache, and the data array of
 script nodes it has room for. The shipped maps' all are, of 19001 nodes
 (their names differ: a30's is "static script node"). */
+#ifdef HALO_BIG_ENDIAN
+/* port: a map's script syntax (a data array in the scenario's tag data) in
+a big-endian console's byte order, once: the array's header and every node
+(its value as the 32-bit number it is: HS_SLOT) */
+static void hs_syntax_data_byte_swap(
+	struct data_array *data,
+	long size)
+{
+	struct hs_syntax_node *node;
+	long node_index;
+
+	if (size < (long)sizeof(struct data_array) || data->signature != CONSOLE_BSWAP32('d@t@'))
+	{
+		return;
+	}
+	data->maximum_count = (short)CONSOLE_BSWAP16(data->maximum_count);
+	data->size = (short)CONSOLE_BSWAP16(data->size);
+	data->signature = CONSOLE_BSWAP32(data->signature);
+	data->first_free_absolute_index = (short)CONSOLE_BSWAP16(data->first_free_absolute_index);
+	data->count = (short)CONSOLE_BSWAP16(data->count);
+	data->actual_count = (short)CONSOLE_BSWAP16(data->actual_count);
+	data->next_identifier = (short)CONSOLE_BSWAP16(data->next_identifier);
+	data->data = CONSOLE_BSWAP32(data->data);
+	node = (struct hs_syntax_node *)(data + 1);
+	for (node_index = 0;
+		node_index < data->maximum_count &&
+		(long)(sizeof(struct data_array) + (node_index + 1) * sizeof(struct hs_syntax_node)) <= size;
+		node_index++, node++)
+	{
+		node->datum_header = (short)CONSOLE_BSWAP16(node->datum_header);
+		node->index = (short)CONSOLE_BSWAP16(node->index);
+		node->type = (short)CONSOLE_BSWAP16(node->type);
+		node->flags = (short)CONSOLE_BSWAP16(node->flags);
+		node->next_node_index = CONSOLE_BSWAP32(node->next_node_index);
+		node->string_offset = CONSOLE_BSWAP32(node->string_offset);
+		node->data = CONSOLE_BSWAP32(node->data);
+	}
+
+	return;
+}
+#endif
+
 static boolean hs_scenario_syntax_data_valid(
 	struct scenario const *scenario)
 {
@@ -12632,6 +12677,9 @@ static boolean hs_scenario_syntax_data_valid(
 	{
 		return FALSE;
 	}
+#ifdef HALO_BIG_ENDIAN
+	hs_syntax_data_byte_swap((struct data_array *)address, scenario->hs_syntax_data.size);
+#endif
 
 #ifdef HALO_CUSTOM_EDITION
 	/* port: a Custom Edition or HaloMD map's array, which Halo PC's tools

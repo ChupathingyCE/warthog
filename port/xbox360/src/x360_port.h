@@ -67,5 +67,7 @@ int x360_network_start(void);
 /* ---------- leaving */
 
 void x360_exit_to_launcher(void);
+/* logs why and the return addresses of the calls that led here */
+void x360_log_backtrace(const char *why);
 
 #endif

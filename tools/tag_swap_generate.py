@@ -64,6 +64,43 @@ SCALARS = {
     "__time64_t": 8, "long double": 8, "qword": 8,
 }
 
+# Blocks the game reaches by offsets of its own rather than by name, whose
+# elements are composites of the structures it reads them as: the scenario's
+# object placements and palettes (source/objects/object_types.c: each object
+# type's placement and palette blocks by offset into the scenario and its
+# placement element size; the types' place functions read an element as the
+# object part, then the permutation, unit or device part, as their
+# structures nest: scenario_biped_datum, scenario_weapon_datum, and so on)
+COMPOSITES = {
+    "placement scenery": (0x48, [(0, "struct scenario_object_datum"), (0x28, "struct scenario_object_permutation")]),
+    "placement unit": (0x78, [(0, "struct scenario_biped_datum")]),
+    "placement weapon": (0x5C, [(0, "struct scenario_weapon_datum")]),
+    "placement equipment": (0x28, [(0, "struct scenario_equipment_datum")]),
+    "placement machine": (0x40, [(0, "struct scenario_machine_datum")]),
+    "placement control": (0x40, [(0, "struct scenario_control_datum")]),
+    "placement light fixture": (0x58, [(0, "struct scenario_light_fixture_datum")]),
+    "placement sound scenery": (0x28, [(0, "struct scenario_object_datum")]),
+}
+OVERRIDES = {
+    ("struct scenario", "scenery"): "placement scenery",
+    ("struct scenario", "bipeds"): "placement unit",
+    ("struct scenario", "vehicles"): "placement unit",
+    ("struct scenario", "weapons"): "placement weapon",
+    ("struct scenario", "equipment"): "placement equipment",
+    ("struct scenario", "machines"): "placement machine",
+    ("struct scenario", "controls"): "placement control",
+    ("struct scenario", "light_fixtures"): "placement light fixture",
+    ("struct scenario", "sound_scenery"): "placement sound scenery",
+    **{("struct scenario", palette): "struct scenario_object_palette_entry" for palette in (
+        "scenery_palette", "biped_palette", "vehicle_palette", "equipment_palette", "weapon_palette",
+        "machine_palette", "control_palette", "light_fixtures_palette", "sound_scenery_palette")},
+    # (particle_systems.c reads the types' as these; the system's and the
+    # states' are the same blocks of constants)
+    **{(owner, "physics_constants"): "struct particle_system_physics_constant" for owner in (
+        "struct particle_system_definition", "struct particle_system_type_state",
+        "struct particle_system_type_particle_state")},
+}
+
 LAYOUT_LINE = re.compile(r"^\s*(\d+)(?::(\d+)-(\d+))? \|(\s*)(.*?)\s*$")
 SIZE_LINE = re.compile(r"\[sizeof=(\d+), (?:dsize=\d+, )?align=(\d+)")
 
@@ -235,6 +272,19 @@ def callee(node: dict) -> str:
     return target.get("referencedDecl", {}).get("name", "") if target.get("kind") == "DeclRefExpr" else ""
 
 
+def group_value(name: str) -> int:
+    return struct.unpack(">I", name.encode("latin-1"))[0]
+
+
+# the shader types (source/rasterizer/xbox/*: _shader_type_environment = 3
+# and on) and their tag groups
+SHADER_TYPE_GROUPS = {3: group_value("senv"), 4: group_value("soso"), 5: group_value("sotr"),
+                      6: group_value("schi"), 7: group_value("swat"), 8: group_value("sgla"),
+                      9: group_value("smet"), 10: group_value("spla")}
+
+SHADER_TYPE_WORDS = {3: "environment", 4: "model", 5: "generic", 6: "chicago", 7: "water", 8: "glass",
+                     9: "meter", 10: "plasma"}
+
 ACCESSORS = ("tag_block_get_element", "tag_block_get_element_with_size")
 GETTERS = ("tag_get", "tag_get_definition")
 
@@ -311,6 +361,14 @@ def collect_ast(tree: dict, elements: Dict[tuple, Set[str]], roots: Dict[int, Se
             if kind in ("ImplicitCastExpr", "CStyleCastExpr") and node.get("castKind") == "BitCast":
                 target = pointee(type_of(node))
                 inner = strip(node["inner"][0]) if node.get("inner") else {}
+                # a shader read as its type's structure, from the shader
+                # itself (struct shader *): its type's group, by the name
+                source = pointee(type_of(node["inner"][0])) if node.get("inner") else None
+                if target and source == "struct shader" and target.startswith("struct shader_"):
+                    for shader_type, word in SHADER_TYPE_WORDS.items():
+                        if word in target.replace("shader_transparent_", "shader_") and \
+                                not (word == "generic" and "chicago" in target):
+                            roots.setdefault(SHADER_TYPE_GROUPS[shader_type], set()).add(target)
                 function_name = callee(inner)
                 if target and function_name:
                     arguments = inner["inner"][1:]
@@ -322,6 +380,16 @@ def collect_ast(tree: dict, elements: Dict[tuple, Set[str]], roots: Dict[int, Se
                         key = block_key(arguments[0])
                         if key:
                             elements.setdefault(key, set()).add(target)
+                    elif function_name == "shader_get_and_verify_type" and len(arguments) >= 2 and \
+                            (target.startswith("struct ") or target.startswith("union ")):
+                        # a shader read as its type's structure: the group of
+                        # that shader type (SHADER_TYPE_GROUPS)
+                        shader_type = integer_of(arguments[1])
+                        # (a unit's own enumeration of the types may be
+                        # misnamed: the structure must be of that type's)
+                        if shader_type is not None and shader_type in SHADER_TYPE_GROUPS and \
+                                (SHADER_TYPE_WORDS[shader_type] in target or "lens_flare_fields" in target):
+                            roots.setdefault(SHADER_TYPE_GROUPS[shader_type], set()).add(target)
                     elif function_name in GETTERS and len(arguments) >= 2 and \
                             (target.startswith("struct ") or target.startswith("union ")):
                         group = integer_of(arguments[0])
@@ -388,13 +456,51 @@ def analyze(unit: Tuple[str, List[str]]) -> Tuple[str, dict]:
 
 # ---------- layouts to swap programs
 
+def keys_of(key) -> tuple:
+    """a block's names, (owner, field) pairs: one, or the several views
+    that place a block at the same offset"""
+    if not key:
+        return ()
+    if isinstance(key[0], str):
+        return (key,)
+    return tuple(key)
+
+
+def combine(old, new) -> tuple:
+    return tuple(sorted(set(keys_of(old)) | set(keys_of(new))))
+
+
+PLACEHOLDER = re.compile(r"^_?(unused|pad|padding|reserved|garbage|unknown)", re.I)
+
+
+def resolve(candidates) -> Dict[int, Tuple[int, bool]]:
+    """the fields to swap from candidates, (offset, width, placeholder):
+    where they overlap, a named field wins over a placeholder (unused[],
+    pad), then the wider"""
+    chosen: Dict[int, Tuple[int, bool]] = {}
+    spans: List[Tuple[int, int]] = []
+    for at, width, placeholder in sorted(set(candidates), key=lambda c: (c[2], c[0], -c[1])):
+        if any(start < at + width and at < end for start, end in spans):
+            continue
+        spans.append((at, at + width))
+        chosen[at] = (width, placeholder)
+    return chosen
+
+
 class Layouts:
-    def __init__(self, records: Dict[str, Tuple[int, Node]], elements: Dict[Tuple[str, str], Set[str]]):
+    """record layouts as (size, {offset: (width, placeholder)},
+    {offset: block names})"""
+
+    def __init__(self, records: Dict[str, List[Tuple[int, Node]]], elements: Dict[Tuple[str, str], Set[str]]):
         self.records = records
         self.elements = elements
-        self.memo: Dict[str, Tuple[int, Dict[int, int], Dict[int, Tuple[str, str]]]] = {}
+        self.memo: Dict[str, tuple] = {}
         self.unknown_types: Set[str] = set()
         self.bitfields: Set[str] = set()
+        self.size_conflicts: Set[str] = set()
+
+    def record_size(self, type_: str) -> int:
+        return max(size for size, _ in self.records[type_])
 
     def size_of(self, type_: str) -> Optional[int]:
         type_ = type_.strip()
@@ -407,26 +513,63 @@ class Layouts:
         if type_.endswith("*") or type_.startswith("enum "):
             return 4
         if type_ in self.records:
-            return self.records[type_][0]
+            return self.record_size(type_)
+        if type_ in COMPOSITES:
+            return COMPOSITES[type_][0]
         return None
 
     def layout(self, type_: str):
-        """(size, {offset: scalar size}, {offset: (owner, field)}) of a record"""
         if type_ in self.memo:
             return self.memo[type_]
         if type_ in SCALARS:
             width = SCALARS[type_]
-            self.memo[type_] = (width, {0: width} if width > 1 else {}, {})
+            self.memo[type_] = (width, {0: (width, False)} if width > 1 else {}, {})
             return self.memo[type_]
-        size, tree = self.records[type_]
-        scalars: Dict[int, int] = {}
-        blocks: Dict[int, Tuple[str, str]] = {}
-        self.memo[type_] = (size, scalars, blocks)
-        self._walk(tree, type_, 0, scalars, blocks, top=True)
+        if " | " in type_:
+            self.memo[type_] = self.merged(type_.split(" | "))
+            return self.memo[type_]
+        if type_ in COMPOSITES:
+            size, parts = COMPOSITES[type_]
+            candidates = []
+            blocks: Dict[int, tuple] = {}
+            for at, part in parts:
+                _, part_scalars, part_blocks = self.layout(part)
+                for offset, (width, placeholder) in part_scalars.items():
+                    if at + offset < size:
+                        candidates.append((at + offset, width, placeholder))
+                for offset, key in part_blocks.items():
+                    blocks[at + offset] = combine(blocks.get(at + offset), key)
+            self.memo[type_] = (size, resolve(candidates), blocks)
+            return self.memo[type_]
+        # every unit's declaration of the record: all of their fields
+        self.memo[type_] = (self.record_size(type_), {}, {})
+        sizes = {size for size, _ in self.records[type_]}
+        if len(sizes) > 1:
+            self.size_conflicts.add(f"{type_} {sorted(sizes)}")
+        candidates = []
+        blocks: Dict[int, tuple] = {}
+        for _, tree in self.records[type_]:
+            self._walk(tree, type_, candidates, blocks)
+        self.memo[type_] = (self.record_size(type_), resolve(candidates), blocks)
         return self.memo[type_]
 
-    def _add_type(self, type_: str, offset: int, owner: str, field: str, scalars, blocks) -> None:
+    def merged(self, views: List[str]):
+        size = 0
+        candidates = []
+        blocks: Dict[int, tuple] = {}
+        for view in views:
+            if view not in self.records and view not in SCALARS and view not in COMPOSITES and " | " not in view:
+                continue
+            view_size, view_scalars, view_blocks = self.layout(view)
+            size = max(size, view_size)
+            candidates += [(at, width, placeholder) for at, (width, placeholder) in view_scalars.items()]
+            for at, key in view_blocks.items():
+                blocks[at] = combine(blocks.get(at), key)
+        return size, resolve(candidates), blocks
+
+    def _add_type(self, type_: str, offset: int, owner: str, field: str, candidates, blocks) -> None:
         type_ = type_.strip()
+        placeholder = bool(PLACEHOLDER.match(field or ""))
         array = re.match(r"^(.*)\[(\d+)\]$", type_)
         if array:
             element = array.group(1).strip()
@@ -435,48 +578,56 @@ class Layouts:
                 self.unknown_types.add(element)
                 return
             for index in range(int(array.group(2))):
-                self._add_type(element, offset + index * element_size, owner, field, scalars, blocks)
+                self._add_type(element, offset + index * element_size, owner, field, candidates, blocks)
             return
         if type_ == "struct tag_block":
-            blocks[offset] = (owner, field)
+            blocks[offset] = combine(blocks.get(offset), (owner, field))
             for word in range(3):
-                scalars[offset + word * 4] = 4
+                candidates.append((offset + word * 4, 4, False))
             return
         if type_ in SCALARS:
             if SCALARS[type_] > 1:
-                scalars.setdefault(offset, SCALARS[type_])
+                candidates.append((offset, SCALARS[type_], placeholder))
             return
         if type_.endswith("*") or type_.startswith("enum "):
-            scalars.setdefault(offset, 4)
+            candidates.append((offset, 4, placeholder))
             return
         if type_ in self.records:
             _, element_scalars, element_blocks = self.layout(type_)
-            for at, size in element_scalars.items():
-                scalars.setdefault(offset + at, size)
+            for at, (width, element_placeholder) in element_scalars.items():
+                candidates.append((offset + at, width, placeholder or element_placeholder))
             for at, key in element_blocks.items():
-                blocks.setdefault(offset + at, key)
+                blocks[offset + at] = combine(blocks.get(offset + at), key)
             return
         self.unknown_types.add(type_)
 
-    def _walk(self, node: Node, owner: str, base: int, scalars, blocks, top: bool = False) -> None:
+    def _walk(self, node: Node, owner: str, candidates, blocks) -> None:
+        """a record's fields (a union's alternatives all go in: resolve
+        keeps the widest named one where they overlap)"""
         for child in node.children:
             if child.bits is not None:
                 self.bitfields.add(f"{owner}.{child.name}")
                 continue
             if child.type == "struct tag_block":
-                self._add_type(child.type, child.offset, owner, child.name, scalars, blocks)
+                self._add_type(child.type, child.offset, owner, child.name, candidates, blocks)
             elif child.children and not re.search(r"\[\d+\]$", child.type):
-                self._walk(child, child.type if not child.type.startswith(("struct (", "union (")) else owner,
-                           0, scalars, blocks)
+                inner_owner = child.type if not child.type.startswith(("struct (", "union (")) else owner
+                self._walk(child, inner_owner, candidates, blocks)
             else:
-                self._add_type(child.type, child.offset, owner, child.name, scalars, blocks)
+                self._add_type(child.type, child.offset, owner, child.name, candidates, blocks)
 
-    def element_of(self, key: Tuple[str, str]) -> Optional[str]:
-        candidates = sorted(t for t in self.elements.get(key, ()) if t in self.records or t in SCALARS)
+    def element_of(self, key) -> Optional[str]:
+        for single in keys_of(key):
+            if single in OVERRIDES:
+                return OVERRIDES[single]
+        candidates = sorted({t for single in keys_of(key) for t in self.elements.get(single, ())
+                             if t in self.records or t in SCALARS})
         if not candidates:
             return None
-        # the largest view: the most fields read
-        return max(candidates, key=lambda t: (self.layout(t)[0], len(self.layout(t)[1])))
+        if len(candidates) == 1:
+            return candidates[0]
+        # every view the code has of the element: all of their fields
+        return " | ".join(candidates)
 
 
 # ---------- the maps: group hierarchy and a check
@@ -527,16 +678,17 @@ def main() -> int:
     units = game_units()
     if not units:
         sys.exit("no game units: configure the Xbox 360 build first (python3 configure.py --xdk360 ...)")
-    records: Dict[str, Tuple[int, Node]] = {}
+    records: Dict[str, List[Tuple[int, Node]]] = {}
     found: Dict[tuple, Set[str]] = {}
     roots: Dict[int, Set[str]] = {}
     calls: Dict[tuple, Set[tuple]] = {}
     with ProcessPoolExecutor(max_workers=args.jobs) as pool:
         for source, data in pool.map(analyze, units):
             for name, value in data["records"].items():
-                if name not in records or records[name][0] < value[0] or (
-                        records[name][0] == value[0] and count_nodes(value[1]) > count_nodes(records[name][1])):
-                    records[name] = value
+                variants = records.setdefault(name, [])
+                signature = node_signature(value[1])
+                if all(node_signature(tree) != signature for _, tree in variants):
+                    variants.append(value)
             for key, value in data["elements"].items():
                 found.setdefault(key, set()).update(value)
             for key, value in data["roots"].items():
@@ -564,6 +716,8 @@ def main() -> int:
     write_tables(args.output, layouts, roots, hierarchy)
     if args.maps:
         check(args.maps, layouts, roots, hierarchy)
+    for name in sorted(layouts.size_conflicts):
+        print("note: declared with different sizes (the largest is used):", name, file=sys.stderr)
     for name in sorted(layouts.bitfields):
         print("note: bitfield (its bits are not the Xbox's on a big-endian target):", name, file=sys.stderr)
     return 0
@@ -616,6 +770,10 @@ def resolve_elements(found: Dict[tuple, Set[str]], calls: Dict[tuple, Set[tuple]
     return {(key[1], key[2]): value for key, value in types.items() if key[0] == "member"}
 
 
+def node_signature(node: Node) -> tuple:
+    return (node.offset, node.type, node.name, tuple(node_signature(child) for child in node.children))
+
+
 def count_nodes(node: Node) -> int:
     return 1 + sum(count_nodes(child) for child in node.children)
 
@@ -629,29 +787,8 @@ def group_views(group: int, roots: Dict[int, Set[str]], hierarchy: Dict[int, Tup
 
 
 def merged(layouts: Layouts, views: List[str]):
-    size = 0
-    scalars: Dict[int, int] = {}
-    blocks: Dict[int, Tuple[str, str]] = {}
-    conflicts = []
-    for view in views:
-        if view not in layouts.records:
-            continue
-        view_size, view_scalars, view_blocks = layouts.layout(view)
-        size = max(size, view_size)
-        for at, scalar in view_scalars.items():
-            if scalars.get(at, scalar) != scalar:
-                conflicts.append(at)
-            scalars.setdefault(at, scalar)
-        for at, key in view_blocks.items():
-            if at not in blocks or (layouts.element_of(blocks[at]) is None and layouts.element_of(key)):
-                blocks[at] = key
-    # a scalar overlapping a wider one at a lower offset is the wider one's
-    covered: Dict[int, int] = {}
-    for at in sorted(scalars):
-        if any(start < at < start + width for start, width in covered.items()):
-            continue
-        covered[at] = scalars[at]
-    return size, covered, blocks, conflicts
+    size, scalars, blocks = layouts.merged(views)
+    return size, scalars, blocks, []
 
 
 def program(scalars: Dict[int, int], blocks: Dict[int, int]) -> List[Tuple[int, int, int]]:
@@ -660,7 +797,7 @@ def program(scalars: Dict[int, int], blocks: Dict[int, int]) -> List[Tuple[int, 
     argument"""
     ops: List[Tuple[int, int, int]] = []
     for at in sorted(scalars):
-        size = scalars[at]
+        size = scalars[at][0]
         if ops and ops[-1][1] == size and ops[-1][0] + ops[-1][2] * size == at:
             ops[-1] = (ops[-1][0], size, ops[-1][2] + 1)
         else:
@@ -767,7 +904,8 @@ def check(maps: Path, layouts: Layouts, roots: Dict[int, Set[str]], hierarchy: D
                     continue
                 if count < 0 or count > 0x100000 or not (TAG_CACHE_ADDRESS <= block_address < TAG_CACHE_ADDRESS
                                                          + len(data)):
-                    bad[f"{key[0]}.{key[1]}"] = bad.get(f"{key[0]}.{key[1]}", 0) + 1
+                    name_ = ", ".join(f"{owner}.{field}" for owner, field in keys_of(key))
+                    bad[name_] = bad.get(name_, 0) + 1
                     continue
                 element = layouts.element_of(key)
                 if element is None:
@@ -791,7 +929,8 @@ def check(maps: Path, layouts: Layouts, roots: Dict[int, Set[str]], hierarchy: D
     for group, count in sorted(no_views.items(), key=lambda item: -item[1]):
         print(f"check: no layout for group '{fourcc(group)}' ({count} tags)", file=sys.stderr)
     for key, count in sorted(unknown.items(), key=lambda item: -item[1]):
-        print(f"check: unknown elements: {key[0]}.{key[1]} ({count} elements)", file=sys.stderr)
+        names = ", ".join(f"{owner}.{field}" for owner, field in keys_of(key))
+        print(f"check: unknown elements: {names} ({count} elements)", file=sys.stderr)
     for name, count in sorted(bad.items(), key=lambda item: -item[1]):
         print(f"check: not a block: {name} ({count})", file=sys.stderr)
 

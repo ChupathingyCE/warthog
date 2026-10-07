@@ -3005,8 +3005,10 @@ void halt_and_catch_fire(
 		/* port: no screen to show the error on yet; the log has it
 		(errors.c), and the console goes back to its launcher instead of
 		stopping (port/xbox360/src/x360_system.c) */
+		void x360_log_backtrace(const char *why);
 		void x360_exit_to_launcher(void);
 
+		x360_log_backtrace("halted");
 		x360_exit_to_launcher();
 	}
 #endif

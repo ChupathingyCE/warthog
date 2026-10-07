@@ -510,12 +510,46 @@ _Bool __atomic_compare_exchange_8(volatile void *memory, void *expected, unsigne
 
 /* ---------- POSIX leftovers */
 
-/* (no call stacks yet: the crash reports say where, not how) */
-int backtrace(void **frames, int count)
+/* the return addresses of the calls that led here, by the stack's back
+chain: each frame's first word is its caller's stack pointer, and the
+Xenon convention keeps a function's return address in the word 8 bytes
+below its caller's stack pointer */
+__attribute__((noinline)) int backtrace(void **frames, int count)
 {
-	(void)frames;
-	(void)count;
-	return 0;
+	unsigned int *stack;
+	int captured = 0;
+
+	__asm__ __volatile__("mr %0, 1" : "=r"(stack));
+
+	while (captured < count && stack)
+	{
+		unsigned int *caller = (unsigned int *)(UINT_PTR)stack[0];
+		unsigned int address;
+
+		if (!caller || caller <= stack || (UINT_PTR)caller - (UINT_PTR)stack > 0x100000)
+			break;
+		address = caller[-2];
+		/* (a frame that saved no return address: its caller's is further up) */
+		if (address >= 0x82000000U && address < 0x84000000U)
+			frames[captured++] = (void *)(UINT_PTR)address;
+		stack = caller;
+	}
+	return captured;
+}
+
+void x360_log_backtrace(const char *why)
+{
+	void *frames[24];
+	char text[24 * 11 + 1];
+	int count = backtrace(frames, 24), index;
+	size_t length = 0;
+
+	text[0] = '\0';
+	for (index = 0; index < count; index++)
+		length += (size_t)_snprintf(text + length, sizeof(text) - length - 1, " %08x",
+			(unsigned int)(UINT_PTR)frames[index]);
+	text[sizeof(text) - 1] = '\0';
+	x360_log("%s; calls:%s", why, text);
 }
 
 /* the environment: the console has none, so settings that the desktop
