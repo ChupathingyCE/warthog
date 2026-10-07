@@ -68,7 +68,7 @@ static void first_use(const char *name)
 static struct
 {
 	BOOL loaded;
-	BOOL no_draws, constant_stream, no_resolves, log_draws, clear_red;
+	BOOL no_draws, constant_stream, no_resolves, log_draws, clear_red, green, no_cull, no_depth, no_blend, probe;
 } debug;
 
 static void debug_load(void)
@@ -89,6 +89,11 @@ static void debug_load(void)
 		if (!strcmp(word, "no_resolves")) debug.no_resolves = TRUE;
 		if (!strcmp(word, "log_draws")) debug.log_draws = TRUE;
 		if (!strcmp(word, "clear_red")) debug.clear_red = TRUE;
+		if (!strcmp(word, "green")) debug.green = TRUE;
+		if (!strcmp(word, "no_cull")) debug.no_cull = TRUE;
+		if (!strcmp(word, "no_depth")) debug.no_depth = TRUE;
+		if (!strcmp(word, "no_blend")) debug.no_blend = TRUE;
+		if (!strcmp(word, "probe")) debug.probe = TRUE;
 	}
 	fclose(file);
 	x360_log("gl: debug switches: draws %s, constant stream %s, resolves %s",
@@ -338,6 +343,8 @@ static struct
 	/* the present blit's shaders */
 	D3DVertexShader *blit_vertex;
 	D3DPixelShader *blit_pixel;
+	D3DPixelShader *green_pixel;
+	struct texture *presented;
 	D3DVertexDeclaration *blit_declaration;
 	unsigned long frame;
 	unsigned long draws;
@@ -406,6 +413,12 @@ static BOOL gl_ready(void)
 	if (code)
 	{
 		gl.blit_vertex = D3DDevice_CreateVertexShader(x360_video_shader_code(code));
+		x360_video_shader_free(code);
+	}
+	code = x360_video_compile("float4 main() : COLOR { return float4(0.0, 1.0, 0.0, 1.0); }\n", "ps_3_0", NULL);
+	if (code)
+	{
+		gl.green_pixel = D3DDevice_CreatePixelShader(x360_video_shader_code(code));
 		x360_video_shader_free(code);
 	}
 	code = x360_video_compile(blit_pixel_source, "ps_3_0", NULL);
@@ -1305,13 +1318,13 @@ static void apply_render_state(void)
 	IDirect3DDevice9_SetRenderState(device, D3DRS_STENCILFAIL, stencil_operation(gl.stencil_fail));
 	IDirect3DDevice9_SetRenderState(device, D3DRS_STENCILZFAIL, stencil_operation(gl.stencil_zfail));
 	IDirect3DDevice9_SetRenderState(device, D3DRS_STENCILPASS, stencil_operation(gl.stencil_zpass));
-	/* (GL's counter-clockwise, in Direct3D's window coordinates, is
-	Direct3D's clockwise) */
+	/* (the winding GL culls is Direct3D's of the same name: measured on
+	the console, the menu's draws all culled with the names exchanged) */
 	if (gl.cull_face)
 	{
 		GLenum culled = gl.cull_mode == GL_FRONT ? gl.front_face : gl.front_face == GL_CCW ? GL_CW : GL_CCW;
 
-		cull = gl.cull_mode == GL_FRONT_AND_BACK ? D3DCULL_NONE : culled == GL_CCW ? D3DCULL_CW : D3DCULL_CCW;
+		cull = gl.cull_mode == GL_FRONT_AND_BACK ? D3DCULL_NONE : culled == GL_CCW ? D3DCULL_CCW : D3DCULL_CW;
 	}
 	IDirect3DDevice9_SetRenderState(device, D3DRS_CULLMODE, cull);
 	IDirect3DDevice9_SetRenderState(device, D3DRS_COLORWRITEENABLE,
@@ -1337,6 +1350,15 @@ static void apply_render_state(void)
 		rectangle.bottom = gl.scissor[1] + gl.scissor[3];
 		IDirect3DDevice9_SetScissorRect(device, &rectangle);
 	}
+	if (debug.no_cull)
+		IDirect3DDevice9_SetRenderState(device, D3DRS_CULLMODE, D3DCULL_NONE);
+	if (debug.no_depth)
+	{
+		IDirect3DDevice9_SetRenderState(device, D3DRS_ZENABLE, FALSE);
+		IDirect3DDevice9_SetRenderState(device, D3DRS_STENCILENABLE, FALSE);
+	}
+	if (debug.no_blend)
+		IDirect3DDevice9_SetRenderState(device, D3DRS_ALPHABLENDENABLE, FALSE);
 	viewport.X = (DWORD)(gl.viewport[0] < 0 ? 0 : gl.viewport[0]);
 	viewport.Y = (DWORD)(gl.viewport[1] < 0 ? 0 : gl.viewport[1]);
 	viewport.Width = (DWORD)gl.viewport[2];
@@ -1443,7 +1465,17 @@ static BOOL prepare_draw(struct program **program_out, struct shader **vertex_ou
 	}
 	apply_render_state();
 	IDirect3DDevice9_SetVertexShader(gl.device, vertex->vertex);
-	IDirect3DDevice9_SetPixelShader(gl.device, fragment->pixel);
+	IDirect3DDevice9_SetPixelShader(gl.device, debug.green && gl.green_pixel ? gl.green_pixel : fragment->pixel);
+	if (debug.log_draws && gl.draws < 40)
+	{
+		x360_log("gl:   viewport %d %d %d %d, scissor %d (%d %d %d %d), depth %d func 0x%x mask %d, blend %d 0x%x 0x%x, "
+			"cull %d 0x%x 0x%x, colors %d%d%d%d, constants %d/%d, target %p/%p",
+			gl.viewport[0], gl.viewport[1], gl.viewport[2], gl.viewport[3], gl.scissor_test, gl.scissor[0],
+			gl.scissor[1], gl.scissor[2], gl.scissor[3], gl.depth_test, gl.depth_func, gl.depth_mask, gl.blend,
+			gl.blend_source, gl.blend_destination, gl.cull_face, gl.cull_mode, gl.front_face, gl.color_mask[0],
+			gl.color_mask[1], gl.color_mask[2], gl.color_mask[3], program->vertex_constant_count,
+			program->pixel_constant_count, (void *)gl.bound_color, (void *)gl.bound_depth);
+	}
 	if (program->vertex_constant_count)
 		IDirect3DDevice9_SetVertexShaderConstantF(gl.device, 0, &program->vertex_constants[0][0],
 			(UINT)program->vertex_constant_count);
@@ -2204,6 +2236,8 @@ static void APIENTRY x360_glBlitFramebuffer(GLint sx0, GLint sy0, GLint sx1, GLi
 	v1 = (float)sy1 / (float)source->height;
 	blit_quad(source, u0, v0, u1, v1, (float)dx0, (float)dy0, (float)dx1, (float)dy1, width, height,
 		filter == GL_LINEAR);
+	if (!gl.draw_framebuffer)
+		gl.presented = source;
 	targets_written();
 }
 
@@ -2711,6 +2745,40 @@ void x360_gl_swap(void)
 {
 	if (!gl_ready())
 		return;
+	debug_load();
+	if (debug.probe && gl.presented && gl.presented->d3d && gl.frame % 150 == 149)
+	{
+		/* what the game's picture holds: its texels' colors, counted */
+		D3DLOCKED_RECT locked;
+		unsigned long colors[6] = { 0 }, counts[6] = { 0 }, others = 0, y, x;
+		int distinct = 0, index;
+
+		IDirect3DDevice9_BlockUntilIdle(gl.device);
+		IDirect3DTexture9_LockRect((D3DTexture *)gl.presented->d3d, 0, &locked, NULL, D3DLOCK_READONLY);
+		for (y = 0; y < gl.presented->height; y++)
+		{
+			const unsigned long *row = (const unsigned long *)((const unsigned char *)locked.pBits + y * locked.Pitch);
+
+			for (x = 0; x < gl.presented->width; x++)
+			{
+				for (index = 0; index < distinct && colors[index] != row[x]; index++)
+					;
+				if (index < distinct)
+					counts[index]++;
+				else if (distinct < 6)
+				{
+					colors[distinct] = row[x];
+					counts[distinct++] = 1;
+				}
+				else
+					others++;
+			}
+		}
+		IDirect3DTexture9_UnlockRect((D3DTexture *)gl.presented->d3d, 0);
+		x360_log("gl: picture %lux%lu: %08lx x%lu, %08lx x%lu, %08lx x%lu, %08lx x%lu, %08lx x%lu, %08lx x%lu, "
+			"others %lu", gl.presented->width, gl.presented->height, colors[0], counts[0], colors[1], counts[1],
+			colors[2], counts[2], colors[3], counts[3], colors[4], counts[4], colors[5], counts[5], others);
+	}
 	D3DDevice_Present(gl.device);
 	gl.bound_screen = FALSE;
 	gl.bound_color = (D3DSurface *)1;
