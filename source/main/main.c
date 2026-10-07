@@ -3000,6 +3000,16 @@ void halt_and_catch_fire(
 	struct rasterizer_frame_begin_parameters frame_parameters;
 	struct rasterizer_window_begin_parameters window_parameters;
 
+#ifdef HALO_XBOX360
+	{
+		/* port: no screen to show the error on yet; the log has it
+		(errors.c), and the console goes back to its launcher instead of
+		stopping (port/xbox360/src/x360_system.c) */
+		void x360_exit_to_launcher(void);
+
+		x360_exit_to_launcher();
+	}
+#endif
 	if (!global_screenshot_count.halt_recursion_lock)
 	{
 		scenario = global_scenario_try_and_get();
