@@ -35,7 +35,9 @@ static struct
 	short buffers[BUFFERS][BUFFER_FRAMES * CHANNELS];
 	unsigned long filled;    /* samples in the buffer being filled */
 	int current;
-	BOOL running;
+	BOOL running, dry;
+	unsigned long underruns, underruns_logged, submitted;
+	DWORD last_report;
 } audio;
 
 /* the stream SDL hands back (any non-NULL value): this file's state */
@@ -49,6 +51,19 @@ static DWORD WINAPI audio_thread(LPVOID parameter)
 		XAUDIO2_VOICE_STATE state;
 
 		IXAudio2SourceVoice_GetState(audio.voice, &state, 0);
+		/* (the voice ran dry: a gap the player hears) */
+		if (state.BuffersQueued == 0 && audio.submitted && !audio.dry)
+			audio.underruns++;
+		audio.dry = state.BuffersQueued == 0;
+		if (GetTickCount() - audio.last_report >= 10000)
+		{
+			audio.last_report = GetTickCount();
+			if (audio.underruns != audio.underruns_logged)
+			{
+				x360_log("audio: %lu underruns so far (%lu buffers played)", audio.underruns, audio.submitted);
+				audio.underruns_logged = audio.underruns;
+			}
+		}
 		if (state.BuffersQueued < QUEUED)
 		{
 			/* (the mixer's floats for one buffer: it calls
@@ -151,6 +166,7 @@ _Bool SDL_PutAudioStreamData(void *stream, const void *data, int length)
 			buffer.AudioBytes = sizeof(audio.buffers[0]);
 			buffer.pAudioData = (const BYTE *)audio.buffers[audio.current];
 			IXAudio2SourceVoice_SubmitSourceBuffer(audio.voice, &buffer, NULL);
+			audio.submitted++;
 			audio.current = (audio.current + 1) % BUFFERS;
 			audio.filled = 0;
 		}

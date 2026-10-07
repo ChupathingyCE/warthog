@@ -854,8 +854,10 @@ static void bind_targets(void)
 		depth_surface = depth->surface;
 	if (gl.bound_screen || color_surface != gl.bound_color || depth_surface != gl.bound_depth)
 	{
-		/* (a target with no color: drawing depth only needs one bound) */
-		IDirect3DDevice9_SetRenderTarget(gl.device, 0, color_surface);
+		/* (a target with no color keeps the last one bound: the console
+		cannot take none) */
+		if (color_surface)
+			IDirect3DDevice9_SetRenderTarget(gl.device, 0, color_surface);
 		IDirect3DDevice9_SetDepthStencilSurface(gl.device, depth_surface);
 		gl.bound_color = color_surface;
 		gl.bound_depth = depth_surface;
@@ -868,9 +870,6 @@ static void texture_resolve(struct texture *texture)
 {
 	D3DRECT rectangle;
 	D3DPOINT point;
-	D3DSurface *previous_color = gl.bound_color;
-	D3DSurface *previous_depth = gl.bound_depth;
-	BOOL previous_screen = gl.bound_screen;
 
 	if (!texture->unresolved || !texture->surface || !texture->d3d || texture->depth_format || debug.no_resolves)
 		return;
@@ -888,25 +887,11 @@ static void texture_resolve(struct texture *texture)
 	point.y = 0;
 	IDirect3DDevice9_Resolve(gl.device, D3DRESOLVE_RENDERTARGET0, &rectangle, texture->d3d, &point, 0, 0, NULL,
 		1.0f, 0, NULL);
-	if (previous_screen || previous_color != texture->surface)
-	{
-		gl.bound_screen = FALSE;
-		gl.bound_color = texture->surface;
-		gl.bound_depth = NULL;
-		if (previous_screen)
-		{
-			gl.bound_screen = FALSE;
-			gl.bound_color = (D3DSurface *)1;
-			bind_targets();
-		}
-		else
-		{
-			IDirect3DDevice9_SetRenderTarget(gl.device, 0, previous_color);
-			IDirect3DDevice9_SetDepthStencilSurface(gl.device, previous_depth);
-			gl.bound_color = previous_color;
-			gl.bound_depth = previous_depth;
-		}
-	}
+	/* the resolve's target stays bound: callers bind theirs again after
+	(bound_color can hold a stand-in that is no surface, never to be bound) */
+	gl.bound_screen = FALSE;
+	gl.bound_color = texture->surface;
+	gl.bound_depth = NULL;
 }
 
 /* the draw framebuffer's color texture, which a draw or clear makes newer
