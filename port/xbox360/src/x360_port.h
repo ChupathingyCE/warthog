@@ -76,6 +76,13 @@ void x360_video_shader_free(void *shader);
 /* the device, the compiler, a triangle and a present, logged */
 void x360_video_probe(void);
 
+/* ---------- OpenGL on the console (x360_gl.c) */
+
+/* an entry point by its name, NULL if there is none */
+void *x360_gl_function(const char *name);
+/* the frame drawn: presented */
+void x360_gl_swap(void);
+
 /* ---------- leaving */
 
 void x360_exit_to_launcher(void);

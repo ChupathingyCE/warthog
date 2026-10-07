@@ -119,10 +119,27 @@ int platform_window_sizes(long *widths, long *heights, int maximum)
 	return 0;
 }
 
+/* gl_functions.c's */
+int gl_functions_load(void);
+
+/* the screen: the console's Direct3D device, under the desktop renderer's
+OpenGL (port/xbox360/src/x360_gl.c) */
 BOOL platform_video_initialize(unsigned long width, unsigned long height)
 {
-	platform_log("video: %lux%lu asked for; no renderer on the Xbox 360 yet", width, height);
-	return FALSE;
+	static BOOL ready;
+
+	if (ready)
+		return TRUE;
+	if (!x360_video_device())
+		return FALSE;
+	if (!gl_functions_load())
+	{
+		platform_log("video: an OpenGL entry point is missing");
+		return FALSE;
+	}
+	platform_log("video: the game's %lux%lu screen, drawn through OpenGL on Direct3D 9", width, height);
+	ready = TRUE;
+	return TRUE;
 }
 
 void platform_display_apply(void)
@@ -131,18 +148,19 @@ void platform_display_apply(void)
 
 void platform_video_drawable_size(int *width, int *height)
 {
-	*width = 640;
-	*height = 480;
+	*width = 1280;
+	*height = 720;
 }
 
 void platform_video_window_size(int *width, int *height)
 {
-	*width = 640;
-	*height = 480;
+	*width = 1280;
+	*height = 720;
 }
 
 void platform_video_swap(void)
 {
+	x360_gl_swap();
 }
 
 void platform_mouse_capture(BOOL capture)

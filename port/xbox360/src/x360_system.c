@@ -738,11 +738,10 @@ char **SDL_GlobDirectory(const char *path, const char *pattern, unsigned int fla
 	return list;
 }
 
-/* no OpenGL: the renderer draws nothing until the console's own */
+/* OpenGL on the console's Direct3D (x360_gl.c) */
 void *SDL_GL_GetProcAddress(const char *name)
 {
-	(void)name;
-	return NULL;
+	return x360_gl_function(name);
 }
 
 /* no audio device yet: the game's mixer keeps time silently
@@ -799,4 +798,22 @@ static void exit_handlers_install(void)
 {
 	atexit(exit_handler);
 	signal(SIGABRT, abort_handler);
+}
+
+/* ---------- byte swaps the SDK declares and defines nowhere (Microsoft's
+compiler expands them inline) */
+
+unsigned short __cdecl _byteswap_ushort(unsigned short value)
+{
+	return __builtin_bswap16(value);
+}
+
+unsigned long __cdecl _byteswap_ulong(unsigned long value)
+{
+	return __builtin_bswap32(value);
+}
+
+unsigned __int64 __cdecl _byteswap_uint64(unsigned __int64 value)
+{
+	return __builtin_bswap64(value);
 }
