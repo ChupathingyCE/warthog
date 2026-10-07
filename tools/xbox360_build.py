@@ -93,6 +93,9 @@ GAME_ABI_FLAGS = [
     "-fno-delete-null-pointer-checks",
     "-ffp-contract=off",
     "-msvr4-struct-return",
+    # char is signed, as MSVC has it (PowerPC's is unsigned: a char holding
+    # NONE would read 255)
+    "-fsigned-char",
     "-DHALO_64BIT",
     "-DHALO_XBOX_WINDOW",
     "-DDEBUG",
