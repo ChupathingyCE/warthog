@@ -744,30 +744,7 @@ void *SDL_GL_GetProcAddress(const char *name)
 	return x360_gl_function(name);
 }
 
-/* no audio device yet: the game's mixer keeps time silently
-(dsound_sdl.c) */
-void *SDL_OpenAudioDeviceStream(unsigned int device, const void *spec, void *callback, void *user_data)
-{
-	(void)device;
-	(void)spec;
-	(void)callback;
-	(void)user_data;
-	return NULL;
-}
-
-_Bool SDL_ResumeAudioStreamDevice(void *stream)
-{
-	(void)stream;
-	return 0;
-}
-
-_Bool SDL_PutAudioStreamData(void *stream, const void *data, int length)
-{
-	(void)stream;
-	(void)data;
-	(void)length;
-	return 0;
-}
+/* (the audio device: x360_audio.c) */
 
 /* ---------- leaving */
 

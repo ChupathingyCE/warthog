@@ -28,6 +28,8 @@ enum
 };
 
 static DWORD reported_ports;
+static WORD last_buttons[XUSER_MAX_COUNT];
+static int button_logs;
 
 int x360_pad_read(int port, struct x360_pad *pad)
 {
@@ -55,6 +57,14 @@ int x360_pad_read(int port, struct x360_pad *pad)
 		x360_log("controller %d: connected", port + 1);
 	}
 	buttons = state.Gamepad.wButtons;
+	/* (the first presses, in the log: input's bring-up) */
+	if (buttons != last_buttons[port] && button_logs < 200)
+	{
+		button_logs++;
+		x360_log("controller %d: buttons 0x%04x, triggers %d %d, left stick %d %d", port + 1, buttons,
+			state.Gamepad.bLeftTrigger, state.Gamepad.bRightTrigger, state.Gamepad.sThumbLX, state.Gamepad.sThumbLY);
+	}
+	last_buttons[port] = buttons;
 	/* D-pad, Start, Back, the sticks' clicks: the same bits */
 	pad->buttons = buttons & 0x00ff;
 	pad->analog[XBOX_A] = (buttons & XINPUT_GAMEPAD_A) ? 255 : 0;
