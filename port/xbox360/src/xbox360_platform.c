@@ -66,6 +66,32 @@ int halo_interpolation_enabled(void)
 	return 0;
 }
 
+/* ---------- the main loop's pulse */
+
+/* the game's (game.h) */
+long game_time_get(void);
+
+/* every pass of the main loop (main.c): once a second, how many passes
+there were and the game's time in ticks */
+void xbox360_main_loop_tick(void)
+{
+	static DWORD last_report;
+	static unsigned long loops, total;
+	DWORD now = GetTickCount();
+
+	loops++;
+	total++;
+	if (!last_report)
+		last_report = now;
+	if (now - last_report >= 1000)
+	{
+		platform_log("main loop: %lu passes in %lu ms (%lu in all), game time %ld", loops,
+			(unsigned long)(now - last_report), total, game_time_get());
+		loops = 0;
+		last_report = now;
+	}
+}
+
 /* ---------- the screen (none yet) */
 
 BOOL platform_screen_mode(long *width, long *height)

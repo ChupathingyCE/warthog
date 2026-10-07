@@ -3286,6 +3286,15 @@ void main_loop(
 
 	while (TRUE)
 	{
+#ifdef HALO_XBOX360
+		/* port: the loop's pulse in the log, once a second
+		(port/xbox360/src/xbox360_platform.c) */
+		{
+			extern void xbox360_main_loop_tick(void);
+
+			xbox360_main_loop_tick();
+		}
+#endif
 #ifdef HALO_XBOX_CONSOLE
 		/* port: the loop counted for the bring-up watchdog (port/xbox/src/xbox_port.c);
 		the game list fetched once at the start, on a thread of its own, and
