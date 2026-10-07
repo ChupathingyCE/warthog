@@ -556,17 +556,71 @@ static unsigned long dotted_quad(const char *host)
 	return *host ? 0 : htonl(value);
 }
 
+/* names looked up before: internet play's thread also carries the game's
+traffic, so a lookup again (a broker's after it failed) must not hold it
+for XNet DNS's seconds while a game is on */
+enum
+{
+	RESOLVED_HOSTS = 8,
+	RESOLVED_HOST_SIZE = 64,
+};
+
+static struct
+{
+	char host[RESOLVED_HOST_SIZE];
+	unsigned long address;
+} resolved[RESOLVED_HOSTS];
+
+static unsigned long resolved_address(const char *host)
+{
+	int index;
+
+	for (index = 0; index < RESOLVED_HOSTS; index++)
+	{
+		if (resolved[index].address && !strcmp(resolved[index].host, host))
+			return resolved[index].address;
+	}
+	return 0;
+}
+
+static void resolved_keep(const char *host, unsigned long address)
+{
+	int index, free_index = -1;
+
+	if (strlen(host) >= RESOLVED_HOST_SIZE)
+		return;
+	for (index = 0; index < RESOLVED_HOSTS; index++)
+	{
+		if (!strcmp(resolved[index].host, host))
+		{
+			resolved[index].address = address;
+			return;
+		}
+		if (free_index < 0 && !resolved[index].host[0])
+			free_index = index;
+	}
+	if (free_index >= 0)
+	{
+		strcpy(resolved[free_index].host, host);
+		resolved[free_index].address = address;
+	}
+}
+
 posix_ulong posix_resolve_ipv4(const char *host)
 {
-	unsigned long address = dotted_quad(host);
+	unsigned long address = dotted_quad(host), started;
 	XNDNS *dns = NULL;
 	WSAEVENT event;
 
 	if (address)
 		return address;
+	address = resolved_address(host);
+	if (address)
+		return address;
 	event = WSACreateEvent();
 	if (event == WSA_INVALID_EVENT)
 		return 0;
+	started = GetTickCount();
 	if (XNetDnsLookup(host, event, &dns) == 0 && dns)
 	{
 		WaitForSingleObject(event, 20000);
@@ -575,6 +629,11 @@ posix_ulong posix_resolve_ipv4(const char *host)
 		XNetDnsRelease(dns);
 	}
 	WSACloseEvent(event);
+	if (GetTickCount() - started >= 2000)
+		platform_log("Internet play: looking up %s took %lus (%s)", host, (GetTickCount() - started) / 1000,
+			address ? "found" : "not found");
+	if (address)
+		resolved_keep(host, address);
 	return address;
 }
 
