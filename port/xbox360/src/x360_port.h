@@ -64,6 +64,18 @@ void x360_pad_rumble(int port, unsigned short left, unsigned short right);
 nonzero if they are up */
 int x360_network_start(void);
 
+/* ---------- the screen (x360_video.c) */
+
+/* the Direct3D 9 device (D3DDevice *), made on the first call; NULL if it
+cannot be */
+void *x360_video_device(void);
+/* HLSL to microcode on the console: an ID3DXBuffer, or NULL (logged) */
+void *x360_video_compile(const char *source, const char *profile, unsigned long *size);
+const void *x360_video_shader_code(void *shader);
+void x360_video_shader_free(void *shader);
+/* the device, the compiler, a triangle and a present, logged */
+void x360_video_probe(void);
+
 /* ---------- leaving */
 
 void x360_exit_to_launcher(void);

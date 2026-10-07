@@ -176,7 +176,7 @@ REPLACED_PLATFORM_SOURCES = {
 
 # what the XEX links: XAM and the kernel come in as imports through xapilib
 # and xboxkrnl
-XDK_LIBS = "xapilib,d3d9,xgraphics,xaudio2,x3daudio,xboxkrnl,xnet,oldnames,libcMT"
+XDK_LIBS = "xapilib,d3d9,d3dx9,xgraphics,xaudio2,x3daudio,xboxkrnl,xnet,oldnames,libcMT"
 XEX_BASE = "0x82000000"
 # the game's main thread: the desktop builds give it 8 MB
 XEX_STACK = "0x800000"

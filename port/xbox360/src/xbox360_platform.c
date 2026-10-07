@@ -43,6 +43,8 @@ static void xbox360_startup(void)
 {
 	/* (no sound device yet: dsound_sdl.c's mixer runs on its own clock) */
 	setenv("HALO_NO_AUDIO", "1", 0);
+	/* (what the renderer will stand on: logged, a second of a triangle) */
+	x360_video_probe();
 	x360_log("platform layer up; the game starts");
 }
 
