@@ -211,10 +211,10 @@ static void report_platform(void)
 
 	memset(&mode, 0, sizeof(mode));
 	XGetVideoMode(&mode);
-	log_line("video: %lux%lu, widescreen %s, interlaced %s, HD %s, standard %lu, AV pack %lu",
+	log_line("video: %lux%lu, widescreen %s, interlaced %s, HD %s, standard %lu",
 		(unsigned long)mode.dwDisplayWidth, (unsigned long)mode.dwDisplayHeight,
 		yes_no(mode.fIsWideScreen), yes_no(mode.fIsInterlaced), yes_no(mode.fIsHiDef),
-		(unsigned long)mode.VideoStandard, (unsigned long)XGetAVPack());
+		(unsigned long)mode.VideoStandard);
 
 	log_line("storage: log written to %s: %s", LOG_PATH, yes_no(log_file != INVALID_HANDLE_VALUE));
 	report_path("game:\\default.xex");
