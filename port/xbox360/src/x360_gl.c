@@ -68,7 +68,7 @@ static void first_use(const char *name)
 static struct
 {
 	BOOL loaded;
-	BOOL no_draws, constant_stream, no_resolves, log_draws, clear_red, green, no_cull, no_depth, no_blend, probe;
+	BOOL no_draws, constant_stream, no_resolves, log_draws, clear_red, green, no_cull, no_depth, no_blend, probe, dump;
 } debug;
 
 static void debug_load(void)
@@ -94,6 +94,7 @@ static void debug_load(void)
 		if (!strcmp(word, "no_depth")) debug.no_depth = TRUE;
 		if (!strcmp(word, "no_blend")) debug.no_blend = TRUE;
 		if (!strcmp(word, "probe")) debug.probe = TRUE;
+		if (!strcmp(word, "dump")) debug.dump = TRUE;
 	}
 	fclose(file);
 	x360_log("gl: debug switches: draws %s, constant stream %s, resolves %s",
@@ -2778,6 +2779,34 @@ void x360_gl_swap(void)
 		x360_log("gl: picture %lux%lu: %08lx x%lu, %08lx x%lu, %08lx x%lu, %08lx x%lu, %08lx x%lu, %08lx x%lu, "
 			"others %lu", gl.presented->width, gl.presented->height, colors[0], counts[0], colors[1], counts[1],
 			colors[2], counts[2], colors[3], counts[3], colors[4], counts[4], colors[5], counts[5], others);
+	}
+	if (debug.dump && gl.presented && gl.presented->d3d && (gl.frame == 300 || gl.frame == 900))
+	{
+		/* the game's picture, untiled, to game:\picture<n>.raw (BGRA rows) */
+		D3DLOCKED_RECT locked;
+		unsigned long size = gl.presented->width * gl.presented->height * 4;
+		unsigned char *linear = malloc(size);
+		char path[64];
+		FILE *file;
+
+		IDirect3DDevice9_BlockUntilIdle(gl.device);
+		if (linear)
+		{
+			IDirect3DTexture9_LockRect((D3DTexture *)gl.presented->d3d, 0, &locked, NULL, D3DLOCK_READONLY);
+			XGUntileSurface(linear, gl.presented->width * 4, NULL, locked.pBits, gl.presented->width,
+				gl.presented->height, NULL, 4);
+			IDirect3DTexture9_UnlockRect((D3DTexture *)gl.presented->d3d, 0);
+			_snprintf(path, sizeof(path) - 1, "game:\\picture%lu.raw", gl.frame);
+			path[sizeof(path) - 1] = '\0';
+			file = fopen(path, "wb");
+			if (file)
+			{
+				fwrite(linear, 1, size, file);
+				fclose(file);
+				x360_log("gl: the picture (%lux%lu) written to %s", gl.presented->width, gl.presented->height, path);
+			}
+			free(linear);
+		}
 	}
 	D3DDevice_Present(gl.device);
 	gl.bound_screen = FALSE;
