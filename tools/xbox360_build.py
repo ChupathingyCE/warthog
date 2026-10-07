@@ -247,6 +247,7 @@ def xbox360_configure_inputs() -> List[Path]:
         PORT_DIR / "src",
         PORT_DIR / "include",
         CONSOLE_DIR / "include",
+        CONSOLE_DIR / "game",
         LINUX_DIR / "src",
         LINUX_DIR / "game",
         *hud_configure_inputs(),
@@ -377,6 +378,7 @@ def generate_xbox360_build(n: Writer, sln: Any) -> None:
         f"-include {semantics_header}",
         f"-I{crt_wrappers}",
         f"-I{PORT_DIR / 'include'}",
+        f"-I{CONSOLE_DIR / 'include'}",
         f"-iquote {LINUX_DIR / 'include'}",
         f"-iquote {Path(linux_config['game_sources'])}",
         game_defines_and_includes(linux_config),
@@ -444,6 +446,9 @@ def generate_xbox360_build(n: Writer, sln: Any) -> None:
         if source.as_posix() not in excluded:
             add_object(source, game_cflags, [*implicit_common, semantics_header])
     for source in sorted(Path(linux_config["game_sources"]).glob("*.c")):
+        add_object(source, game_cflags, [*implicit_common, semantics_header])
+    # the consoles' shared game code: the maps' byte order
+    for source in sorted((CONSOLE_DIR / "game").glob("*.c")):
         add_object(source, game_cflags, [*implicit_common, semantics_header])
     game_objects = objects[game_objects_start:]
 

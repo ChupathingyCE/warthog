@@ -132,6 +132,11 @@ symbols in this file:
 #include "sound_cache.h"
 #include "texture_cache.h"
 #include "interface/ui_widget.h"
+#ifdef HALO_BIG_ENDIAN
+/* port: the maps in a big-endian console's byte order */
+#include "cache_byte_swap.h"
+#include "tag_byte_swap.h"
+#endif
 #include "scenario/scenario_definitions.h"
 #include "sound/sound_manager.h"
 
@@ -863,6 +868,11 @@ boolean cache_file_header_verify(
 	char const *scenario_name,
 	boolean fatal)
 {
+#ifdef HALO_BIG_ENDIAN
+	/* port: in the console's byte order (a header read from a map; the
+	copies on the cache drive are already) */
+	cache_file_header_byte_swap(header);
+#endif
 	if (header->header_signature != CACHE_FILE_HEADER_SIGNATURE ||
 		header->footer_signature != CACHE_FILE_FOOTER_SIGNATURE ||
 		header->file_length < 0 ||
@@ -1254,6 +1264,13 @@ long scenario_tags_load(
 
 				return NONE;
 			}
+#ifdef HALO_BIG_ENDIAN
+			/* port: the tag header and index in the console's byte order */
+			cache_file_tags_byte_swap(
+				tag_cache_base_address,
+				XBOX_ADDRESS(tag_cache_base_address),
+				cache_file_globals.header.tag_data_size);
+#endif
 			if (!cache_file_tag_header_verify(
 				tag_cache_base_address,
 				cache_file_globals.header.tag_data_size,
@@ -1264,6 +1281,13 @@ long scenario_tags_load(
 				return NONE;
 			}
 
+#ifdef HALO_BIG_ENDIAN
+			/* port: and the tags themselves (port/console/game/tag_byte_swap.c) */
+			tag_byte_swap_tags(
+				tag_cache_base_address,
+				XBOX_ADDRESS(tag_cache_base_address),
+				cache_file_globals.header.tag_data_size);
+#endif
 			cache_file_globals.tag_header = tag_cache_base_address;
 			match_vassert(
 				"c:\\halo\\SOURCE\\cache\\cache_files.c",
@@ -1377,6 +1401,23 @@ boolean scenario_structure_bsp_load(
 		/* port: a bsp that did not all read, or whose header's pointers
 		leave what was read, is not loaded */
 		structure_bsp_header = xbox_pointer(reference->base_address);
+#ifdef HALO_BIG_ENDIAN
+		/* port: its header and buffers in the console's byte order */
+		if (read_complete == TRUE)
+		{
+			if (cache_file_structure_bsp_byte_swap(
+				structure_bsp_header,
+				reference->base_address,
+				reference->file_size))
+			{
+				tag_byte_swap_structure_bsp(
+					xbox_pointer(structure_bsp_header->base_address),
+					structure_bsp_header->base_address,
+					reference->base_address,
+					reference->file_size);
+			}
+		}
+#endif
 		if (read_complete != TRUE ||
 #ifdef HALO_CUSTOM_EDITION
 			(!cache_file_is_ce && (
