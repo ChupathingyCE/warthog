@@ -178,6 +178,45 @@ static long group_layout(unsigned long group_tag)
 #define TAG_INSTANCE_GROUP 0x0
 #define TAG_INSTANCE_ADDRESS 0x14
 #define STRUCTURE_BSP_GROUP 0x73627370UL /* 'sbsp' */
+#define UNICODE_STRING_LIST_GROUP 0x75737472UL /* 'ustr' */
+#define HUD_MESSAGE_TEXT_GROUP 0x686D7420UL /* 'hmt ' */
+/* (a tag_data: its size, then its address at +0xC; a string list entry is one) */
+#define TAG_DATA_SIZE 0x14
+#define TAG_DATA_ADDRESS 0xC
+
+/* a tag_data of UTF-16 text (wchar_t): its characters, which no layout
+covers (the data is bytes to the tag system) */
+static void swap_text_data(struct swap_region *region, const unsigned char *data)
+{
+	long size = (long)read32(data);
+	unsigned long address = read32(data + TAG_DATA_ADDRESS);
+
+	if (size <= 0 || !region_holds(region, address, (unsigned long)size))
+		return;
+	swap_fields(region->base + (address - region->address), 2, (unsigned long)size / 2);
+}
+
+/* the text of the groups that hold UTF-16 strings, after their fields */
+static void swap_tag_text(struct swap_region *region, unsigned long group_tag, unsigned long address)
+{
+	const unsigned char *at = region->base + (address - region->address);
+
+	if (group_tag == UNICODE_STRING_LIST_GROUP)
+	{
+		/* (its strings block of tag_data entries) */
+		long count = (long)read32(at);
+		unsigned long entries = read32(at + 4), index;
+
+		if (count <= 0 || !region_holds(region, entries, (unsigned long)count * TAG_DATA_SIZE))
+			return;
+		for (index = 0; index < (unsigned long)count; index++)
+			swap_text_data(region, region->base + (entries - region->address) + index * TAG_DATA_SIZE);
+	}
+	else if (group_tag == HUD_MESSAGE_TEXT_GROUP)
+	{
+		swap_text_data(region, at);
+	}
+}
 
 void tag_byte_swap_tags(void *base, unsigned long base_address, unsigned long size)
 {
@@ -231,6 +270,7 @@ void tag_byte_swap_tags(void *base, unsigned long base_address, unsigned long si
 		}
 		region.tags++;
 		swap_layout(&region, (unsigned long)layout, address, 0);
+		swap_tag_text(&region, group_tag, address);
 	}
 	error(_error_silent, "tag byte swap: %lu of %lu tags, %lu blocks, %lu elements; %lu blocks not swapped",
 		region.tags, count, region.blocks, region.elements, region.bad_blocks);
