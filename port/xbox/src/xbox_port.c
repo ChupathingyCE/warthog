@@ -186,11 +186,17 @@ static unsigned long __stdcall xbox_watchdog(void *parameter)
 		Sleep(1000);
 		if (xbox_main_loops == loops)
 		{
-			if (++still % 3 == 0)
+			/* (into debug.txt too, at 3 s and each half minute: the lines
+			wait in the queue until the loop runs again) */
+			if (++still == 3 || still % 30 == 0)
+				platform_log("main loop stalled %lus at '%s' (loop %lu)", still, xbox_main_stage, loops);
+			else if (still % 3 == 0)
 				DbgPrint("halo: main loop stalled %lus at '%s' (loop %lu)\n", still, xbox_main_stage, loops);
 		}
 		else
 		{
+			if (still >= 3)
+				platform_log("main loop ran again after %lus", still);
 			still = 0;
 			if (xbox_trace_enabled())
 				DbgPrint("halo: main loop %lu (%lu a second), at '%s'\n", xbox_main_loops, xbox_main_loops - last_loops,
