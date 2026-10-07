@@ -1,6 +1,14 @@
 # Xbox 360
 
-Phase 0: `ninja xbox360` builds a boot test (`build/xbox360/default.xex`), not the game. It writes a log of the console's memory and platform facts that the port's plan depends on, then returns to the launcher. None of the game is compiled for this console yet. docs/consoles.md has the status of every console, and docs/wiiu.md the big-endian work the Wii U shares with this one.
+`ninja xbox360` builds the game for the Xbox 360: `build/xbox360/default.xex`. It is the Windows build's arrangement (port/windows/README.md) on the console's PowerPC: the game's sources and the desktop platform layer (`port/linux/src`), with the console's own units in `src`. It starts on a development kit and logs its start-up, then stops early in the game's own start (being worked on). Nothing is drawn yet and there is no sound. docs/consoles.md has the status of every console.
+
+How it is put together:
+
+- The game and `port/linux/src` see the original Xbox's SDK declarations (`port/include/xdk`), as on every other port. `src/x360_*.c` see the console's own SDK. Functions both define are renamed for the game's side (`include/halo_xbox360_api_names.h`).
+- Pointers are 32 bits, but the Xbox's addresses are the console's executable's, so the game runs with the 64-bit builds' pointer mode over a relocatable window (`HALO_64BIT` and `HALO_XBOX_WINDOW`, `source/cseries/xbox_address.h`): Xbox addresses 0x78000000 to 0x88000000 (the heap, then 128 MB of contiguous memory) are one 256 MB block wherever the console has it, and an Xbox address is one add away from its pointer (`src/x360_memory.c`).
+- `src/x360_posix.c`, `x360_files.c`, `x360_net.c` and `x360_system.c` give the platform layer the POSIX, file, socket and SDL calls it makes, on the console's kernel, XNet and C runtime. Paths are made the console's: backslashes, below `game:\`.
+- Thread-local variables are emulated (`-femulated-tls`, `src/x360_tls.c`): the console's TLS is Microsoft's compiler's.
+- `src/xbox360_platform.c` and `src/xbox360_input.c` stand in for `sdl_platform.c` and `xinput_sdl.c`, as the dedicated server's units do; the controllers are the console's (`src/x360_input_pad.c`).
 
 ## Requirements
 
@@ -17,34 +25,9 @@ ninja xbox360
 
 Every build stamps its first log line with the version, commit and build time, so a test can tell which build ran (a failed upload leaves the old XEX in place).
 
-## Install and run
+## Run
 
-On an RGH or JTAG console with Aurora:
-
-1. FTP `build/xbox360/default.xex` to a folder of its own, such as `Hdd1:\Games\Warthog360\`.
-2. In Aurora, add that folder as a scan path (or rescan), then launch "default.xex".
-3. The screen turns gray while the test runs, then green. Press any button, or wait 10 seconds, and it returns to Aurora.
-4. FTP `debug.txt` back from the same folder.
-
-## The log
-
-`game:\debug.txt`, beside the XEX (also on the debug channel, for XBDM). It reports:
-
-- version, commit, build time;
-- system version, video mode, AV pack;
-- physical and virtual memory, total and free; the largest `malloc` and `XPhysicalAlloc` that succeed (to 1 MB); whether a 128 MB contiguous block (the Xbox's memory, which the game's addresses are laid out for) can be had with 4 KB, 64 KB and 16 MB pages, and where;
-- which storage paths exist (`game:`, `Hdd1:`, `Hdd:`, `Usb0:`);
-- controllers in each port;
-- network: link state, whether the console has an address and of which kind (private, link-local, public). Never the address.
-
-## Phase 0 checklist
-
-Send back:
-
-1. `debug.txt`, whole.
-2. Whether the screen turned gray and then green.
-3. Whether a button press returned to Aurora, and whether the timeout did.
-4. The console (model, RGH or JTAG, dashboard version) and how it was connected (wired or wireless).
+Put `default.xex` in a folder of its own on the console (`Hdd1:\Games\Warthog360\`), with the Xbox disc's `maps` folder beside it (the NTSC maps, 01.10.12.2276: at least `ui.map`). The log is on the debug channel (XBDM) and in `game:\port.txt` (the console's layer) and `game:\debug.txt` (the game's). Settings are `game:\config.toml`, written at the first start.
 
 ## Notes for the port
 

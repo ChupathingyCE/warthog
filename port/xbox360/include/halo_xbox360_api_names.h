@@ -1,0 +1,90 @@
+/*
+HALO_XBOX360_API_NAMES.H
+
+The desktop platform layer (port/linux/src) implements Xbox SDK functions
+under the names the console's own libraries also define (CreateFileA,
+ReadFile, Sleep, XPhysicalAlloc, ...). As in the Windows build, the game and
+the Xbox-facing platform code see them under other names, so that the
+units that talk to the console (port/xbox360/src/x360_*.c) reach the
+console's.
+*/
+
+#ifndef __HALO_XBOX360_API_NAMES_H
+#define __HALO_XBOX360_API_NAMES_H
+
+/* the Windows build's list: every function of port/linux/src that Win32
+also has, which the console's libraries have too */
+#include "../../windows/include/halo_windows_api_names.h"
+
+/* and those only the Xbox family has */
+#define XPhysicalAlloc halo_xbox_XPhysicalAlloc
+#define XPhysicalFree halo_xbox_XPhysicalFree
+#define XPhysicalProtect halo_xbox_XPhysicalProtect
+#define XQueryMemoryProtect halo_xbox_XQueryMemoryProtect
+
+/* and those the console's libraries also define (its Direct3D 9 has the
+Direct3D 8 functions' names, its XNet and XInput their own): the list is
+the symbols both define, found by the link */
+#define D3DCubeTexture_LockRect halo_xbox_D3DCubeTexture_LockRect
+#define D3DDevice_Clear halo_xbox_D3DDevice_Clear
+#define D3DDevice_CreateIndexBuffer halo_xbox_D3DDevice_CreateIndexBuffer
+#define D3DDevice_CreateTexture halo_xbox_D3DDevice_CreateTexture
+#define D3DDevice_CreateVertexBuffer halo_xbox_D3DDevice_CreateVertexBuffer
+#define D3DDevice_CreateVertexShader halo_xbox_D3DDevice_CreateVertexShader
+#define D3DDevice_DrawIndexedVertices halo_xbox_D3DDevice_DrawIndexedVertices
+#define D3DDevice_DrawVertices halo_xbox_D3DDevice_DrawVertices
+#define D3DDevice_GetBackBuffer halo_xbox_D3DDevice_GetBackBuffer
+#define D3DDevice_GetDepthStencilSurface halo_xbox_D3DDevice_GetDepthStencilSurface
+#define D3DDevice_GetDeviceCaps halo_xbox_D3DDevice_GetDeviceCaps
+#define D3DDevice_InsertCallback halo_xbox_D3DDevice_InsertCallback
+#define D3DDevice_IsBusy halo_xbox_D3DDevice_IsBusy
+#define D3DDevice_PersistDisplay halo_xbox_D3DDevice_PersistDisplay
+#define D3DDevice_Present halo_xbox_D3DDevice_Present
+#define D3DDevice_Release halo_xbox_D3DDevice_Release
+#define D3DDevice_SetIndices halo_xbox_D3DDevice_SetIndices
+#define D3DDevice_SetRenderState halo_xbox_D3DDevice_SetRenderState
+#define D3DDevice_SetRenderState_CullMode halo_xbox_D3DDevice_SetRenderState_CullMode
+#define D3DDevice_SetRenderState_FillMode halo_xbox_D3DDevice_SetRenderState_FillMode
+#define D3DDevice_SetRenderState_LineWidth halo_xbox_D3DDevice_SetRenderState_LineWidth
+#define D3DDevice_SetRenderState_MultiSampleAntiAlias halo_xbox_D3DDevice_SetRenderState_MultiSampleAntiAlias
+#define D3DDevice_SetRenderState_MultiSampleMask halo_xbox_D3DDevice_SetRenderState_MultiSampleMask
+#define D3DDevice_SetRenderState_StencilEnable halo_xbox_D3DDevice_SetRenderState_StencilEnable
+#define D3DDevice_SetRenderState_StencilFail halo_xbox_D3DDevice_SetRenderState_StencilFail
+#define D3DDevice_SetRenderState_ZEnable halo_xbox_D3DDevice_SetRenderState_ZEnable
+#define D3DDevice_SetRenderTarget halo_xbox_D3DDevice_SetRenderTarget
+#define D3DDevice_SetStreamSource halo_xbox_D3DDevice_SetStreamSource
+#define D3DDevice_SetTexture halo_xbox_D3DDevice_SetTexture
+#define D3DDevice_SetVertexShader halo_xbox_D3DDevice_SetVertexShader
+#define D3DDevice_SetVerticalBlankCallback halo_xbox_D3DDevice_SetVerticalBlankCallback
+#define D3DDevice_SetViewport halo_xbox_D3DDevice_SetViewport
+#define D3DResource_BlockUntilNotBusy halo_xbox_D3DResource_BlockUntilNotBusy
+#define D3DResource_IsBusy halo_xbox_D3DResource_IsBusy
+#define D3DResource_Release halo_xbox_D3DResource_Release
+#define D3DSurface_GetDesc halo_xbox_D3DSurface_GetDesc
+#define D3DSurface_LockRect halo_xbox_D3DSurface_LockRect
+#define D3DTexture_GetLevelDesc halo_xbox_D3DTexture_GetLevelDesc
+#define D3DTexture_GetSurfaceLevel halo_xbox_D3DTexture_GetSurfaceLevel
+#define D3DTexture_LockRect halo_xbox_D3DTexture_LockRect
+#define D3DVertexBuffer_Lock halo_xbox_D3DVertexBuffer_Lock
+#define D3DVolumeTexture_LockBox halo_xbox_D3DVolumeTexture_LockBox
+#define Direct3D_CreateDevice halo_xbox_Direct3D_CreateDevice
+#define RtlEnterCriticalSection halo_xbox_RtlEnterCriticalSection
+#define RtlInitializeCriticalSection halo_xbox_RtlInitializeCriticalSection
+#define RtlLeaveCriticalSection halo_xbox_RtlLeaveCriticalSection
+#define RtlTryEnterCriticalSection halo_xbox_RtlTryEnterCriticalSection
+#define XGetLanguage halo_xbox_XGetLanguage
+#define XNetCleanup halo_xbox_XNetCleanup
+#define XNetCreateKey halo_xbox_XNetCreateKey
+#define XNetGetEthernetLinkStatus halo_xbox_XNetGetEthernetLinkStatus
+#define XNetGetTitleXnAddr halo_xbox_XNetGetTitleXnAddr
+#define XNetRandom halo_xbox_XNetRandom
+#define XNetRegisterKey halo_xbox_XNetRegisterKey
+#define XNetStartup halo_xbox_XNetStartup
+#define XNetUnregisterKey halo_xbox_XNetUnregisterKey
+#define XNetXnAddrToInAddr halo_xbox_XNetXnAddrToInAddr
+#define XInputGetState halo_xbox_XInputGetState
+#define XInputSetState halo_xbox_XInputSetState
+#define XLaunchNewImageA halo_xbox_XLaunchNewImageA
+#define XGetLaunchInfo halo_xbox_XGetLaunchInfo
+
+#endif
