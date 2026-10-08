@@ -57,7 +57,34 @@ void x360_debug_print(const char *text)
 	size_t length = strlen(text);
 
 	log_lock_enter();
-	OutputDebugStringA(text);
+	/* (to the debug channel a line at a time, each at most 200 characters:
+	a long text in one call, such as a shader's source, brought XBDM down;
+	port.txt below has it whole) */
+	{
+		const char *cursor = text;
+		char piece[204];
+
+		while (*cursor)
+		{
+			size_t span = strcspn(cursor, "\n");
+
+			if (span > 200)
+				span = 200;
+			memcpy(piece, cursor, span);
+			cursor += span;
+			if (*cursor == '\n')
+			{
+				piece[span++] = '\n';
+				cursor++;
+			}
+			else if (*cursor)
+			{
+				piece[span++] = '\n';
+			}
+			piece[span] = '\0';
+			OutputDebugStringA(piece);
+		}
+	}
 	if (port_log == INVALID_HANDLE_VALUE)
 	{
 		port_log = CreateFileA(PORT_LOG_PATH, GENERIC_WRITE, FILE_SHARE_READ, NULL, CREATE_ALWAYS,
@@ -240,8 +267,11 @@ int halo_xbox360_vsnprintf(char *buffer, size_t size, const char *format, va_lis
 	length = _vsnprintf(buffer, size, format, arguments);
 	if (length < 0 || (size_t)length >= size)
 	{
+		/* (cut short: the arguments are not walked a second time for the
+		full length, as the first walk may have used them up; a caller
+		sees at least the buffer's size, which says it was cut short) */
 		buffer[size - 1] = '\0';
-		length = _vscprintf(format, arguments);
+		length = (int)size;
 	}
 	return length;
 }
