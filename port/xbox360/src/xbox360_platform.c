@@ -247,11 +247,55 @@ void platform_pump_events(void)
 {
 }
 
-/* ---------- the texture write watch (memory_watch.c): the console's title
-memory has no page protection to fault on, so every look at a texture's
-pages says they changed (a re-upload, never a missed change) */
+/* ---------- the texture write watch (memory_watch.c)
 
-static volatile unsigned long watch_counter = 1;
+The console's title memory has no page protection to fault on, so a
+texture's pages are marked written only by the writes the port knows of: a
+file read into the window (platform_contiguous_write), a block allocated or
+freed, and a texture locked through Direct3D (d3d8_resources.c), which is how
+the game writes its textures (the text cache, the progress bar, the
+defaults). The rest of the time a texture keeps its upload.
+"debug.texture_no_cache" in the config uploads every texture at every use
+again, should a write ever be missed. */
+
+#define WATCH_PAGE_SIZE 0x1000UL
+#define WATCH_PAGE_COUNT (PLATFORM_CONTIGUOUS_SIZE / WATCH_PAGE_SIZE)
+
+extern unsigned int xbox_address_space_base;
+
+static LONG watch_counter = 1;
+static unsigned long page_generation[WATCH_PAGE_COUNT];
+
+/* the pages of a range of Xbox addresses within the window, or FALSE */
+static BOOL watch_pages(unsigned long address, unsigned long size, unsigned long *first, unsigned long *last)
+{
+	unsigned long end;
+
+	if (!size)
+		return FALSE;
+	end = address + size;
+	if (end <= PLATFORM_CONTIGUOUS_BASE || address >= PLATFORM_CONTIGUOUS_BASE + PLATFORM_CONTIGUOUS_SIZE)
+		return FALSE;
+	if (address < PLATFORM_CONTIGUOUS_BASE)
+		address = PLATFORM_CONTIGUOUS_BASE;
+	if (end > PLATFORM_CONTIGUOUS_BASE + PLATFORM_CONTIGUOUS_SIZE || end < address)
+		end = PLATFORM_CONTIGUOUS_BASE + PLATFORM_CONTIGUOUS_SIZE;
+	*first = (address - PLATFORM_CONTIGUOUS_BASE) / WATCH_PAGE_SIZE;
+	*last = (end - 1 - PLATFORM_CONTIGUOUS_BASE) / WATCH_PAGE_SIZE;
+	return TRUE;
+}
+
+static void watch_written(void *pointer, unsigned long size)
+{
+	unsigned long address = (unsigned long)((unsigned int)(__UINTPTR_TYPE__)pointer - xbox_address_space_base);
+	unsigned long first, last, page, generation;
+
+	if (!pointer || !watch_pages(address, size, &first, &last))
+		return;
+	generation = (unsigned long)InterlockedIncrement(&watch_counter);
+	for (page = first; page <= last; page++)
+		page_generation[page] = generation;
+}
 
 void memory_watch_initialize(void)
 {
@@ -265,26 +309,32 @@ void memory_watch_protect(unsigned long address, unsigned long size)
 
 unsigned long memory_watch_generation(unsigned long address, unsigned long size)
 {
-	(void)address;
-	(void)size;
-	return ++watch_counter;
+	unsigned long first, last, page, newest = 0;
+
+	/* (outside the window: never known to be unchanged) */
+	if (!watch_pages(address, size, &first, &last))
+		return (unsigned long)InterlockedIncrement(&watch_counter);
+	for (page = first; page <= last; page++)
+	{
+		if (page_generation[page] > newest)
+			newest = page_generation[page];
+	}
+	return newest;
 }
 
 unsigned long memory_watch_serial(void)
 {
-	return ++watch_counter;
+	return (unsigned long)*(volatile LONG *)&watch_counter;
 }
 
 void memory_watch_prepare_write(void *address, unsigned long size)
 {
-	(void)address;
-	(void)size;
+	watch_written(address, size);
 }
 
 void memory_watch_forget(void *address, unsigned long size)
 {
-	(void)address;
-	(void)size;
+	watch_written(address, size);
 }
 
 /* ---------- the version (updater.c's, which the console leaves out) */
