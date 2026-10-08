@@ -201,6 +201,9 @@ the map's own, outside any tag block) made the machine's, as the structure
 bsp's and the game's own are: the renderer reads one byte order (a part's
 vertices stay as they are: the map's, which the vertex formats read) */
 #define MODEL_GROUP 0x6D6F6465UL /* 'mode' */
+#define ANIMATION_GRAPH_GROUP 0x616E7472UL /* 'antr' */
+
+void animation_graph_byte_swap_data(void *graph);
 #define MODEL_GEOMETRIES 0xD0 /* struct model's geometries block */
 #define MODEL_GEOMETRY_SIZE 0x30
 #define MODEL_GEOMETRY_PARTS 0x24
@@ -327,6 +330,9 @@ void tag_byte_swap_tags(void *base, unsigned long base_address, unsigned long si
 		swap_tag_text(&region, group_tag, address);
 		if (group_tag == MODEL_GROUP)
 			swap_model_indices(&region, address, &model_parts);
+		/* (an animation's frames, in tag data: model_animations.c reads them) */
+		if (group_tag == ANIMATION_GRAPH_GROUP)
+			animation_graph_byte_swap_data(region.base + (address - region.address));
 	}
 	error(_error_silent, "tag byte swap: %lu of %lu tags, %lu blocks, %lu elements; %lu blocks not swapped",
 		region.tags, count, region.blocks, region.elements, region.bad_blocks);

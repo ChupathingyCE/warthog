@@ -1611,6 +1611,75 @@ static void draw_log_targets_and_textures(struct program *program)
 			texture ? texture->width : 0, texture ? texture->height : 0,
 			texture && texture->surface ? "(target)" : "");
 	}
+	/* (each program's shaders once, to game:\glsl\p<program>.vs.glsl and so on) */
+	{
+		static GLuint dumped[256];
+		static int dumped_count;
+		int seen = 0, which;
+
+		for (which = 0; which < dumped_count; which++)
+			seen |= dumped[which] == gl.program;
+		if (!seen && dumped_count < 256)
+		{
+			struct shader *stages[2];
+
+			dumped[dumped_count++] = gl.program;
+			/* (and its constants and uniforms as this draw has them) */
+			{
+				char path[64];
+				FILE *file;
+				int row, index;
+
+				CreateDirectoryA("game:\\glsl", NULL);
+				_snprintf(path, sizeof(path) - 1, "game:\\glsl\\p%u.constants.txt", gl.program);
+				path[sizeof(path) - 1] = '\0';
+				file = fopen(path, "wb");
+				if (file)
+				{
+					for (index = 0; index < program->uniform_count; index++)
+						fprintf(file, "uniform %s: vertex %d, pixel %d, sampler %d, count %d\n",
+							program->uniforms[index].name, program->uniforms[index].vertex_register,
+							program->uniforms[index].pixel_register, program->uniforms[index].sampler_register,
+							program->uniforms[index].count);
+					for (row = 0; row < program->vertex_constant_count; row++)
+						fprintf(file, "vs c%d: %g %g %g %g\n", row, program->vertex_constants[row][0],
+							program->vertex_constants[row][1], program->vertex_constants[row][2],
+							program->vertex_constants[row][3]);
+					for (row = 0; row < program->pixel_constant_count; row++)
+						fprintf(file, "ps c%d: %g %g %g %g\n", row, program->pixel_constants[row][0],
+							program->pixel_constants[row][1], program->pixel_constants[row][2],
+							program->pixel_constants[row][3]);
+					fclose(file);
+				}
+			}
+			stages[0] = object_get(program->vertex, _object_shader);
+			stages[1] = object_get(program->fragment, _object_shader);
+			CreateDirectoryA("game:\\glsl", NULL);
+			for (which = 0; which < 2; which++)
+			{
+				int text;
+
+				for (text = 0; text < 2 && stages[which]; text++)
+				{
+					const char *body = text ? stages[which]->hlsl : stages[which]->source;
+					char path[64];
+					FILE *file;
+
+					if (!body)
+						continue;
+					_snprintf(path, sizeof(path) - 1, "game:\\glsl\\p%u.%s.%s", gl.program, which ? "ps" : "vs",
+						text ? "hlsl" : "glsl");
+					path[sizeof(path) - 1] = '\0';
+					file = fopen(path, "wb");
+					if (file)
+					{
+						fputs(body, file);
+						fclose(file);
+					}
+				}
+			}
+		}
+	}
 	x360_log("gl:   program %u, framebuffer %u: color %lux%lu, depth %lux%lu; textures%s", gl.program,
 		gl.draw_framebuffer, color ? color->width : 0, color ? color->height : 0, depth ? depth->width : 0,
 		depth ? depth->height : 0, textures);
@@ -1762,6 +1831,23 @@ static BOOL setup_vertices(struct shader *vertex, unsigned long vertex_start, un
 			element->Stream = (WORD)stream;
 			element->Offset = (WORD)attribute->relative_offset;
 			element->Type = vertex_type(attribute, packed);
+			if (draw_logged())
+			{
+				struct buffer *buffer = object_get(binding->buffer, _object_buffer);
+				unsigned long at = (unsigned long)binding->offset + vertex_start * (unsigned long)binding->stride +
+					attribute->relative_offset;
+				const unsigned char *bytes = buffer && buffer->data && at + 16 <= buffer->size ? buffer->data + at : NULL;
+
+				x360_log("gl:     attribute %d: size %d type 0x%x%s%s%s, offset %u, stride %d, declared 0x%08lx; "
+					"vertex %lu: %02x%02x%02x%02x %02x%02x%02x%02x %02x%02x%02x%02x %02x%02x%02x%02x", index,
+					attribute->size, attribute->type, attribute->normalized ? " normalized" : "",
+					attribute->integer ? " integer" : "", packed ? " packed" : "", attribute->relative_offset,
+					binding->stride, (unsigned long)element->Type, vertex_start,
+					bytes ? bytes[0] : 0, bytes ? bytes[1] : 0, bytes ? bytes[2] : 0, bytes ? bytes[3] : 0,
+					bytes ? bytes[4] : 0, bytes ? bytes[5] : 0, bytes ? bytes[6] : 0, bytes ? bytes[7] : 0,
+					bytes ? bytes[8] : 0, bytes ? bytes[9] : 0, bytes ? bytes[10] : 0, bytes ? bytes[11] : 0,
+					bytes ? bytes[12] : 0, bytes ? bytes[13] : 0, bytes ? bytes[14] : 0, bytes ? bytes[15] : 0);
+			}
 		}
 		else
 		{
@@ -1776,6 +1862,9 @@ static BOOL setup_vertices(struct shader *vertex, unsigned long vertex_start, un
 			}
 			/* (packed: only the constant attributes, one after another) */
 			memcpy(constants + constant_count * 4, attribute->value, 16);
+			if (draw_logged())
+				x360_log("gl:     attribute %d: constant %g %g %g %g", index, attribute->value[0], attribute->value[1],
+					attribute->value[2], attribute->value[3]);
 			element->Stream = (WORD)constant_stream;
 			element->Offset = (WORD)(constant_count * 16);
 			constant_count++;
