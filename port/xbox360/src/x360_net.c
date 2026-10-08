@@ -86,6 +86,55 @@ int x360_network_start(void)
 	return 1;
 }
 
+/* ---------- the console's own address for 127.0.0.1
+
+The game reaches itself at 127.0.0.1 (a host's own client joins its game
+there: split screen and hosting). XNet has no loopback, so traffic to
+127.0.0.1 goes to the console's own address, and traffic from that address
+is reported as from 127.0.0.1, as xnet.c does for network.address on the
+desktop. */
+
+#define LOOPBACK_ADDRESS 0x7F000001UL
+
+static unsigned long own_address(void)
+{
+	XNADDR address;
+
+	memset(&address, 0, sizeof(address));
+	if (XNetGetTitleXnAddr(&address) & XNET_GET_XNADDR_NONE)
+		return 0;
+	return address.ina.s_addr;
+}
+
+/* a destination of 127.0.0.1: the console's own address in storage */
+static const void *outgoing(const void *address, int address_length, struct sockaddr_in *storage)
+{
+	const struct sockaddr_in *in = address;
+	unsigned long own;
+
+	if (!in || address_length < (int)sizeof(*in) || in->sin_family != AF_INET ||
+		in->sin_addr.s_addr != htonl(LOOPBACK_ADDRESS) || !(own = own_address()))
+	{
+		return address;
+	}
+	memcpy(storage, in, sizeof(*storage));
+	storage->sin_addr.s_addr = own;
+	return storage;
+}
+
+/* a source of the console's own address: 127.0.0.1 */
+static void incoming(void *address, const int *address_length)
+{
+	struct sockaddr_in *in = address;
+	unsigned long own;
+
+	if (in && address_length && *address_length >= (int)sizeof(*in) && in->sin_family == AF_INET &&
+		(own = own_address()) != 0 && in->sin_addr.s_addr == own)
+	{
+		in->sin_addr.s_addr = htonl(LOOPBACK_ADDRESS);
+	}
+}
+
 int posix_socket_last_error(void)
 {
 	return WSAGetLastError();
@@ -125,6 +174,9 @@ int posix_socket_bind(int handle, const void *address, int address_length)
 
 int posix_socket_connect(int handle, const void *address, int address_length)
 {
+	struct sockaddr_in storage;
+
+	address = outgoing(address, address_length, &storage);
 	return connect((SOCKET)handle, address, address_length) == 0 ? 0 : -1;
 }
 
@@ -137,7 +189,10 @@ int posix_socket_accept(int handle, void *address, int *address_length)
 {
 	SOCKET accepted = accept((SOCKET)handle, address, address_length);
 
-	return accepted == INVALID_SOCKET ? -1 : (int)accepted;
+	if (accepted == INVALID_SOCKET)
+		return -1;
+	incoming(address, address_length);
+	return (int)accepted;
 }
 
 int posix_socket_send(int handle, const void *buffer, int length, int flags)
@@ -150,7 +205,11 @@ int posix_socket_send(int handle, const void *buffer, int length, int flags)
 int posix_socket_sendto(int handle, const void *buffer, int length, int flags, const void *address,
 	int address_length)
 {
-	int result = sendto((SOCKET)handle, buffer, length, flags, address, address_length);
+	struct sockaddr_in storage;
+	int result;
+
+	address = outgoing(address, address_length, &storage);
+	result = sendto((SOCKET)handle, buffer, length, flags, address, address_length);
 
 	return result == SOCKET_ERROR ? -1 : result;
 }
@@ -166,7 +225,10 @@ int posix_socket_recvfrom(int handle, void *buffer, int length, int flags, void 
 {
 	int result = recvfrom((SOCKET)handle, buffer, length, flags, address, address_length);
 
-	return result == SOCKET_ERROR ? -1 : result;
+	if (result == SOCKET_ERROR)
+		return -1;
+	incoming(address, address_length);
+	return result;
 }
 
 int posix_socket_shutdown(int handle, int how)
@@ -215,7 +277,10 @@ int posix_socket_getsockname(int handle, void *address, int *address_length)
 
 int posix_socket_getpeername(int handle, void *address, int *address_length)
 {
-	return getpeername((SOCKET)handle, address, address_length) == 0 ? 0 : -1;
+	if (getpeername((SOCKET)handle, address, address_length) != 0)
+		return -1;
+	incoming(address, address_length);
+	return 0;
 }
 
 static void fill_set(fd_set *set, const int *handles, int count)
