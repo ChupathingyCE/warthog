@@ -196,6 +196,59 @@ static void swap_text_data(struct swap_region *region, const unsigned char *data
 	swap_fields(region->base + (address - region->address), 2, (unsigned long)size / 2);
 }
 
+/* a model's indices (each part's triangle buffer: little-endian words of
+the map's own, outside any tag block) made the machine's, as the structure
+bsp's and the game's own are: the renderer reads one byte order (a part's
+vertices stay as they are: the map's, which the vertex formats read) */
+#define MODEL_GROUP 0x6D6F6465UL /* 'mode' */
+#define MODEL_GEOMETRIES 0xD0 /* struct model's geometries block */
+#define MODEL_GEOMETRY_SIZE 0x30
+#define MODEL_GEOMETRY_PARTS 0x24
+#define MODEL_PART_SIZE 0x68
+#define MODEL_PART_TRIANGLES 0x38 /* the part's triangles tag block */
+#define MODEL_PART_TRIANGLE_BUFFER 0x44 /* type (short), pad, count, base address */
+#define TRIANGLE_BUFFER_STRIP 1
+
+static void swap_model_indices(struct swap_region *region, unsigned long address, unsigned long *swapped)
+{
+	const unsigned char *model = region->base + (address - region->address);
+	long geometry_count = (long)read32(model + MODEL_GEOMETRIES);
+	unsigned long geometries = read32(model + MODEL_GEOMETRIES + 4), geometry_index;
+
+	if (geometry_count <= 0 || !region_holds(region, geometries, (unsigned long)geometry_count * MODEL_GEOMETRY_SIZE))
+		return;
+	for (geometry_index = 0; geometry_index < (unsigned long)geometry_count; geometry_index++)
+	{
+		const unsigned char *geometry = region->base + (geometries - region->address) +
+			geometry_index * MODEL_GEOMETRY_SIZE;
+		long part_count = (long)read32(geometry + MODEL_GEOMETRY_PARTS);
+		unsigned long parts = read32(geometry + MODEL_GEOMETRY_PARTS + 4), part_index;
+
+		if (part_count <= 0 || !region_holds(region, parts, (unsigned long)part_count * MODEL_PART_SIZE))
+			continue;
+		for (part_index = 0; part_index < (unsigned long)part_count; part_index++)
+		{
+			const unsigned char *part = region->base + (parts - region->address) + part_index * MODEL_PART_SIZE;
+			const unsigned char *buffer = part + MODEL_PART_TRIANGLE_BUFFER;
+			unsigned short type;
+			long count = (long)read32(buffer + 4);
+			unsigned long indices = read32(buffer + 8), index_count;
+
+			memcpy(&type, buffer, 2);
+			if (count <= 0)
+				continue;
+			index_count = type == TRIANGLE_BUFFER_STRIP ? (unsigned long)count + 2 : (unsigned long)count * 3;
+			/* (the triangles block's own words were swapped with the block) */
+			if ((long)read32(part + MODEL_PART_TRIANGLES) > 0 && read32(part + MODEL_PART_TRIANGLES + 4) == indices)
+				continue;
+			if (!region_holds(region, indices, index_count * 2))
+				continue;
+			swap_fields(region->base + (indices - region->address), 2, index_count);
+			(*swapped)++;
+		}
+	}
+}
+
 /* the text of the groups that hold UTF-16 strings, after their fields */
 static void swap_tag_text(struct swap_region *region, unsigned long group_tag, unsigned long address)
 {
@@ -225,6 +278,7 @@ void tag_byte_swap_tags(void *base, unsigned long base_address, unsigned long si
 	unsigned long missing_groups[16];
 	unsigned long missing_counts[16];
 	int missing = 0, missing_index;
+	unsigned long model_parts = 0;
 
 	csmemset(&region, 0, sizeof(region));
 	region.base = base;
@@ -271,9 +325,12 @@ void tag_byte_swap_tags(void *base, unsigned long base_address, unsigned long si
 		region.tags++;
 		swap_layout(&region, (unsigned long)layout, address, 0);
 		swap_tag_text(&region, group_tag, address);
+		if (group_tag == MODEL_GROUP)
+			swap_model_indices(&region, address, &model_parts);
 	}
 	error(_error_silent, "tag byte swap: %lu of %lu tags, %lu blocks, %lu elements; %lu blocks not swapped",
 		region.tags, count, region.blocks, region.elements, region.bad_blocks);
+	error(_error_silent, "tag byte swap: %lu model parts' indices", model_parts);
 	for (missing_index = 0; missing_index < missing; missing_index++)
 	{
 		error(_error_silent, "tag byte swap: no layout for '%c%c%c%c' (%lu tags, left as they are)",

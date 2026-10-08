@@ -69,6 +69,11 @@ static struct
 {
 	BOOL loaded;
 	BOOL no_draws, constant_stream, no_resolves, log_draws, clear_red, green, no_cull, no_depth, no_blend, probe, dump;
+	/* log_frame=N: every draw and clear of frame N; dump_at=N: the picture
+	of frame N too; skip_program=N: that program's draws left out */
+	unsigned long log_frame, dump_at;
+	GLuint skip_programs[16];
+	int skip_program_count;
 } debug;
 
 static void debug_load(void)
@@ -95,6 +100,14 @@ static void debug_load(void)
 		if (!strcmp(word, "no_blend")) debug.no_blend = TRUE;
 		if (!strcmp(word, "probe")) debug.probe = TRUE;
 		if (!strcmp(word, "dump")) debug.dump = TRUE;
+		sscanf(word, "log_frame=%lu", &debug.log_frame);
+		if (sscanf(word, "dump_at=%lu", &debug.dump_at) == 1)
+			debug.dump = TRUE;
+		if (debug.skip_program_count < 16 &&
+			sscanf(word, "skip_program=%u", &debug.skip_programs[debug.skip_program_count]) == 1)
+		{
+			debug.skip_program_count++;
+		}
 	}
 	fclose(file);
 	x360_log("gl: debug switches: draws %s, constant stream %s, resolves %s",
@@ -150,10 +163,14 @@ struct texture
 	BOOL unresolved;
 };
 
+/* a buffer's bytes are where the GPU reads them: physical memory of its own
+(XPhysicalAlloc), or memory it is an alias of (x360_gl_buffer_alias: the
+Xbox window, whose vertices the GPU reads in place) */
 struct buffer
 {
 	unsigned char *data;
 	unsigned long size;
+	BOOL alias;
 };
 
 struct framebuffer
@@ -301,7 +318,7 @@ static struct
 	D3DDevice *device;
 	BOOL ready;
 	/* bindings */
-	GLuint array_buffer, element_buffer;
+	GLuint array_buffer, element_buffer, copy_write_buffer;
 	GLenum active_unit;
 	GLuint textures[TEXTURE_UNITS][3];   /* 2D, 3D, cube */
 	GLuint samplers[TEXTURE_UNITS];
@@ -444,6 +461,37 @@ static BOOL gl_ready(void)
 	return TRUE;
 }
 
+/* ---------- the frame's costs, for the log every few seconds */
+
+static struct
+{
+	LARGE_INTEGER frequency;
+	DWORD last_report;
+	unsigned long frames, draws, idle_waits, fence_waits, ring_bytes, textures_deleted;
+	double idle_wait_ms, fence_wait_ms, frame_ms;
+	LARGE_INTEGER frame_start;
+} stats;
+
+static double stats_ms_since(LARGE_INTEGER start)
+{
+	LARGE_INTEGER now;
+
+	if (!stats.frequency.QuadPart)
+		QueryPerformanceFrequency(&stats.frequency);
+	QueryPerformanceCounter(&now);
+	return (double)(now.QuadPart - start.QuadPart) * 1000.0 / (double)stats.frequency.QuadPart;
+}
+
+static void gpu_idle_wait(void)
+{
+	LARGE_INTEGER start;
+
+	QueryPerformanceCounter(&start);
+	IDirect3DDevice9_BlockUntilIdle(gl.device);
+	stats.idle_waits++;
+	stats.idle_wait_ms += stats_ms_since(start);
+}
+
 /* ---------- rings: draw data the GPU reads, two frames' worth */
 
 static void *ring_reserve(unsigned char *ring, unsigned long ring_size, unsigned long *offset, unsigned long size)
@@ -465,13 +513,108 @@ static void *ring_reserve(unsigned char *ring, unsigned long ring_size, unsigned
 			warned = TRUE;
 			x360_log("gl: a frame's draw data passed %lu MB; the ring wraps", half >> 20);
 		}
-		IDirect3DDevice9_BlockUntilIdle(gl.device);
+		gpu_idle_wait();
 		aligned = start;
 		if (size > half)
 			return NULL;
 	}
 	*offset = aligned + size;
+	stats.ring_bytes += size;
 	return ring + aligned;
+}
+
+/* ---------- buffer storage */
+
+/* storage the GPU may still read: freed once the frame that last used it
+is done (rings_next_frame) */
+#define RETIRED_MAXIMUM 256
+
+static struct
+{
+	void *storage[2][RETIRED_MAXIMUM];
+	int count[2];
+} retired;
+
+static void storage_free_now(void *storage)
+{
+	if (storage)
+		XPhysicalFree(storage);
+}
+
+static void storage_retire(void *storage)
+{
+	int half = gl.frame_half;
+
+	if (!storage)
+		return;
+	if (retired.count[half] == RETIRED_MAXIMUM)
+	{
+		/* (more than a frame can hold: wait for the GPU, then free them) */
+		int index;
+
+		gpu_idle_wait();
+		for (index = 0; index < retired.count[half]; index++)
+			storage_free_now(retired.storage[half][index]);
+		retired.count[half] = 0;
+	}
+	retired.storage[half][retired.count[half]++] = storage;
+}
+
+static void *storage_allocate(unsigned long size)
+{
+	return XPhysicalAlloc(size ? size : 1, MAXULONG_PTR, 0, PAGE_READWRITE |
+		(size >= 1024 * 1024 ? MEM_LARGE_PAGES : 0));
+}
+
+/* the CPU's writes to [data, data + size) out of its cache, for the GPU */
+static void storage_flush(const void *data, unsigned long size)
+{
+	unsigned long line = (unsigned long)(UINT_PTR)data & ~127UL;
+	unsigned long end = (unsigned long)(UINT_PTR)data + size;
+
+	for (; line < end; line += 128)
+		__asm__ volatile ("dcbst 0, %0" : : "r"(line) : "memory");
+	__asm__ volatile ("sync" : : : "memory");
+}
+
+static void texture_release(struct texture *texture);
+
+#define RETIRED_TEXTURES_MAXIMUM 256
+
+static struct
+{
+	struct texture *textures[2][RETIRED_TEXTURES_MAXIMUM];
+	int count[2];
+} retired_textures;
+
+static void retired_textures_free(int half)
+{
+	int index;
+
+	for (index = 0; index < retired_textures.count[half]; index++)
+	{
+		texture_release(retired_textures.textures[half][index]);
+		free(retired_textures.textures[half][index]);
+	}
+	retired_textures.count[half] = 0;
+}
+
+static void texture_retire(struct texture *texture)
+{
+	int half = gl.frame_half;
+
+	if (!gl.ready)
+	{
+		texture_release(texture);
+		free(texture);
+		return;
+	}
+	if (retired_textures.count[half] == RETIRED_TEXTURES_MAXIMUM)
+	{
+		gpu_idle_wait();
+		retired_textures_free(half);
+	}
+	retired_textures.textures[half][retired_textures.count[half]++] = texture;
 }
 
 static void rings_next_frame(void)
@@ -479,7 +622,23 @@ static void rings_next_frame(void)
 	gl.frame_fences[gl.frame_half] = IDirect3DDevice9_InsertFence(gl.device);
 	gl.frame_half ^= 1;
 	if (gl.frame_fences[gl.frame_half])
+	{
+		LARGE_INTEGER start;
+
+		QueryPerformanceCounter(&start);
 		D3DDevice_BlockOnFence(gl.frame_fences[gl.frame_half]);
+		stats.fence_waits++;
+		stats.fence_wait_ms += stats_ms_since(start);
+	}
+	/* (storage retired two frames ago: the GPU is done with it) */
+	retired_textures_free(gl.frame_half);
+	{
+		int index;
+
+		for (index = 0; index < retired.count[gl.frame_half]; index++)
+			storage_free_now(retired.storage[gl.frame_half][index]);
+		retired.count[gl.frame_half] = 0;
+	}
 	gl.vertex_ring_offset = gl.frame_half * (RING_VERTEX_SIZE / 2);
 	gl.index_ring_offset = gl.frame_half * (RING_INDEX_SIZE / 2);
 }
@@ -970,7 +1129,27 @@ static BOOL shader_compile(struct shader *shader)
 		errors->lpVtbl->Release(errors);
 	shader->code = code;
 	if (vertex)
+	{
+		/* (only the inputs the compiled shader reads: the game's shaders
+		declare all sixteen, and each one fed is a stream, or constants
+		copied for every vertex) */
+		D3DXSEMANTIC semantics[MAXD3DDECLLENGTH];
+		UINT count = 0, index;
+		unsigned long used = 0;
+
+		if (SUCCEEDED(D3DXGetShaderInputSemantics((const DWORD *)code->lpVtbl->GetBufferPointer(code), semantics,
+			&count)))
+		{
+			for (index = 0; index < count; index++)
+			{
+				if (semantics[index].Usage == D3DDECLUSAGE_TEXCOORD && semantics[index].UsageIndex < ATTRIBUTES)
+					used |= 1UL << semantics[index].UsageIndex;
+			}
+			shader->inputs &= used;
+			shader->packed_inputs &= used;
+		}
 		shader->vertex = D3DDevice_CreateVertexShader(code->lpVtbl->GetBufferPointer(code));
+	}
 	else
 		shader->pixel = D3DDevice_CreatePixelShader(code->lpVtbl->GetBufferPointer(code));
 	return shader->vertex || shader->pixel;
@@ -1410,13 +1589,58 @@ static struct texture *unit_texture(GLint unit)
 }
 
 /* everything a draw needs but its vertices; FALSE if it cannot be drawn */
+/* the draw framebuffer's targets and the textures sampled, for the log */
+static void draw_log_targets_and_textures(struct program *program)
+{
+	struct framebuffer *framebuffer = object_get(gl.draw_framebuffer, _object_framebuffer);
+	struct texture *color = framebuffer ? object_get(framebuffer->color, _object_texture) : NULL;
+	struct texture *depth = framebuffer ? object_get(framebuffer->depth, _object_texture) : NULL;
+	char textures[160];
+	int index, length = 0;
+
+	textures[0] = 0;
+	for (index = 0; index < program->uniform_count && length < (int)sizeof(textures) - 24; index++)
+	{
+		struct uniform *uniform = &program->uniforms[index];
+		struct texture *texture;
+
+		if (!uniform->sampler || uniform->sampler_register < 0)
+			continue;
+		texture = unit_texture(uniform->unit);
+		length += _snprintf(textures + length, sizeof(textures) - length, " s%d=%lux%lu%s", uniform->sampler_register,
+			texture ? texture->width : 0, texture ? texture->height : 0,
+			texture && texture->surface ? "(target)" : "");
+	}
+	x360_log("gl:   program %u, framebuffer %u: color %lux%lu, depth %lux%lu; textures%s", gl.program,
+		gl.draw_framebuffer, color ? color->width : 0, color ? color->height : 0, depth ? depth->width : 0,
+		depth ? depth->height : 0, textures);
+}
+
+/* whether this draw goes in the log (log_draws: the first 40; log_frame) */
+static BOOL draw_logged(void)
+{
+	return (debug.log_draws && gl.draws < 40) || (debug.log_frame && gl.frame == debug.log_frame);
+}
+
+static BOOL program_skipped(GLuint program)
+{
+	int index;
+
+	for (index = 0; index < debug.skip_program_count; index++)
+	{
+		if (debug.skip_programs[index] == program)
+			return TRUE;
+	}
+	return FALSE;
+}
+
 static BOOL prepare_draw(struct program **program_out, struct shader **vertex_out)
 {
 	struct program *program = object_get(gl.program, _object_program);
 	struct shader *vertex, *fragment;
 	int index;
 
-	if (!gl.ready || !program || !program->linked)
+	if (!gl.ready || !program || !program->linked || program_skipped(gl.program))
 		return FALSE;
 	vertex = object_get(program->vertex, _object_shader);
 	fragment = object_get(program->fragment, _object_shader);
@@ -1452,7 +1676,7 @@ static BOOL prepare_draw(struct program **program_out, struct shader **vertex_ou
 	apply_render_state();
 	IDirect3DDevice9_SetVertexShader(gl.device, vertex->vertex);
 	IDirect3DDevice9_SetPixelShader(gl.device, debug.green && gl.green_pixel ? gl.green_pixel : fragment->pixel);
-	if (debug.log_draws && gl.draws < 40)
+	if (draw_logged())
 	{
 		x360_log("gl:   viewport %d %d %d %d, scissor %d (%d %d %d %d), depth %d func 0x%x mask %d, blend %d 0x%x 0x%x, "
 			"cull %d 0x%x 0x%x, colors %d%d%d%d, constants %d/%d, target %p/%p",
@@ -1461,6 +1685,7 @@ static BOOL prepare_draw(struct program **program_out, struct shader **vertex_ou
 			gl.blend_source, gl.blend_destination, gl.cull_face, gl.cull_mode, gl.front_face, gl.color_mask[0],
 			gl.color_mask[1], gl.color_mask[2], gl.color_mask[3], program->vertex_constant_count,
 			program->pixel_constant_count, (void *)gl.bound_color, (void *)gl.bound_depth);
+		draw_log_targets_and_textures(program);
 	}
 	if (program->vertex_constant_count)
 		IDirect3DDevice9_SetVertexShaderConstantF(gl.device, 0, &program->vertex_constants[0][0],
@@ -1475,7 +1700,7 @@ static BOOL prepare_draw(struct program **program_out, struct shader **vertex_ou
 
 /* the vertex declaration and streams for vertices [0, vertex_end) of the
 attributes the vertex shader reads */
-static BOOL setup_vertices(struct shader *vertex, unsigned long vertex_end)
+static BOOL setup_vertices(struct shader *vertex, unsigned long vertex_start, unsigned long vertex_end)
 {
 	D3DVERTEXELEMENT9 elements[ATTRIBUTES + 1];
 	static D3DVertexBuffer stream_headers[2][BINDINGS + 1];
@@ -1483,7 +1708,7 @@ static BOOL setup_vertices(struct shader *vertex, unsigned long vertex_end)
 	int element_count = 0, stream_count = 0;
 	int stream_of_binding[BINDINGS];
 	float *constants = NULL;
-	int constant_stream = -1;
+	int constant_stream = -1, constant_count = 0;
 	int index;
 
 	for (index = 0; index < BINDINGS; index++)
@@ -1509,17 +1734,25 @@ static BOOL setup_vertices(struct shader *vertex, unsigned long vertex_end)
 			{
 				struct buffer *buffer = object_get(binding->buffer, _object_buffer);
 				unsigned long stride = (unsigned long)binding->stride;
-				unsigned long bytes = stride ? stride * vertex_end : 64;
-				void *copy;
+				unsigned long bytes;
+				unsigned char *copy;
 
 				if (!buffer || !buffer->data || (unsigned long)binding->offset >= buffer->size)
 					return FALSE;
-				if ((unsigned long)binding->offset + bytes > buffer->size)
-					bytes = buffer->size - (unsigned long)binding->offset;
-				copy = ring_reserve(gl.vertex_ring, RING_VERTEX_SIZE, &gl.vertex_ring_offset, bytes);
-				if (!copy)
-					return FALSE;
-				memcpy(copy, buffer->data + binding->offset, bytes);
+				/* (read where it is: buffers are in memory the GPU reads) */
+				copy = buffer->data + binding->offset;
+				bytes = buffer->size - (unsigned long)binding->offset;
+				if ((UINT_PTR)copy & 3)
+				{
+					/* (a stream starts on 4 bytes: an odd one is copied) */
+					bytes = stride ? stride * vertex_end : 64;
+					if ((unsigned long)binding->offset + bytes > buffer->size)
+						bytes = buffer->size - (unsigned long)binding->offset;
+					copy = ring_reserve(gl.vertex_ring, RING_VERTEX_SIZE, &gl.vertex_ring_offset, bytes);
+					if (!copy)
+						return FALSE;
+					memcpy(copy, buffer->data + binding->offset, bytes);
+				}
 				stream = stream_count++;
 				stream_of_binding[attribute->binding] = stream;
 				XGSetVertexBufferHeader(bytes, 0, 0, 0, &streams[stream]);
@@ -1541,9 +1774,11 @@ static BOOL setup_vertices(struct shader *vertex, unsigned long vertex_end)
 					return FALSE;
 				constant_stream = stream_count++;
 			}
-			memcpy(constants + index * 4, attribute->value, 16);
+			/* (packed: only the constant attributes, one after another) */
+			memcpy(constants + constant_count * 4, attribute->value, 16);
 			element->Stream = (WORD)constant_stream;
-			element->Offset = (WORD)(index * 16);
+			element->Offset = (WORD)(constant_count * 16);
+			constant_count++;
 			element->Type = (D3DDECLTYPE_FLOAT4 & ~D3DDECLTYPE_ENDIAN_MASK) |
 				(GPUENDIAN_NONE << D3DDECLTYPE_ENDIAN_SHIFT);
 		}
@@ -1553,10 +1788,10 @@ static BOOL setup_vertices(struct shader *vertex, unsigned long vertex_end)
 		/* (big-endian floats written here: swapped to the GPU's order, as the
 		format has none of its own) */
 		int value;
-		unsigned long stride = 0, bytes = ATTRIBUTES * 16;
+		unsigned long stride = 0, bytes = (unsigned long)constant_count * 16;
 		float *data = constants;
 
-		for (value = 0; value < ATTRIBUTES * 4; value++)
+		for (value = 0; value < constant_count * 4; value++)
 		{
 			unsigned long word;
 
@@ -1569,13 +1804,26 @@ static BOOL setup_vertices(struct shader *vertex, unsigned long vertex_end)
 			/* (every vertex its own copy, rather than one read by all) */
 			unsigned long vertex_index;
 
-			stride = ATTRIBUTES * 16;
-			bytes = stride * (vertex_end ? vertex_end : 1);
-			data = ring_reserve(gl.vertex_ring, RING_VERTEX_SIZE, &gl.vertex_ring_offset, bytes);
+			unsigned long vertices;
+
+			/* (only the vertices drawn: the stream starts that many before
+			its copies, which the draw never reads) */
+			stride = (unsigned long)constant_count * 16;
+			if (vertex_end <= vertex_start)
+				vertex_end = vertex_start + 1;
+			vertices = vertex_end - vertex_start;
+			data = ring_reserve(gl.vertex_ring, RING_VERTEX_SIZE, &gl.vertex_ring_offset, stride * vertices);
 			if (!data)
 				return FALSE;
-			for (vertex_index = 0; vertex_index < (vertex_end ? vertex_end : 1); vertex_index++)
+			for (vertex_index = 0; vertex_index < vertices; vertex_index++)
 				memcpy((unsigned char *)data + vertex_index * stride, constants, stride);
+			if ((UINT_PTR)data < vertex_start * stride + 0x100000)
+			{
+				x360_log("gl: a draw's constant attributes cannot start %lu vertices back", vertex_start);
+				return FALSE;
+			}
+			data = (float *)((unsigned char *)data - vertex_start * stride);
+			bytes = stride * vertex_end;
 		}
 		XGSetVertexBufferHeader(bytes, 0, 0, 0, &streams[constant_stream]);
 		XGOffsetResourceAddress((D3DResource *)&streams[constant_stream], data);
@@ -1621,40 +1869,46 @@ static void draw(GLenum mode, unsigned long first, unsigned long count, GLenum i
 		const unsigned char *source;
 		void *copy;
 		static D3DIndexBuffer index_headers[2];
-		unsigned long index, highest = 0;
+		unsigned long index, highest = 0, lowest = ~0UL;
 
 		if (!buffer || !buffer->data || offset + count * index_bytes > buffer->size)
 			return;
 		source = buffer->data + offset;
 		for (index = 0; index < count; index++)
 		{
-			unsigned long value = index_bytes == 4 ?
-				(unsigned long)source[index * 4] | (unsigned long)source[index * 4 + 1] << 8 |
-				(unsigned long)source[index * 4 + 2] << 16 | (unsigned long)source[index * 4 + 3] << 24 :
-				(unsigned long)source[index * 2] | (unsigned long)source[index * 2 + 1] << 8;
+			/* (indices are the machine's words: the game's, and a model's
+			made so as it loads, rasterizer_xbox_hardware_geometry.c) */
+			unsigned long value = index_bytes == 4 ? ((const unsigned long *)source)[index] :
+				((const unsigned short *)source)[index];
 
-			if (value > highest && !(index_bytes == 2 && value == 0xffff))
+			if (index_bytes == 2 && value == 0xffff)
+				continue;
+			if (value > highest)
 				highest = value;
+			if (value < lowest)
+				lowest = value;
 		}
+		if (lowest > highest)
+			lowest = highest;
 		vertex_end = (unsigned long)((long)highest + base_vertex + 1);
 		copy = ring_reserve(gl.index_ring, RING_INDEX_SIZE, &gl.index_ring_offset, count * index_bytes);
-		if (!copy || !setup_vertices(vertex, vertex_end))
+		if (!copy || !setup_vertices(vertex, (unsigned long)((long)lowest + base_vertex), vertex_end))
 			return;
 		memcpy(copy, source, count * index_bytes);
-		XGSetIndexBufferHeader(count * index_bytes, 0, index_bytes == 4 ? D3DFMT_LE_INDEX32 : D3DFMT_LE_INDEX16, 0,
+		XGSetIndexBufferHeader(count * index_bytes, 0, index_bytes == 4 ? D3DFMT_INDEX32 : D3DFMT_INDEX16, 0,
 			0, &index_headers[gl.frame_half]);
 		XGOffsetResourceAddress((D3DResource *)&index_headers[gl.frame_half], copy);
 		IDirect3DDevice9_SetIndices(gl.device, &index_headers[gl.frame_half]);
-		if (debug.log_draws && gl.draws < 40)
+		if (draw_logged())
 			x360_log("gl: draw %lu: indexed %lu (vertices to %lu, base %ld), mode 0x%x, program %u, inputs 0x%lx",
 				gl.draws, count, vertex_end, base_vertex, mode, gl.program, vertex->inputs);
 		IDirect3DDevice9_DrawIndexedVertices(gl.device, type, (INT)base_vertex, 0, (UINT)count);
 	}
 	else
 	{
-		if (!setup_vertices(vertex, vertex_end))
+		if (!setup_vertices(vertex, first, vertex_end))
 			return;
-		if (debug.log_draws && gl.draws < 40)
+		if (draw_logged())
 			x360_log("gl: draw %lu: %lu from %lu, mode 0x%x, program %u, inputs 0x%lx", gl.draws, count, first, mode,
 				gl.program, vertex->inputs);
 		IDirect3DDevice9_DrawVertices(gl.device, type, (UINT)first, (UINT)count);
@@ -1891,11 +2145,9 @@ static void APIENTRY x360_glDeleteTextures(GLsizei n, const GLuint *names)
 
 		if (!texture)
 			continue;
-		/* (not while the GPU may read it: the frame finishes first) */
-		if (gl.ready)
-			IDirect3DDevice9_BlockUntilIdle(gl.device);
-		texture_release(texture);
-		free(texture);
+		/* (not while the GPU may read it: released two frames on) */
+		texture_retire(texture);
+		stats.textures_deleted++;
 		objects[names[index]].type = _object_none;
 		objects[names[index]].data = NULL;
 	}
@@ -2149,6 +2401,13 @@ static void APIENTRY x360_glClear(GLbitfield mask)
 		flags |= D3DCLEAR_STENCIL;
 	if (!flags)
 		return;
+	if (draw_logged())
+	{
+		x360_log("gl: clear 0x%lx (color %.2f %.2f %.2f %.2f, depth %.2f), scissor %d (%d %d %d %d), framebuffer %u",
+			(unsigned long)flags, gl.clear_color[0], gl.clear_color[1], gl.clear_color[2], gl.clear_color[3],
+			gl.clear_depth, gl.scissor_test, gl.scissor[0], gl.scissor[1], gl.scissor[2], gl.scissor[3],
+			gl.draw_framebuffer);
+	}
 	color.x = gl.clear_color[0];
 	color.y = gl.clear_color[1];
 	color.z = gl.clear_color[2];
@@ -2241,7 +2500,7 @@ static void APIENTRY x360_glReadPixels(GLint x, GLint y, GLsizei width, GLsizei 
 static struct buffer *bound_buffer(GLenum target)
 {
 	GLuint name = target == GL_ELEMENT_ARRAY_BUFFER ? gl.element_buffer : target == GL_ARRAY_BUFFER ?
-		gl.array_buffer : 0;
+		gl.array_buffer : target == GL_COPY_WRITE_BUFFER ? gl.copy_write_buffer : 0;
 
 	return object_get(name, _object_buffer);
 }
@@ -2261,7 +2520,8 @@ static void APIENTRY x360_glDeleteBuffers(GLsizei n, const GLuint *names)
 
 		if (!buffer)
 			continue;
-		free(buffer->data);
+		if (!buffer->alias)
+			storage_retire(buffer->data);
 		free(buffer);
 		objects[names[index]].type = _object_none;
 	}
@@ -2273,6 +2533,8 @@ static void APIENTRY x360_glBindBuffer(GLenum target, GLuint buffer)
 		gl.array_buffer = buffer;
 	else if (target == GL_ELEMENT_ARRAY_BUFFER)
 		gl.element_buffer = buffer;
+	else if (target == GL_COPY_WRITE_BUFFER)
+		gl.copy_write_buffer = buffer;
 }
 
 static void APIENTRY x360_glBindBufferBase(GLenum target, GLuint index, GLuint buffer)
@@ -2281,27 +2543,32 @@ static void APIENTRY x360_glBindBufferBase(GLenum target, GLuint index, GLuint b
 	(void)target; (void)index; (void)buffer;
 }
 
+/* new storage each time (what the GPU may still read of the old is kept
+until it is done: a stream buffer orphaned when full) */
 static void APIENTRY x360_glBufferData(GLenum target, GLsizeiptr size, const void *data, GLenum usage)
 {
 	struct buffer *buffer = bound_buffer(target);
+	unsigned char *storage;
 
 	(void)usage;
 	if (!buffer)
 		return;
-	if ((unsigned long)size != buffer->size)
+	storage = storage_allocate((unsigned long)size);
+	if (!storage)
 	{
-		unsigned char *grown = realloc(buffer->data, size ? (size_t)size : 1);
-
-		if (!grown)
-		{
-			x360_log("gl: out of memory for a %lu byte buffer", (unsigned long)size);
-			return;
-		}
-		buffer->data = grown;
-		buffer->size = (unsigned long)size;
+		x360_log("gl: out of memory for a %lu byte buffer", (unsigned long)size);
+		return;
 	}
+	if (!buffer->alias)
+		storage_retire(buffer->data);
+	buffer->data = storage;
+	buffer->size = (unsigned long)size;
+	buffer->alias = FALSE;
 	if (data)
+	{
 		memcpy(buffer->data, data, (size_t)size);
+		storage_flush(buffer->data, (unsigned long)size);
+	}
 }
 
 static void APIENTRY x360_glBufferSubData(GLenum target, GLintptr offset, GLsizeiptr size, const void *data)
@@ -2310,19 +2577,54 @@ static void APIENTRY x360_glBufferSubData(GLenum target, GLintptr offset, GLsize
 
 	if (!buffer || !buffer->data || (unsigned long)offset + (unsigned long)size > buffer->size)
 		return;
-	memcpy(buffer->data + offset, data, (size_t)size);
+	/* (an alias given its own bytes: they are there already) */
+	if (data != buffer->data + offset)
+		memcpy(buffer->data + offset, data, (size_t)size);
+	storage_flush(buffer->data + offset, (unsigned long)size);
 }
+
+static struct
+{
+	struct buffer *buffer;
+	unsigned long offset, length;
+} mapped;
 
 static void *APIENTRY x360_glMapBufferRange(GLenum target, GLintptr offset, GLsizeiptr length, GLbitfield access)
 {
 	struct buffer *buffer = bound_buffer(target);
 
-	(void)length;
 	(void)access;
-	return buffer && buffer->data ? buffer->data + offset : NULL;
+	if (!buffer || !buffer->data)
+		return NULL;
+	mapped.buffer = buffer;
+	mapped.offset = (unsigned long)offset;
+	mapped.length = (unsigned long)length;
+	return buffer->data + offset;
 }
 
-static GLboolean APIENTRY x360_glUnmapBuffer(GLenum target) { (void)target; return GL_TRUE; }
+static GLboolean APIENTRY x360_glUnmapBuffer(GLenum target)
+{
+	(void)target;
+	if (mapped.buffer && mapped.buffer->data)
+		storage_flush(mapped.buffer->data + mapped.offset, mapped.length);
+	mapped.buffer = NULL;
+	return GL_TRUE;
+}
+
+/* the buffer bound to target made an alias of memory the GPU can read in
+place (the Xbox window's: d3d8_gl.c's mirror) */
+void x360_gl_buffer_alias(GLenum target, void *memory, unsigned long size)
+{
+	struct buffer *buffer = bound_buffer(target);
+
+	if (!buffer)
+		return;
+	if (!buffer->alias)
+		storage_retire(buffer->data);
+	buffer->data = memory;
+	buffer->size = size;
+	buffer->alias = TRUE;
+}
 
 /* ---------- the entry points: vertex attributes */
 
@@ -2765,7 +3067,7 @@ void x360_gl_swap(void)
 			"others %lu", gl.presented->width, gl.presented->height, colors[0], counts[0], colors[1], counts[1],
 			colors[2], counts[2], colors[3], counts[3], colors[4], counts[4], colors[5], counts[5], others);
 	}
-	if (debug.dump && gl.presented && gl.presented->d3d && (gl.frame == 300 || gl.frame == 900))
+	if (debug.dump && gl.presented && gl.presented->d3d && (gl.frame == 300 || gl.frame == 900 || gl.frame == debug.dump_at))
 	{
 		/* the game's picture, untiled, to game:\picture<n>.raw (BGRA rows) */
 		D3DLOCKED_RECT locked;
@@ -2797,6 +3099,24 @@ void x360_gl_swap(void)
 	gl.bound_screen = FALSE;
 	gl.bound_color = (D3DSurface *)1;
 	rings_next_frame();
+	stats.frames++;
+	stats.frame_ms += stats_ms_since(stats.frame_start);
+	QueryPerformanceCounter(&stats.frame_start);
+	if (GetTickCount() - stats.last_report >= 5000)
+	{
+		if (stats.frames)
+		{
+			x360_log("gl: %lu frames, %.1f ms a frame; a frame: %lu draws, %lu KB of draw data; waits: %lu idle "
+				"(%.1f ms), %lu fence (%.1f ms); %lu textures deleted",
+				stats.frames, stats.frame_ms / stats.frames, (gl.draws - stats.draws) / stats.frames,
+				stats.ring_bytes / stats.frames / 1024, stats.idle_waits, stats.idle_wait_ms, stats.fence_waits,
+				stats.fence_wait_ms, stats.textures_deleted);
+		}
+		stats.last_report = GetTickCount();
+		stats.frames = stats.idle_waits = stats.fence_waits = stats.ring_bytes = stats.textures_deleted = 0;
+		stats.idle_wait_ms = stats.fence_wait_ms = stats.frame_ms = 0.0;
+		stats.draws = gl.draws;
+	}
 	gl.frame++;
 	if (gl.frame == 1 || gl.frame % 600 == 0)
 		x360_log("gl: frame %lu, %lu draws so far", gl.frame, gl.draws);

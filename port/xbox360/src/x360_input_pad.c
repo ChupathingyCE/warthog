@@ -10,6 +10,7 @@ white (left) and black (right) buttons, as the desktop builds map them
 */
 
 #include <xtl.h>
+#include <stdio.h>
 #include <string.h>
 
 #include "x360_port.h"
@@ -28,6 +29,31 @@ enum
 };
 
 static DWORD reported_ports;
+
+/* bring-up: "fake_pad" in game:\gl.txt keeps controller 1 connected (at
+rest) while it is not, so an automated run is never paused for it */
+static int fake_pad(void)
+{
+	static int loaded = -1;
+
+	if (loaded < 0)
+	{
+		FILE *file = fopen("game:\\gl.txt", "rb");
+		char word[64];
+
+		loaded = 0;
+		if (file)
+		{
+			while (fscanf(file, "%63s", word) == 1)
+			{
+				if (!strcmp(word, "fake_pad"))
+					loaded = 1;
+			}
+			fclose(file);
+		}
+	}
+	return loaded;
+}
 static WORD last_buttons[XUSER_MAX_COUNT];
 static int button_logs;
 
@@ -49,7 +75,7 @@ int x360_pad_read(int port, struct x360_pad *pad)
 			reported_ports &= ~(1UL << port);
 			x360_log("controller %d: disconnected", port + 1);
 		}
-		return 0;
+		return port == 0 && fake_pad();
 	}
 	if (!(reported_ports & (1UL << port)))
 	{

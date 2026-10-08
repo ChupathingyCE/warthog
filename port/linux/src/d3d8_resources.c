@@ -404,6 +404,11 @@ void WINAPI D3DVertexBuffer_Lock(D3DVertexBuffer *buffer, UINT offset, UINT size
 	(void)size;
 	(void)flags;
 	*data = buffer->Data ? (BYTE *)resource_data(buffer->Data) + offset : NULL;
+#ifdef HALO_XBOX360
+	/* (a lock is a write: the console has no page faults to see it by) */
+	if (*data && size)
+		memory_watch_prepare_write(*data, size);
+#endif
 }
 
 HRESULT WINAPI D3DDevice_CreateIndexBuffer(UINT length, DWORD usage, D3DFORMAT format, D3DPOOL pool, D3DIndexBuffer **result)
