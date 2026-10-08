@@ -204,6 +204,10 @@ vertices stay as they are: the map's, which the vertex formats read) */
 #define ANIMATION_GRAPH_GROUP 0x616E7472UL /* 'antr' */
 
 void animation_graph_byte_swap_data(void *graph);
+unsigned long structure_bsp_cluster_data_offset(void);
+
+/* a tag_data of longs: made the machine's */
+static void swap_long_data(struct swap_region *region, const unsigned char *data);
 #define MODEL_GEOMETRIES 0xD0 /* struct model's geometries block */
 #define MODEL_GEOMETRY_SIZE 0x30
 #define MODEL_GEOMETRY_PARTS 0x24
@@ -250,6 +254,16 @@ static void swap_model_indices(struct swap_region *region, unsigned long address
 			(*swapped)++;
 		}
 	}
+}
+
+static void swap_long_data(struct swap_region *region, const unsigned char *data)
+{
+	long size = (long)read32(data);
+	unsigned long address = read32(data + TAG_DATA_ADDRESS);
+
+	if (size <= 0 || !region_holds(region, address, (unsigned long)size))
+		return;
+	swap_fields(region->base + (address - region->address), 4, (unsigned long)size / 4);
 }
 
 /* the text of the groups that hold UTF-16 strings, after their fields */
@@ -362,6 +376,8 @@ void tag_byte_swap_structure_bsp(void *bsp, unsigned long bsp_address, unsigned 
 		return;
 	}
 	swap_layout(&region, (unsigned long)layout, bsp_address, 0);
+	/* (the clusters' visibility: longs in tag data) */
+	swap_long_data(&region, (const unsigned char *)bsp + structure_bsp_cluster_data_offset());
 	error(_error_silent, "tag byte swap: structure bsp: %lu blocks, %lu elements; %lu blocks not swapped",
 		region.blocks, region.elements, region.bad_blocks);
 }

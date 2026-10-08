@@ -1769,6 +1769,11 @@ static BOOL prepare_draw(struct program **program_out, struct shader **vertex_ou
 
 /* the vertex declaration and streams for vertices [0, vertex_end) of the
 attributes the vertex shader reads */
+/* (a draw's base vertex, applied to its streams' addresses: the GPU's own
+base vertex does not take a negative one, which the renderer's draws from
+the mirror use) */
+static long draw_base_vertex;
+
 static BOOL setup_vertices(struct shader *vertex, unsigned long vertex_start, unsigned long vertex_end)
 {
 	D3DVERTEXELEMENT9 elements[ATTRIBUTES + 1];
@@ -1821,6 +1826,11 @@ static BOOL setup_vertices(struct shader *vertex, unsigned long vertex_start, un
 					if (!copy)
 						return FALSE;
 					memcpy(copy, buffer->data + binding->offset, bytes);
+				}
+				if (draw_base_vertex)
+				{
+					copy += draw_base_vertex * (long)stride;
+					bytes = (unsigned long)((long)bytes - draw_base_vertex * (long)stride);
 				}
 				stream = stream_count++;
 				stream_of_binding[attribute->binding] = stream;
@@ -1979,10 +1989,16 @@ static void draw(GLenum mode, unsigned long first, unsigned long count, GLenum i
 		}
 		if (lowest > highest)
 			lowest = highest;
-		vertex_end = (unsigned long)((long)highest + base_vertex + 1);
+		/* (vertices by index: the base is in the streams' addresses) */
+		vertex_end = highest + 1;
+		draw_base_vertex = base_vertex;
 		copy = ring_reserve(gl.index_ring, RING_INDEX_SIZE, &gl.index_ring_offset, count * index_bytes);
-		if (!copy || !setup_vertices(vertex, (unsigned long)((long)lowest + base_vertex), vertex_end))
+		if (!copy || !setup_vertices(vertex, lowest, vertex_end))
+		{
+			draw_base_vertex = 0;
 			return;
+		}
+		draw_base_vertex = 0;
 		memcpy(copy, source, count * index_bytes);
 		XGSetIndexBufferHeader(count * index_bytes, 0, index_bytes == 4 ? D3DFMT_INDEX32 : D3DFMT_INDEX16, 0,
 			0, &index_headers[gl.frame_half]);
@@ -1991,7 +2007,7 @@ static void draw(GLenum mode, unsigned long first, unsigned long count, GLenum i
 		if (draw_logged())
 			x360_log("gl: draw %lu: indexed %lu (vertices to %lu, base %ld), mode 0x%x, program %u, inputs 0x%lx",
 				gl.draws, count, vertex_end, base_vertex, mode, gl.program, vertex->inputs);
-		IDirect3DDevice9_DrawIndexedVertices(gl.device, type, (INT)base_vertex, 0, (UINT)count);
+		IDirect3DDevice9_DrawIndexedVertices(gl.device, type, 0, 0, (UINT)count);
 	}
 	else
 	{
