@@ -33,7 +33,7 @@ one computer (configure.py --console-limits); it is never a release. */
 #endif
 
 /* the slots on the network: the PC builds' (128 and 128 since network
-version 11; network version 20 keeps them), which never change; a build with the console's limits folds the PCs' game settings
+version 11; network version 28 keeps them), which never change; a build with the console's limits folds the PCs' game settings
 record and game type states into its own slots as they arrive
 (port/linux/game/network_game_layout.c, docs/cross-play.md) */
 #define HALO_PORT_WIRE_NETWORK_PLAYERS 128

@@ -12,7 +12,7 @@
 
 > Warthog follows ChupathingyCE: the shared game code comes from there, and this repository adds only the consoles' own code. You need your own copy of Halo; no SDK or game files are included.
 
-> **Built on ChupathingyCE with [OpenCE](https://github.com/OpenCommunityEdition/OpenCE) build-133 through build-138 (network version 20).** Warthog joins games hosted on network versions 11 through 20, by ChupathingyCE and OpenCE builds alike, with up to 16 players. There's no release yet: Warthog is in development, and for now it runs on development kits and modified consoles.
+> **Built on ChupathingyCE (network version 28, as [OpenCE](https://github.com/OpenCommunityEdition/OpenCE)'s build-201).** Warthog joins games hosted on network versions 11 through 30, by ChupathingyCE and OpenCE builds alike, with up to 16 players. There's no release yet: Warthog is in development, and for now it runs on development kits and modified consoles.
 
 Warthog is the Halo: Combat Evolved decompilation built back for the console
 it was written for, on the same code as
@@ -83,7 +83,7 @@ What to know:
   and a game that turns co-op is left with a message. Split screen and the
   campaign on the console itself play as they always did.
 - **Network versions.** The console joins hosts of network versions 11
-  through 20. A host of another version is refused with the reason.
+  through 30. A host of another version is refused with the reason.
 - **Your address stays private.** The game's log never shows a public IP
   address, only a tag.
 
@@ -107,7 +107,7 @@ The game writes its log to `D:\debug.txt`; attach it to bug reports.
 
 ## Warthog, ChupathingyCE and Delta
 
-- **ChupathingyCE to Warthog, one way.** Warthog is rebased on
+- **ChupathingyCE to Warthog, one way.** Warthog merges
   ChupathingyCE: changes flow from ChupathingyCE into Warthog, never back
   through it. Fixes to the shared game code go to ChupathingyCE first (and
   from there to OpenCE). Warthog keeps only what the console needs on top.
@@ -193,7 +193,7 @@ XLink's addressing) on the computer under AddressSanitizer, with a fuzzer;
 
 The console builds 16 players on 16 machines and the Xbox's 2,048 objects;
 the PCs build 128, 128 and 8,192, and both send their game settings whole
-(13,120 bytes at 128 slots, unchanged in network version 20). As a client
+(13,120 bytes at 128 slots, unchanged through network version 28). As a client
 of a PC host, the console folds the PCs' 128-slot game settings record and
 Slayer's state into its own 16 slots as they arrive, checks the record's
 layout against its own at compile time, and leaves a game that grows past
@@ -215,11 +215,11 @@ built for the console as a joiner), which needs XNet in its open mode
 
 ## Keeping in step with ChupathingyCE
 
-Warthog is rebased on ChupathingyCE: its own commits are replayed
-(`git cherry-pick`) onto ChupathingyCE's newest main, conflicts resolved in
-favor of ChupathingyCE's code with the console's switches kept, and
-`ninja xbox`, the desktop builds and the host tests must pass. Each
-console switch Warthog keeps in a shared file is work at every rebase.
+Warthog merges ChupathingyCE (a merge, never a rebase: Warthog's main is
+public and is never rewritten): conflicts are resolved in favor of
+ChupathingyCE's code with the console's switches kept, and `ninja xbox`,
+the desktop builds and the host tests must pass. Each console switch
+Warthog keeps in a shared file is work at every merge.
 
 ## Credits
 
