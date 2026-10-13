@@ -119,7 +119,7 @@ The game writes its log to `D:\debug.txt`; attach it to bug reports.
   is to be a full Delta machine: Delta Peer with an `xbox` platform key (its
   16-player and no-co-op caveats, its memory class), the signed legacy
   table, a signed game list so the console needs no TLS, and later stats
-  and profile links. The plan: [docs/warthog-delta.md](docs/warthog-delta.md).
+  and profile links.
 
 ## Building it yourself
 
@@ -219,10 +219,7 @@ Warthog is rebased on ChupathingyCE: its own commits are replayed
 (`git cherry-pick`) onto ChupathingyCE's newest main, conflicts resolved in
 favor of ChupathingyCE's code with the console's switches kept, and
 `ninja xbox`, the desktop builds and the host tests must pass. Each
-console switch Warthog keeps in a shared file is work at every rebase;
-[docs/warthog-upstreaming.md](docs/warthog-upstreaming.md) lists the ones
-that could move into ChupathingyCE itself, compiled out of the desktop
-builds.
+console switch Warthog keeps in a shared file is work at every rebase.
 
 ## Credits
 
