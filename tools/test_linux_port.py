@@ -304,6 +304,25 @@ def test_menu_settings_exist():
     assert controls == set(re.findall(r'\{ "(controls\.[a-z_]+)", L"', functions))
 
 
+def test_report_joined_games_stops_claims():
+    """network.report_joined_games = false stops both what a copy sends the
+    game list about a game it joined: its own report of the game
+    (browser_client_report) and the claim of its players' lines in the
+    host's report (browser_claim_game, /v1/claim). A game it hosts is
+    claimed either way."""
+    root = MENUS.parent.parent.parent
+    browser = (root / "port/linux/src/browser.c").read_text()
+    for function in ("browser_client_report", "browser_claim_game"):
+        body = re.search(r"^void " + function + r"\(.*?^\}", browser, re.M | re.S).group(0)
+        gate = re.search(r'!config_boolean\("network\.report_joined_games"\)\s*\|\|\s*'
+                         r'!p2p_joined_invite\(', body)
+        assert gate, function
+        assert body.index("return;") > gate.start(), function
+    readme = (root / "port/linux/README.md").read_text()
+    row = next(line for line in readme.splitlines() if line.startswith("| `network.report_joined_games`"))
+    assert "/v1/claim" in row
+
+
 def test_default_brokers_are_brokers_txt():
     """The brokers a game uses with no brokers.txt beside its config.toml
     (p2p_signal.c's DEFAULT_BROKERS) are port/assets/network/brokers.txt's."""
