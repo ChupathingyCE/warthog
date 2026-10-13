@@ -30,8 +30,9 @@ Without an audio device, a clock thread runs the same mixer into a scratch
 buffer, so streams still drain at their real rate.
 
 audio.volume sets the master volume (default 1.0); audio.reverb = false
-turns the reverb off; audio.enabled = false skips opening a device;
-audio.buffer_frames sets the device's buffer (port_config.c).
+turns the reverb off; audio.resampling = "linear" resamples by linear
+interpolation instead (resampling); audio.enabled = false skips opening a
+device; audio.buffer_frames sets the device's buffer (port_config.c).
 */
 
 #include "platform.h"
@@ -157,6 +158,8 @@ static DSI3DL2LISTENER environment =
 static unsigned long environment_serial;
 /* audio.reverb */
 static BOOL reverb_enabled = TRUE;
+/* audio.resampling = "linear" */
+static BOOL resampling_linear = FALSE;
 
 static float gain_from_millibels(LONG millibels)
 {
@@ -421,7 +424,12 @@ down): linear interpolation, which the mixer did before, left them only 8 to
 played faster than the output rate takes its frames (a step over 1) gets the
 low pass narrowed to match, up to RESAMPLER_MAXIMUM_STRETCH times, so it
 does not alias. The frames come from the voice's packets in turn, so the low
-pass reads straight across a packet's end into the next. */
+pass reads straight across a packet's end into the next.
+
+audio.resampling = "linear" interpolates between the two frames around
+the moment instead, as the mixer did before: brighter to some ears, for the
+images it leaves, which the windowed sinc takes out. It is a choice of its
+own: turning the reverb off left the low pass on. */
 
 /* the low pass's one side, RESAMPLER_TABLE_STEPS values a source frame */
 static float resampler_table[RESAMPLER_ZERO_CROSSINGS * RESAMPLER_TABLE_STEPS + 2];
@@ -541,6 +549,26 @@ static BOOL take_frame(struct sdl_stream *stream, float *frame)
 	}
 }
 
+/* whether the voice has a frame to take; the packets with none left are
+marked finished on the way, as take_frame marks them */
+static BOOL voice_has_frames(struct sdl_stream *stream)
+{
+	unsigned long position;
+
+	for (position = 0; position < stream->packet_count; position++)
+	{
+		struct voice_packet *packet = &stream->packets[(stream->packet_head + position) % MAXIMUM_STREAM_PACKETS];
+
+		if (packet->finished)
+			continue;
+		if (stream->cursor < packet->frames)
+			return TRUE;
+		stream->cursor = 0;
+		packet->finished = TRUE;
+	}
+	return FALSE;
+}
+
 /* ---------- mixing */
 
 /* mixes one voice into output (frames of stereo float), and into the reverb's
@@ -561,6 +589,16 @@ static void mix_voice(struct sdl_stream *stream, float *output, float *send, uns
 	rate, and the frames it reaches on each side */
 	scale = step > 1.0 ? (float)(1.0 / (step < RESAMPLER_MAXIMUM_STRETCH ? step : RESAMPLER_MAXIMUM_STRETCH)) : 1.0f;
 	width = (long)ceilf(RESAMPLER_ZERO_CROSSINGS / scale);
+	/* a voice that ran dry and stopped (below) starts over once it has
+	frames again: stream_process starts over only a stream with no packets,
+	and the next can come before the finished ones are completed */
+	if (stream->silence > (unsigned long)(2 * width))
+	{
+		if (!voice_has_frames(stream))
+			return;
+		resampler_reset(stream);
+		stream->gains_valid = FALSE;
+	}
 	voice_gains(stream, &target_left, &target_right, &target_room, &target_direct_lowpass, &target_room_lowpass);
 	if (!stream->gains_valid)
 	{
@@ -614,10 +652,8 @@ static void mix_voice(struct sdl_stream *stream, float *output, float *send, uns
 			/* a voice turned all the way down (out of earshot), and not
 			sending to the reverb, only moves on */
 		}
-		else if (!reverb_enabled)
+		else if (resampling_linear)
 		{
-			/* with reverb disabled, it uses linear interpolation
-			for raw (non-muffled) sound quality instead. */
 			const float *a = stream->history[stream->center % RESAMPLER_HISTORY];
 			const float *b = stream->history[(stream->center + 1) % RESAMPLER_HISTORY];
 			float fraction = (float)stream->phase;
@@ -1163,6 +1199,7 @@ static void audio_start(void)
 	audio_started = TRUE;
 	master_volume = (float)config_real("audio.volume");
 	reverb_enabled = config_boolean("audio.reverb");
+	resampling_linear = !strcmp(config_string("audio.resampling"), "linear");
 	resampler_initialize();
 	resampler_phases_initialize();
 	reverb_initialize();
@@ -1211,6 +1248,10 @@ static void stream_complete_head(struct sdl_stream *stream, DWORD status, DWORD 
 	struct voice_packet *entry = &stream->packets[stream->packet_head];
 	XMEDIAPACKET packet = entry->packet;
 
+	/* (one not played to its end, flushed: the cursor was its place, and the
+	mixer may take the next while the lock is let go below) */
+	if (!entry->finished)
+		stream->cursor = 0;
 	packet_release(entry);
 	entry->finished = FALSE;
 	stream->packet_head = (stream->packet_head + 1) % MAXIMUM_STREAM_PACKETS;
@@ -1417,14 +1458,15 @@ VOID WINAPI DirectSoundDoWork(void)
 {
 	static unsigned long volume_read_at = (unsigned long)-1;
 
-	/* (audio.volume and audio.reverb read again when the settings change: on
-	the game's thread, not the mixer's, whose lock the config's file I/O
-	would hold) */
+	/* (audio.volume, audio.reverb and audio.resampling read again when the
+	settings change: on the game's thread, not the mixer's, whose lock the
+	config's file I/O would hold) */
 	if (volume_read_at != config_changes())
 	{
 		volume_read_at = config_changes();
 		master_volume = (float)config_real("audio.volume");
 		reverb_enabled = config_boolean("audio.reverb");
+		resampling_linear = !strcmp(config_string("audio.resampling"), "linear");
 	}
 	streams_complete_finished();
 }

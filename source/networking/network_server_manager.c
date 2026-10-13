@@ -483,6 +483,13 @@ server browser's listing of a public game (p2p_lobby.c) */
 void p2p_set_game_player_counts(int count, int maximum);
 void p2p_set_game_listing(const char *name, const char *map, const char *gametype, int engine_type, int open,
 	int in_progress, int has_teams);
+#ifdef HALO_GAME_BROWSER
+/* port: Delta Peer (port/linux/src/delta_peer.h), beside the game's
+protocol, which it leaves as it is: the hosted game's machines and players
+told to it each idle, and the game gone */
+static void network_game_server_delta_frame(struct network_game_server *server);
+void delta_peer_game_stop(int host);
+#endif
 
 /* ---------- constants */
 
@@ -624,7 +631,8 @@ struct message_server_pregame_countdown
 
 struct message_server_pregame_keep_alive
 {
-	short unused;
+	/* (a short on the Xbox, a long on the wire: network_messages.c) */
+	long unused;
 };
 
 struct message_server_postgame_keep_alive
@@ -1358,6 +1366,9 @@ void network_game_server_dispose(
 	network_game_server_memory_do_not_use_directly_in_use = FALSE;
 
 	p2p_set_game_player_counts(0, 0);
+#ifdef HALO_GAME_BROWSER
+	delta_peer_game_stop(TRUE);
+#endif
 	network_event("network server disposed");
 
 	return;
@@ -1465,6 +1476,9 @@ boolean network_game_server_idle(
 	server browser's listing) */
 	p2p_set_game_player_counts(server->game.player_count, server->game.maximum_players);
 	network_game_server_list(server);
+#ifdef HALO_GAME_BROWSER
+	network_game_server_delta_frame(server);
+#endif
 
 	if (network_game_server_game_is_valid(server))
 	{
@@ -3116,15 +3130,38 @@ boolean server_has_enough_machines(
 boolean server_ok_to_countdown(
 	struct network_game_server *server)
 {
-	if (server_has_enough_machines(server) &&
-		server_has_a_player_on_each_machine(server) &&
-		!server_needs_more_teams(server) &&
-		server->game.player_count >= server->game.minimum_players)
+	boolean enough_machines = server_has_enough_machines(server);
+	boolean a_player_on_each = server_has_a_player_on_each_machine(server);
+	boolean teams_full = !server_needs_more_teams(server);
+	boolean enough_players = server->game.player_count >= server->game.minimum_players;
+	boolean ok = enough_machines && a_player_on_each && teams_full && enough_players;
+
+	/* port: a host nobody watches leaves no trace of why its lobby does not
+	start. The reason, logged as it changes (network_event is the engine's
+	log, the host's debug.txt): one letter per condition that fails */
 	{
-		return TRUE;
+		static int last_reason = -1;
+		int reason = (enough_machines ? 0 : 1) | (a_player_on_each ? 0 : 2) |
+			(teams_full ? 0 : 4) | (enough_players ? 0 : 8);
+
+		if (reason != last_reason)
+		{
+			last_reason = reason;
+			network_event(
+				"lobby countdown %s: machines %s, a player on each machine %s, teams %s, players %ld of %ld, paused %s%s%s%s",
+				ok ? "ready" : "held",
+				enough_machines ? "yes" : "NO",
+				a_player_on_each ? "yes" : "NO",
+				teams_full ? "yes" : "NO",
+				(long)server->game.player_count, (long)server->game.minimum_players,
+				server->countdown_state.paused ? "yes" : "no",
+				reason ? " (failed:" : "",
+				(reason & 1) ? " machines" : "",
+				reason ? ")" : "");
+		}
 	}
 
-	return FALSE;
+	return ok;
 }
 
 void network_game_server_invalidate_network_machine(
@@ -3332,6 +3369,8 @@ void network_game_server_change_map_name(
 		map_name,
 		NETWORK_GAME_MAP_NAME_LENGTH - 1);
 	server->game.map.name[NETWORK_GAME_MAP_NAME_LENGTH - 1] = 0;
+	/* port: a Halo PC map's version (cache_files_map_version) */
+	server->game.map.version = (long)cache_files_map_version(server->game.map.name);
 
 	if (!network_game_server_send_game_data_pregame(server))
 	{
@@ -3517,7 +3556,15 @@ static boolean network_game_server_client_machine_timed_out(
 	if (TEST_FLAG(machine->flags, _network_client_machine_level_loaded_bit))
 		return silence > NETWORK_GAME_SERVER_CLIENT_TIMEOUT;
 	/* (joining the game in progress: waiting for its players to be added,
-	or loading) */
+	or loading; port: one that adds none in the time a machine has to in
+	the pregame holds its slot for nothing) */
+	if (!network_game_server_machine_has_players(server, machine->machine_index) &&
+		!network_game_server_machine_has_waiting_players(server, machine->machine_index) &&
+		system_milliseconds() - network_game_server_client_machine_join_times[machine->machine_index] >
+			NETWORK_GAME_SERVER_PLAYERLESS_MACHINE_TIMEOUT)
+	{
+		return TRUE;
+	}
 	return silence > NETWORK_GAME_SERVER_LATE_JOINER_TIMEOUT;
 }
 
@@ -4082,6 +4129,7 @@ static void network_game_server_cooperative_round(
 	server->game.variant_options.friendly_fire = friendly_fire;
 	csstrncpy(server->game.map.name, network_game_server_cooperative_next_map, sizeof(server->game.map.name) - 1);
 	server->game.map.name[sizeof(server->game.map.name) - 1] = 0;
+	server->game.map.version = (long)cache_files_map_version(server->game.map.name);
 	main_set_multiplayer_map_name(server->game.map.name);
 	server->game.maximum_teams = 1;
 	network_game_server_cooperative_next_map[0] = 0;
@@ -4168,7 +4216,7 @@ static boolean network_game_server_setup_game_from_playlist(
 		network_game_generate_local_machine_name(machine_name);
 		ustrncpy(server->game.name, machine_name, NETWORK_GAME_NAME_LENGTH - 1);
 		server->game.name[NETWORK_GAME_NAME_LENGTH - 1] = L'\0';
-		server->game.map.version = 0;
+		server->game.map.version = (long)cache_files_map_version(server->game.map.name);
 		server->game.minimum_players = network_game_solo_game() ? 1 : 2;
 		server->game.maximum_players = MAXIMUM_NETWORK_PLAYER_COUNT;
 		network_game_server_port_settings_apply(server);
@@ -5024,5 +5072,47 @@ unsigned long network_game_server_machine_ipv4_address(
 	}
 
 	return 0;
+}
+#endif
+
+#ifdef HALO_GAME_BROWSER
+#include "../../port/linux/src/delta_peer.h"
+
+/* Delta Peer's view of the hosted game (port/linux/src/delta_peer.h): its
+machines joined (the host's own, and each other's address, as
+network_game_server_machine_ipv4_address gives it) and each player's
+machine. Nothing of the game changes here */
+static void network_game_server_delta_frame(
+	struct network_game_server *server)
+{
+	static struct delta_peer_game_machine machines[MAXIMUM_NETWORK_MACHINE_COUNT];
+	static signed char player_machines[DELTA_PEER_MAXIMUM_PLAYERS];
+	int count = 0;
+	long index;
+
+	for (index = 0; index < MAXIMUM_NETWORK_MACHINE_COUNT && count < DELTA_PEER_MAXIMUM_MACHINES; index++)
+	{
+		struct network_game_server_client_machine *machine = &server->client_machines[index];
+		boolean local;
+
+		if (!network_game_server_client_machine_is_joined_to_game(server, machine) ||
+			machine->machine_index < 0 || machine->machine_index >= DELTA_PEER_MAXIMUM_MACHINES)
+		{
+			continue;
+		}
+		local = network_game_server_client_machine_is_local(server, machine);
+		machines[count].machine_index = (unsigned char)machine->machine_index;
+		machines[count].local = (unsigned char)local;
+		machines[count].ipv4 = local ? 0 :
+			(delta_u32)network_game_server_machine_ipv4_address(server, machine->machine_index);
+		if (local || machines[count].ipv4)
+			count++;
+	}
+	for (index = 0; index < DELTA_PEER_MAXIMUM_PLAYERS; index++)
+	{
+		player_machines[index] = (signed char)(index < MAXIMUM_NETWORK_PLAYER_COUNT &&
+			network_player_is_valid(&server->game.players[index]) ? server->game.players[index].machine_index : -1);
+	}
+	delta_peer_game_host_frame(machines, count, player_machines);
 }
 #endif

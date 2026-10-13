@@ -8,9 +8,9 @@ ChupathingyCE").
 
 ## How changes flow
 
-Code moves one way: ChupathingyCE -> Warthog. Warthog is rebased onto
-ChupathingyCE's main, so a fix to the shared game, network or desktop code
-goes to ChupathingyCE first and arrives here with the next rebase. Pull
+Code moves one way: ChupathingyCE -> Warthog. Warthog merges
+ChupathingyCE, so a fix to the shared game, network or desktop code goes
+to ChupathingyCE first and arrives here with the next merge. Pull
 requests here are for console-specific changes only: `port/<console>/`, the
 console build tools, and shared-code changes behind the console's define
 (`HALO_XBOX_CONSOLE`) that leave the desktop builds unchanged.

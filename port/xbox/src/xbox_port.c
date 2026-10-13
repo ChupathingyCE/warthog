@@ -69,6 +69,39 @@ float rintf(float x)
 	return (float)rint(x);
 }
 
+double sqrt(double x);
+
+float sqrtf(float x)
+{
+	return (float)sqrt(x);
+}
+
+/* the next float after x toward y */
+float nextafterf(float x, float y)
+{
+	union
+	{
+		float value;
+		unsigned long bits;
+	} number;
+
+	if (x != x || y != y)
+		return x + y;
+	if (x == y)
+		return y;
+	if (x == 0.0f)
+	{
+		number.bits = 1;
+		return y > 0.0f ? number.value : -number.value;
+	}
+	number.value = x;
+	if ((x < y) == (x > 0.0f))
+		number.bits++;
+	else
+		number.bits--;
+	return number.value;
+}
+
 /* ---------- the log: the debug monitor at once, and debug.txt from the
 main thread (error() is the game's, not for other threads: internet play's
 thread's lines wait for the main loop, xbox_log_flush) */
@@ -360,6 +393,16 @@ const char *hud_hires_asset_tag(long asset)
 {
 	(void)asset;
 	return "";
+}
+
+void hud_hires_map_loaded(const long *assets, long count)
+{
+	(void)assets;
+	(void)count;
+}
+
+void hud_hires_map_unloaded(void)
+{
 }
 
 struct text_hires_glyph;

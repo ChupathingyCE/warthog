@@ -166,8 +166,8 @@ Kai's for its MAC: yes or no. Kai's address itself (`10.252.EE.FF`, mask
 The build booted on a development kit on October 4: the menus at a steady
 30 fps, the menu music and profiles, DHCP, the game list and ONLINE GAMES.
 The October 2 build also started on a modified retail console. The code is
-now ChupathingyCE's with OpenCE build-138 (network version 20; it joins
-hosts of 11 through 20), not yet booted on a console since that rebase.
+now ChupathingyCE's at network version 28 (it joins hosts of 11 through
+30), merged October 13 and not yet booted on a console since.
 Network co-op is not built for the console (`game/xbox_coop.c`): co-op
 games are left out of its lists, and a game that turns co-op is left with
 a message. Known:

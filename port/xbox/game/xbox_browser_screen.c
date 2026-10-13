@@ -698,4 +698,31 @@ void browser_screen_render(
 	}
 }
 
+/* ---------- moderation
+
+The desktop builds' moderation screen (port/linux/game/moderation_screen.c)
+is Delta Peer's, which the console doesn't speak yet: never up. */
+
+boolean moderation_screen_active(
+	void)
+{
+	return FALSE;
+}
+
+void moderation_screen_update(
+	boolean menu_open)
+{
+	(void)menu_open;
+}
+
+void moderation_screen_process(
+	void)
+{
+}
+
+void moderation_screen_render(
+	void)
+{
+}
+
 #endif

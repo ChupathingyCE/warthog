@@ -275,6 +275,10 @@ short unit_test_speech(
 				144,
 				(vocalization_type >= 0) &&
 					(vocalization_type < NUMBER_OF_VOCALIZATION_TYPES));
+			/* port: a vocalization that is not one (from a map's command
+			list or a script) has no sound */
+			if (vocalization_type < 0 || vocalization_type >= NUMBER_OF_VOCALIZATION_TYPES)
+				break;
 
 			sound_definition_index =
 				dialogue_definition->vocalizations[vocalization_type].index;
@@ -407,7 +411,8 @@ void unit_dialogue_determine_variant(
 		short variant_count = 0;
 		short variant_index;
 
-		for (variant_index = 0; variant_index < definition->unit.dialogue_variants.count; variant_index++)
+		/* port: a short counter stops at SHORT_MAX (a map's count) */
+		for (variant_index = 0; variant_index < MIN(definition->unit.dialogue_variants.count, SHORT_MAX); variant_index++)
 		{
 			struct unit_dialogue_variant *variant = TAG_BLOCK_GET_ELEMENT(
 				&definition->unit.dialogue_variants,
@@ -892,7 +897,7 @@ boolean unit_scream(
 	short scream_type)
 {
 	struct unit_datum *unit = unit_get(unit_index);
-	short vocalization_type;
+	short vocalization_type = 0;
 
 	match_assert(
 		"c:\\halo\\SOURCE\\units\\unit_dialogue.c",
@@ -922,10 +927,6 @@ boolean unit_scream(
 	case _unit_scream_resurrection:
 		vocalization_type = _vocalization_resurrect;
 		break;
-	/* vocalization_type is left unassigned only by this default arm. Not reached unassigned: the
-	 * arm's assertion failure calls system_exit, which does not return in January
-	 * (0x47c960 jumps to halt_and_catch_fire 0x4f21c0, which loops or calls exit).
-	 * Source-policy approval pending (2026-09-27 audit). */
 	default:
 		match_assert(
 			"c:\\halo\\SOURCE\\units\\unit_dialogue.c",
@@ -1129,7 +1130,8 @@ static long unit_find_dialogue_variant(
 	short variant_count = 0;
 	short variant_index;
 
-	for (variant_index = 0; variant_index < definition->unit.dialogue_variants.count; variant_index++)
+	/* port: a short counter stops at SHORT_MAX (a map's count) */
+	for (variant_index = 0; variant_index < MIN(definition->unit.dialogue_variants.count, SHORT_MAX); variant_index++)
 	{
 		struct unit_dialogue_variant *variant = TAG_BLOCK_GET_ELEMENT(
 			&definition->unit.dialogue_variants,
