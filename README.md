@@ -12,7 +12,7 @@
 
 > Warthog follows ChupathingyCE: the shared game code comes from there, and this repository adds only the consoles' own code. You need your own copy of Halo; no SDK or game files are included.
 
-> **Built on ChupathingyCE (network version 28, as [OpenCE](https://github.com/OpenCommunityEdition/OpenCE)'s build-201).** Warthog joins games hosted on network versions 11 through 30, by ChupathingyCE and OpenCE builds alike, with up to 16 players. There's no release yet: Warthog is in development, and for now it runs on development kits and modified consoles.
+> **Built on ChupathingyCE (network version 28, for online play with OpenCE's build-201).** Warthog joins games hosted on network versions 11 through 30, by ChupathingyCE and other builds alike, with up to 16 players. There's no release yet: Warthog is in development, and for now it runs on development kits and modified consoles.
 
 Warthog is the Halo: Combat Evolved decompilation built back for the console
 it was written for, on the same code as

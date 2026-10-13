@@ -19,8 +19,8 @@ name: Build
 # - one job per platform builds both configurations, so its set-up (tools,
 #   downloads, caches) is paid once;
 # - compiles go through ccache, whose cache carries over from run to run, so
-#   a commit only recompiles what it changed; downloads (SDL, musl, Gradle)
-#   are cached too;
+#   a commit only recompiles what it changed; downloads (SDL, musl, Gradle,
+#   the Linux builds' system roots) are cached too;
 # - a newer push to the same branch cancels a run still going;
 # - pushes that only change documentation do not build;
 # - Windows, whose minutes cost twice Linux's, builds only Windows;
@@ -114,7 +114,11 @@ jobs:
 
   linux:
     # Arch Linux has what the build needs as packages: clang 22 (for the
-    # profile-guided optimisation in pgo/) and 32-bit SDL 3.
+    # profile-guided optimisation in pgo/), and CMake, pkg-config and
+    # wayland-scanner for the SDL 3 that the portable build brings. The build
+    # links against Debian 11's 32-bit glibc 2.31 (tools/linux_sysroot.py),
+    # not Arch's, so that it starts on SteamOS and older distributions;
+    # Arch's 32-bit glibc is for the tests.
     runs-on: ubuntu-24.04
     container: archlinux:latest
     timeout-minutes: 40
@@ -123,7 +127,7 @@ jobs:
         run: |
           printf '\n[multilib]\nInclude = /etc/pacman.d/mirrorlist\n' >> /etc/pacman.conf
           pacman -Syu --noconfirm --needed git zstd python python-pytest ninja ccache \
-            clang lld gcc lib32-glibc lib32-gcc-libs lib32-sdl3
+            clang lld gcc lib32-glibc lib32-gcc-libs cmake pkgconf wayland
 
       - uses: actions/checkout@v4
         with:
@@ -135,11 +139,22 @@ jobs:
           key: ccache-linux-${{ github.sha }}
           restore-keys: ccache-linux-
 
+      # the system root and SDL's source, which the build downloads
+      - uses: actions/cache@v4
+        with:
+          path: build/linux/third_party
+          key: linux-third-party-${{ hashFiles('tools/linux_sysroot.py') }}
+
       - name: Debug
         run: python tools/ci_build.py linux debug
 
       - name: Release
         run: python tools/ci_build.py linux release
+
+      # (no executable or library that needs a newer glibc than the system
+      # root's: tools/linux_glibc_check.py)
+      - name: glibc 2.31
+        run: python tools/linux_glibc_check.py dist/chupathingyce-linux-debug dist/chupathingyce-linux-release
 
       - name: Test
         run: |
@@ -163,14 +178,15 @@ jobs:
 
   linux64:
     # The native 64-bit Linux build (ninja linux64), on Arch Linux as the
-    # 32-bit one, with 64-bit SDL 3.
+    # 32-bit one, and portable as it is: against Debian 11's amd64 glibc
+    # 2.31, with the SDL 3 it brings (tools/linux_sysroot.py --arch amd64).
     runs-on: ubuntu-24.04
     container: archlinux:latest
     timeout-minutes: 40
     steps:
       - name: Install the toolchain
         run: |
-          pacman -Syu --noconfirm --needed git zstd python ninja ccache clang lld gcc sdl3
+          pacman -Syu --noconfirm --needed git zstd python ninja ccache clang lld gcc cmake pkgconf wayland
 
       - uses: actions/checkout@v4
         with:
@@ -182,11 +198,20 @@ jobs:
           key: ccache-linux64-${{ github.sha }}
           restore-keys: ccache-linux64-
 
+      # the system root and SDL's source, which the build downloads
+      - uses: actions/cache@v4
+        with:
+          path: build/linux64/third_party
+          key: linux64-third-party-${{ hashFiles('tools/linux_sysroot.py') }}
+
       - name: Debug
         run: python tools/ci_build.py linux64 debug
 
       - name: Release
         run: python tools/ci_build.py linux64 release
+
+      - name: glibc 2.31
+        run: python tools/linux_glibc_check.py dist/chupathingyce-linux64-debug dist/chupathingyce-linux64-release
 
       - name: Compile cache
         run: ccache --show-stats
@@ -241,6 +266,10 @@ jobs:
 
       - name: Release
         run: python3 tools/ci_build.py server-${{ matrix.arch }} release --alpine
+
+      # (static, against musl: no glibc version, and no library, to need)
+      - name: glibc 2.31
+        run: python3 tools/linux_glibc_check.py --static dist/chupathingyce-server-linux-${{ matrix.arch }}
 
       - name: Start it
         run: |

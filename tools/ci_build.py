@@ -51,9 +51,11 @@ from tools.version import base_version, commit, release_build, version  # noqa: 
 
 # what each port's build leaves, and what goes into dist/
 OUTPUTS = {
-    "linux": ["build/linux/halo"],
+    # (and the SDL3 each portable build brings, tools/linux_build.py, with its
+    # zlib license, as the release carries the other libraries')
+    "linux": ["build/linux/halo", "build/linux/libSDL3.so.0", "build/linux/SDL3-LICENSE.txt"],
     # the native 64-bit build (ninja linux64; tools/linux64_build.py)
-    "linux64": ["build/linux64/halo"],
+    "linux64": ["build/linux64/halo", "build/linux64/libSDL3.so.0", "build/linux64/SDL3-LICENSE.txt"],
     "windows": ["build/windows/halo.exe", "build/windows/SDL3.dll"],
     # the native 64-bit build (ninja windows64; tools/windows_build.py)
     "windows64": ["build/windows64/halo.exe", "build/windows64/SDL3.dll"],

@@ -2086,6 +2086,7 @@ static void game_engine_rasterize_scoreboard(
 	/* port: bounded (the map's column names) */
 	usnprintf(row_string, NUMBEROF(row_string), L"\t%s\t%s\t%s\t%s", column_name, score_name, score_string,
 		network ? L"Ping" : L"");
+	row_string[NUMBEROF(row_string) - 1] = 0;
 	{
 		long column;
 
@@ -2160,6 +2161,7 @@ static void game_engine_rasterize_scoreboard(
 			player->name,
 			status_string,
 			ping_string);
+		row_string[NUMBEROF(row_string) - 1] = 0;
 		row_color = has_teams ? &team_colors[PIN(player->team_index, 0, 1)] : &color;
 		scoreboard_draw_row(
 			row_string,
@@ -2246,6 +2248,7 @@ static void game_engine_rasterize_in_game_score(
 
 	game_engine->format_score_name(score_string);
 	usnprintf(row_string, NUMBEROF(row_string), L"\t%s\t%s\t%s", column_name, score_name, score_string);
+	row_string[NUMBEROF(row_string) - 1] = 0;
 	rasterize_in_game_score_draw_line(row_string, FALSE, &color, 1);
 
 	for (entry_index = 0; entry_index < entry_count; entry_index++)
@@ -2309,6 +2312,7 @@ static void game_engine_rasterize_in_game_score(
 				place_string,
 				player->name,
 				status_string);
+			row_string[NUMBEROF(row_string) - 1] = 0;
 
 			if (has_teams)
 				row_color = &team_colors[PIN(player->team_index, 0, 1)];
@@ -5898,7 +5902,9 @@ struct game_variant *build_game_variant_oddball(
 struct game_variant *build_game_variant_team_oddball(
 	struct game_variant *variant)
 {
-	struct game_variant result;
+	/* port: cleared, as every other builder's is: only some of its fields
+	are set below, and the rest were the stack's */
+	struct game_variant result = { 0 };
 
 	SET_FLAG(result.universal_variant.flags, _game_variant_draw_object_in_motion_sensor_bit, TRUE);
 	SET_FLAG(result.universal_variant.flags, _game_variant_allow_friendly_navpoints_bit, TRUE);

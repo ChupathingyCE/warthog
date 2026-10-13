@@ -21,13 +21,71 @@ To build:
 - The 32-bit glibc development files: `lib32-glibc` on Arch Linux,
   `gcc-multilib` and `libc6-dev-i386` on Debian and Ubuntu.
 - The 32-bit SDL3: `lib32-sdl3` on Arch Linux, `libsdl3-dev:i386` on Debian
-  and Ubuntu.
+  and Ubuntu. The portable build does not need it: refer to "Portable
+  build".
 
 To start the game:
 
+- glibc 2.31 or later (32-bit), for the builds from GitHub Actions, which
+  are built against glibc 2.31. They should start on Debian 11, Ubuntu
+  20.04, Fedora 32, SteamOS 3 and later distributions. A build that you
+  make without `--portable` needs the glibc of the computer that built it,
+  or a later one.
 - The 32-bit OpenGL libraries (`lib32-mesa`).
 - The 32-bit PipeWire or PulseAudio client libraries (`lib32-pipewire` or
   `lib32-libpulse`).
+- The 32-bit X11 libraries (`lib32-libx11`, `lib32-libxext`). In a Wayland
+  session, the game uses them through XWayland. SDL uses Wayland itself
+  only if the 32-bit Wayland libraries are version 1.20 or later
+  (`lib32-wayland`, `lib32-libxkbcommon`; Debian 11, Ubuntu 20.04 and
+  Fedora 32 have older ones) and the compositor has the fifo-v1 protocol.
+  On GNOME, the window then has borders only with the 32-bit libdecor
+  (`lib32-libdecor`).
+
+SteamOS has all of these. Its system is read-only, and the builds from
+GitHub Actions need no package: they bring their own SDL3
+(`libSDL3.so.0`, next to the executable).
+
+### Portable build
+
+The builds from GitHub Actions are portable builds (`--portable`; refer to
+"Build options" in the main [README](../../README.md)). The portable build
+starts on more systems than the build machine's:
+
+- It is compiled and linked against the glibc 2.31 of Debian 11, the glibc
+  of the Steam Runtime 3 ("sniper"), not against the glibc of the build
+  machine. An executable needs the glibc version that it was built against,
+  or a later one.
+- It brings SDL 3 (`libSDL3.so.0`), built from source against the same
+  glibc. The executable looks for it in its own folder first (a `DT_RPATH`
+  of `$ORIGIN`, which comes before `LD_LIBRARY_PATH`), so that it uses this
+  SDL even when Steam sets `LD_LIBRARY_PATH`. Few distributions have a
+  32-bit SDL 3. This SDL loads X11, Wayland, libdecor, PipeWire, PulseAudio
+  and ALSA when it starts, so it starts with whichever of them the system
+  has. It is linked only to glibc. Its license is `SDL3-LICENSE.txt`.
+
+The 64-bit build (`ninja linux64`, below) is portable the same way, with
+Debian 11's 64-bit (amd64) packages.
+
+At the first build, `tools/linux_sysroot.py` downloads the Debian packages
+(about 25 MB) and the source of SDL. Each package comes from
+`archive.debian.org` or `deb.debian.org`, or else from
+`snapshot.debian.org`; the source of SDL comes from GitHub or from
+`libsdl.org`. It checks each download against its SHA-256 sum. The system
+root is in `build/linux/third_party/sysroot` (`build/linux64/third_party/sysroot`
+for the 64-bit build). `tools/linux_sysroot.cmake` (`tools/linux64_sysroot.cmake`)
+builds SDL against it.
+
+To make the portable build you need, in addition to the tools above,
+CMake, `pkg-config` (`pkgconf`) and `wayland-scanner` (`wayland` on Arch
+Linux, `libwayland-bin` on Debian and Ubuntu). You do not need the
+system's SDL3. You need the 32-bit glibc only for the tests.
+
+To see the glibc version that a build needs, enter
+`readelf -V build/linux/halo | grep -o 'GLIBC_[0-9.]*' | sort -uV | tail -1`.
+`tools/linux_glibc_check.py`, which the GitHub Actions builds run on every
+Linux executable and library they make, fails on any version later than
+2.31.
 
 ## Build the game
 
@@ -44,7 +102,10 @@ rewrite, `tools/lp64_build.py`). It needs the 64-bit glibc and SDL3
 development files (`sdl3` on Arch Linux, `libsdl3-dev` on Debian 13 and
 Ubuntu 25.04 or later) instead of the 32-bit ones, and the 64-bit OpenGL and
 sound libraries to start. An SDL3 built by hand is found through
-`LIBRARY_PATH` when linking and `LD_LIBRARY_PATH` when starting. It is not
+`LIBRARY_PATH` when linking and `LD_LIBRARY_PATH` when starting. With
+`--portable`, as the releases are built, it needs neither: it is built
+against Debian 11's 64-bit glibc 2.31 and brings its own SDL3, as the 32-bit
+portable build does (refer to "Portable build"). It is not
 optimised with a profile (the committed profiles are the 32-bit build's).
 Its releases are their own download, `chupathingyce-linux64-release.zip`,
 which its self-updater asks for. It plays Halo PC's maps (`maps_ce/`,
@@ -54,6 +115,11 @@ network, and it is a dedicated server too (`server/README.md`).
 ## Start the game
 
 Enter `build/linux/halo`.
+
+To play on a Steam Deck, unpack `chupathingyce-linux64-release.zip` into a
+folder (in Desktop Mode), and add `halo` to Steam as a non-Steam game ("Add
+a Game" in the Games menu of Steam). The game then starts in Game Mode as
+well.
 
 The game data is the folder that contains `maps/`, from an Xbox disc image
 of any version of the game. The game looks for this folder in this
@@ -890,7 +956,7 @@ These files supply the MSVC functions that clang does not have:
 | `port/include/xdk` | The Xbox SDK declarations. The compiler reads this folder after all the other folders. |
 | `tools/linux_msvc_semantics.py` | Makes a header that declares each struct tag at file scope, as MSVC does. It also makes the header inline functions weak, as the COMDAT functions of MSVC. `game/msvc_comdat.c` gives one external copy of each. |
 | `include/halo_linux_winsock_names.h` | Gives new names to the Winsock functions of the SDK. Thus they do not link to the glibc functions with the same names. |
-| `include/halo_linux_source_fixups.h` | Repairs one declaration conflict (`rasterizer_debug_drawing_begin`). |
+| `include/halo_linux_source_fixups.h` | Declares the port's functions that the game's sources call. |
 
 `tools/linux_link_check.py` stops the link if a weak reference has no
 definition. Without this check, the linker gives the reference the address
@@ -937,7 +1003,7 @@ Other changes:
 | `rasterizer/xbox/rasterizer_xbox_environment_fog.c` | A local pointer gets its value from the file-scope array with the same name. |
 | `game/player_control.c` | The mouse aims the player on controller 1 directly. |
 | `sound/game_sound.c` | The game calculates the obstruction of each sound one time for each tick, not for each frame. |
-| `cseries/errors.c` | `debug.txt` stays open between lines. |
+| `cseries/errors.c` | `debug.txt` stays open between lines. A line that is the same as the line before it is counted, not written again (`last line repeated N times`). At 64 MB, `debug.txt` becomes `debug.old.txt` and a new `debug.txt` starts. |
 | `networking/`, `game/`, `interface/`, `bungie_net/network/` and the pools of objects, effects and sounds | The system link limits and the memory for them. |
 | `game/`, `objects/`, `units/`, `networking/` | The distributed netcode. Refer to `NETCODE.md`. |
 | `cache/cache_files.c` | When a map's tags load and unload, the port finds the bitmaps that the high-res HUD replaces (`game/hud_hires_tags.c`), and adds the tags of the menus to the menus' map (`game/menu_tags.c`). |
