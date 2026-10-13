@@ -225,8 +225,8 @@ Warthog keeps in a shared file is work at every merge.
 
 - The decompilation: [punpckhdq/halo](https://github.com/punpckhdq/halo) and
   [bnunu/halo-1](https://github.com/bnunu/halo-1), of the Xbox build 2342.
-- The port: [OpenCE](https://github.com/OpenCommunityEdition/OpenCE) and
-  its contributors, and [ChupathingyCE](https://github.com/ChupathingyCE/chupathingyce).
+- The port: [ChupathingyCE](https://github.com/ChupathingyCE/chupathingyce),
+  and OpenCE and its contributors, up to October 9, 2026.
 - Warthog: [Milenko](https://github.com/MrMilenko) and contributors. The
   toolchain: [OXDK](https://github.com/MrMilenko/OXDK).
 - Libraries: KCP and Monocypher (internet play), zlib, and the
