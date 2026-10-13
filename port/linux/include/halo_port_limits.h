@@ -88,17 +88,24 @@ is newer (network_client_manager.c). A host advertises it, with its netcode,
 in its game's advertisement's reserved bytes (network_server_message_handler.c),
 which hosts built before there was a version send as zeros: version 0.
 Raise it with any change to what the machines send each other. */
-#define HALO_PORT_NETWORK_VERSION 20
+#define HALO_PORT_NETWORK_VERSION 28
 /* ... the versions whose hosts a client joins: its own, and those that differ
 from it only in what the other machines leave out (a message a machine of
 the other version does not know it drops). Which are which is delta.h's
 table (DELTA_LEGACY_VERSIONS): the minimum is its newest breaking version,
-the maximum and the version above its newest (tools/test_delta.py checks
-them; they stay numbers here, which the command repository reads). A host
+the maximum its newest or above it: hosts of OpenCE's next versions are
+joined before a release follows them, as most of its raises leave the game's
+messages as they were (tools/test_delta.py checks them; they stay numbers
+here, which the command repository reads). A host
 never checks a client's version: the client does (network_client_manager.c),
 so the range is the client's. */
 #define HALO_PORT_NETWORK_VERSION_MINIMUM 11
-#define HALO_PORT_NETWORK_VERSION_MAXIMUM 20
+#define HALO_PORT_NETWORK_VERSION_MAXIMUM 30
+/* ... the numbers in use (port/linux/src/delta.c): the three above, until a
+legacy table (docs/delta.md) widens them; code asks these, not the numbers */
+int delta_legacy_announce(void);
+int delta_legacy_minimum(void);
+int delta_legacy_maximum(void);
 /* ... the advertisement's reserved bytes: the version (a little-endian word),
 then flags */
 #define HALO_PORT_ADVERTISED_VERSION_OFFSET 0

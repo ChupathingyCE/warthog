@@ -16,7 +16,7 @@ from typing import Any, Dict, List, Optional, Sequence, Set, Tuple
 
 from .embed_assets import hud_assets_build, hud_configure_inputs, ui_fonts_build
 from .ninja_syntax import Writer
-from .version import release_build, version
+from .version import VERSION_SOURCES, identity_defines, release_build, version
 
 PORT_DIR = Path("port/linux")
 PORT_CONFIG = PORT_DIR / "port.json"
@@ -151,10 +151,10 @@ def updater_defines(release: bool) -> str:
     """the version's defines (port/linux/src/updater.c, the self-updater, has
     them, and gives the version to the rest): the version (tools/version.py),
     whether this build is a release's (only those look for updates), and its
-    configuration"""
+    configuration; and the channel and commit (build_identity.c)"""
     flavor = "release" if release else "debug"
     return (f'-DHALO_VERSION=\\"{version()}\\" -DHALO_RELEASE_BUILD={int(release_build())} '
-            f'-DHALO_BUILD_FLAVOR=\\"{flavor}\\"')
+            f'-DHALO_BUILD_FLAVOR=\\"{flavor}\\" {identity_defines()}')
 
 PLATFORM_FLAGS = [
     "-std=gnu11",
@@ -207,17 +207,20 @@ def musl_math_cflags(abi: str) -> str:
                      f"-include {MUSL_MATH_DIR}/include/libm.h"])
 
 
-# Halo PC's Custom Edition maps (maps/ce/<name>.map, played as <name>@ce):
-# the port code of source/cache, sound, interface and text and
-# port/linux/game/ce_*.c (HALO_CUSTOM_EDITION). The native desktop builds
-# (Linux here, macOS: macos_build.py) have them; the Windows and Android
-# builds do not yet.
+# Halo PC's maps: Custom Edition's (maps_ce/<name>.map, played as
+# <name>@ce), HaloMD's (maps_md/<name>.map, <name>@md) and Halo PC retail's
+# (maps_pc/<name>.map, <name>@pc): the port code of
+# source/cache, sound, interface and text and port/linux/game/ce_*.c
+# (HALO_CUSTOM_EDITION). Every build has them: Linux here (32-bit and
+# 64-bit) and the dedicated server, macOS (lp64_build.py), Windows (32-bit
+# and 64-bit: windows_build.py) and Android (android_build.py). Only the
+# Xbox builds (Warthog) do not.
 CUSTOM_EDITION_DEFINES = ["-DHALO_CUSTOM_EDITION"]
 
 
 def game_browser_defines(sln: Any) -> List[str]:
     """configure.py --game-browser: the game list and server browser
-    (port/linux/src/browser.c), off in the builds the project ships"""
+    (port/linux/src/browser.c), on unless --no-game-browser"""
     defines = ["-DHALO_GAME_BROWSER"] if getattr(sln, "game_browser", False) else []
     # configure.py --console-limits: the console's network and object limits
     # (port/linux/include/halo_port_limits.h), to test its side of cross-play
@@ -457,7 +460,7 @@ def linux32_objects(n: Writer, units: Linux32Units, obj_dir: Path, extra_cflags:
             add_object(source, f"{posix_cflags} -I{STB_DIR}", posix=True)
         elif source.name.startswith("posix_"):
             add_object(source, posix_cflags, posix=True)
-        elif source.name == "updater.c":
+        elif source.name in VERSION_SOURCES:
             add_object(source, f"{platform_cflags} {updater_defines(getattr(sln, 'port_release', False))}")
         else:
             add_object(source, platform_cflags)
@@ -566,6 +569,14 @@ def generate_linux_build(n: Writer, sln: Any) -> None:
     )
 
     n.rule(
+        name="linux_tool_link",
+        command="$linux_cc $ldflags -o $out @$out.rsp",
+        description="LINUX LINK $out",
+        rspfile="$out.rsp",
+        rspfile_content="$in_newline",
+    )
+
+    n.rule(
         name="linux_pgo_train",
         command="$python tools/pgo_train.py --binary $binary --work $work --output $out",
         description="LINUX PGO TRAINING: playing levels in the instrumented build",
@@ -582,8 +593,9 @@ def generate_linux_build(n: Writer, sln: Any) -> None:
                          embedded_assets=embedded_assets)
 
     def emit(obj_dir: Path, output: Path, extra_cflags: List[str], extra_ldflags: List[str],
-             implicit_inputs: List[Path]) -> None:
-        """the objects and the executable, with the given extra flags"""
+             implicit_inputs: List[Path], validator: Optional[Path] = None) -> None:
+        """the objects and the executable, with the given extra flags (and
+        the tag validator alone, tools/map_validate.c, as validator)"""
         objects = linux32_objects(n, units, obj_dir, extra_cflags, implicit_inputs)
         n.build(
             outputs=output,
@@ -596,6 +608,31 @@ def generate_linux_build(n: Writer, sln: Any) -> None:
             implicit=[Path("tools/linux_link_check.py")],
         )
 
+        # the tag validator (port/linux/game/tag_validate.c, tag_schema*.c)
+        # alone on map files: the game's objects of it, and a program that
+        # reads maps (tools/map_validate.c)
+        if validator is not None:
+            game_dir = Path(config["game_sources"])
+            platform_dir = Path(config["platform_sources"])
+            posix_cflags = " ".join(POSIX_FLAGS + [march_flag(sln), f"-I{platform_dir}"])
+            posix_extra = " ".join(flag for flag in extra_cflags if not flag.startswith("-flto"))
+            tool = Path("tools/map_validate.c")
+            tool_object = obj_dir / tool.with_suffix(".o")
+            n.build(
+                outputs=tool_object,
+                rule="linux_cc",
+                inputs=tool,
+                variables={"cflags": " ".join([posix_cflags, f"-I{ZLIB_DIR}", *ZLIB_DEFINES, posix_extra])},
+            )
+            tool_objects = [tool_object, obj_dir / (game_dir / "tag_validate.o"),
+                            *(obj_dir / source.with_suffix(".o") for source in sorted(game_dir.glob("tag_schema*.c"))),
+                            *(obj_dir / (ZLIB_DIR / name).with_suffix(".o") for name in ZLIB_SOURCES)]
+            n.build(
+                outputs=validator,
+                rule="linux_tool_link",
+                inputs=tool_objects,
+                variables={"ldflags": " ".join(["--target=i686-linux-gnu", "-m32", "-no-pie", "-g", *extra_ldflags])},
+            )
 
     # Profile-guided optimisation: with the committed profile, or with
     # --pgo=train one that an instrumented build records while playing
@@ -616,10 +653,11 @@ def generate_linux_build(n: Writer, sln: Any) -> None:
     # compiled together when lld links them.
     cflags, ldflags = lto_flags(sln, build_dir / "thinlto-cache")
     cflags += profile_use_flags(profile)
-    emit(obj_dir, output, cflags, ldflags, [profile] if profile else [])
+    validator = build_dir / "map_validate"
+    emit(obj_dir, output, cflags, ldflags, [profile] if profile else [], validator)
     # internet play's MQTT brokers, a file beside the game (network.brokers_file)
     brokers = build_dir / "brokers.txt"
     n.rule(name="linux_copy", command="cp $in $out", description="LINUX COPY $out")
     n.build(outputs=brokers, rule="linux_copy", inputs=Path("port/assets/network/brokers.txt"))
-    n.build(outputs="linux", rule="phony", inputs=[output, brokers])
+    n.build(outputs="linux", rule="phony", inputs=[output, brokers, validator])
     n.newline()

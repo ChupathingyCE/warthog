@@ -4,6 +4,59 @@ What changed in the ChupathingyCE Dedicated Server. The server is released
 with the game and has its version; the game's own changes are in its
 release notes.
 
+## 0.7.4e
+
+- OpenCE's network version 28 (build-201). No message changed; the game
+  plays three things as OpenCE's 28 does: a multiplayer script's
+  `switch_bsp` keeps the game's first BSP (maps with a copy of their place
+  for each sky stop reloading), the flashlight and dynamic lights stay on
+  past the Xbox's player and vehicle limits, and a second weapon picked up
+  while firing is readied.
+- Announces network version 28; joins as a client hosts of 11 through 30.
+  Redeploy: a legacy table can't follow this one (wire `chupa-28a`).
+
+## 0.7.2e
+
+- OpenCE's network version 26 (build-184): its internet play's signalling
+  is version 4, which OpenCE reads alone. The server reads and answers both
+  3 and 4, so OpenCE's players of build-184 join it over the internet again,
+  as do older builds'. OpenCE's browser players can't (no WebRTC).
+- Announces network version 26; joins as a client hosts of 11 through 30.
+  Redeploy: a legacy table can't follow this one (wire `chupa-26a`).
+
+## 0.7.1b
+
+- Delta Control: moderators for every server, no site needed
+  ([docs/moderation.md](docs/moderation.md)). Roles (owner, admin,
+  moderator), each with its permissions, checked for every command wherever
+  it comes from, limited per person, and written to `control_audit.log`.
+- Moderators by moderator key (a key each ChupathingyCE game makes from its
+  player key and proves): `moderators.txt`, `sv_mod_list`, `sv_mod_add`,
+  `sv_mod_remove`; `sv_players` shows a proved key and its role.
+- In-game moderation over Delta Peer's `moderation` capability: a
+  moderator's game warns, kicks, bans, ends the game or skips the map, each
+  action signed.
+- `sv_warn`; reasons for `sv_kick` and `sv_ban`.
+- The control panel: an account for each person (name, Argon2id password,
+  TOTP second factor the owner may require), a one-time setup link for the
+  first owner, invitations and password resets, `sv_account_*` on the
+  console, backoff per account and per address. Pages for people, the audit
+  file, playlists and game types, settings, one's own account.
+- HTTPS for the control panel beyond the loopback address: the server's own
+  certificate (its fingerprint printed) or yours
+  (`HALO_DEDICATED_CONTROL_CERT`, `_KEY`), `HALO_DEDICATED_CONTROL_TLS`.
+  **Changed:** a non-loopback `HALO_DEDICATED_CONTROL` is HTTPS now; set
+  `HALO_DEDICATED_CONTROL_TLS=off` on a private network to keep plain HTTP.
+- The optional link to halo.milenko.org (`sv_link`, `sv_unlink`,
+  `sv_link_status`, `HALO_DEDICATED_LINK`, `_LINK_URL`, `_LINK_ROLE`): roles
+  given on the site, commands from the site's Servers page, outbound only.
+- Playlists made and edited on the server (`sv_playlist_*`,
+  `sv_mapcycle_add`, `sv_mapcycle_del`), game type files
+  (`sv_gametype_*`), and a settings file (`sv_settings`, `sv_set`).
+- Control API: `/v1/query`, `/v1/file`, `/v1/audit`, `/v1/playlists`,
+  `/v1/gametypes`, `/v1/settings`, `/v1/moderators`, `/v1/link`, and the
+  accounts' endpoints. A request body may be 16 KB.
+
 ## 0.6.3b
 
 - The server is a program of its own, `chupathingyce-server`, for Linux

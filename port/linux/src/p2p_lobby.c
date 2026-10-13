@@ -12,11 +12,11 @@ the host can list its invite, alter its listing, or list another's under
 false details:
 
 	"HL", format 1, the lobby version (2: HALO_PORT_NETWORK_VERSION; browsers
-	hide others), flags (open, under way, teams, closed, password), sequence
-	(4: newest wins), Unix time (4), the Ed25519 key (32), the invite's token
-	(16; a password's game's sealed with the password's key, 56:
-	p2p_seal_token; a tombstone's zero), players, most players, the
-	gametype's engine (1 each), the game's name,
+	hide others), flags (open, under way, teams, closed, password,
+	dedicated), sequence (4: newest wins), Unix time (4), the Ed25519 key
+	(32), the invite's token (16; a password's game's sealed with the
+	password's key, 56: p2p_seal_token; a tombstone's zero), players, most
+	players, the gametype's engine (1 each), the game's name,
 	map and gametype (a length byte, then up to 32, 32 and 24 characters of
 	printable ASCII), a stamp (8, reserved: zero), and the signature (64) of
 	"hceu-lobby-1" and all before it.
@@ -35,8 +35,10 @@ one deletes or keeps is no authority, so
   keeps the newest of each host (by sequence), drops one not heard in
   GAME_EXPIRY (on its own clock; a retained copy is taken only if its time
   is within RETAINED_WINDOW of this machine's, from a host that died and
-  left it), takes a host's closing listing (a tombstone) as its end, and
-  ignores an emptied slot (a wipe is not a delete).
+  left it, and a live one only within LIVE_WINDOW, so an old listing
+  published again by someone else does not list a game long gone), takes
+  a host's closing listing (a tombstone) as its end, and ignores an
+  emptied slot (a wipe is not a delete).
 A host that stops publishes a tombstone, then clears its slot. Going private
 makes a new invite (p2p.c), so a listing seen before lets no one in.
 
@@ -74,6 +76,10 @@ enum
 	_listing_closed = 8,
 	/* its token sealed with a password's key */
 	_listing_password = 16,
+	/* a dedicated server's game, nobody playing at the host (ChupathingyCE's;
+	OpenCE's browsers take no notice of a bit they don't know, and may list
+	these apart) */
+	_listing_dedicated = 128,
 	STAMP_SIZE = 8,
 	/* the signed part's end: everything but the signature */
 	MAXIMUM_LISTING_SIZE = 2 + 1 + 2 + 1 + 4 + 4 + P2P_KEY_SIZE + P2P_SEALED_TOKEN_SIZE + 3 +
@@ -94,6 +100,8 @@ enum
 	VERIFY_BUDGET = 2,
 	/* seconds */
 	RETAINED_WINDOW = 600,
+	/* (wide: a host whose clock is off is still listed) */
+	LIVE_WINDOW = 3600,
 };
 
 static const char signature_label[] = "hceu-lobby-1";
@@ -158,6 +166,8 @@ static struct
 	char gametype[P2P_LISTING_GAMETYPE_SIZE + 1];
 	int engine_type;
 	int flags;
+	/* a dedicated server hosts (p2p_set_hosting_dedicated) */
+	int dedicated;
 	int player_count, maximum_player_count;
 	/* the password's key (p2p_set_hosting_password), if it has one */
 	int has_password;
@@ -264,8 +274,8 @@ static int listing_make(unsigned char *bytes, int flags)
 	bytes[size++] = 'H';
 	bytes[size++] = 'L';
 	bytes[size++] = LISTING_FORMAT;
-	bytes[size++] = (unsigned char)(HALO_PORT_NETWORK_VERSION >> 8);
-	bytes[size++] = (unsigned char)HALO_PORT_NETWORK_VERSION;
+	bytes[size++] = (unsigned char)(delta_legacy_announce() >> 8);
+	bytes[size++] = (unsigned char)delta_legacy_announce();
 	bytes[size++] = (unsigned char)flags;
 	put_long(bytes + size, ++lobby.sequence);
 	size += 4;
@@ -640,6 +650,7 @@ static void listing_take(const struct queued *queued, const struct listing *list
 	shown->open = (listing->flags & _listing_open) != 0;
 	shown->in_progress = (listing->flags & _listing_in_progress) != 0;
 	shown->has_teams = (listing->flags & _listing_has_teams) != 0;
+	shown->dedicated = (listing->flags & _listing_dedicated) != 0;
 	shown->ping = -1;
 }
 
@@ -662,19 +673,20 @@ static void update_browsing(void)
 		int good;
 
 		memmove(lobby.queue, lobby.queue + 1, sizeof(*lobby.queue) * (size_t)(--lobby.queue_count));
-		if (!listing_read(queued.payload, queued.size, &listing) || listing.version < HALO_PORT_NETWORK_VERSION_MINIMUM ||
-			listing.version > HALO_PORT_NETWORK_VERSION_MAXIMUM ||
+		if (!listing_read(queued.payload, queued.size, &listing) || listing.version < delta_legacy_minimum() ||
+			listing.version > delta_legacy_maximum() ||
 			!signing_key_hash(listing.key, key_hash) || memcmp(key_hash, queued.key_hash, P2P_KEY_HASH_SIZE))
 		{
 			continue;
 		}
 		/* a slot's retained copy: only one of about now (a host that died
-		left it, and nothing cleared it) */
-		if (queued.retained)
+		left it, and nothing cleared it); a live one: not one long gone,
+		published again by someone who kept it */
 		{
 			long difference = (long)(listing.time - (unsigned long)time(NULL));
+			long window = queued.retained ? RETAINED_WINDOW : LIVE_WINDOW;
 
-			if (difference > RETAINED_WINDOW || difference < -RETAINED_WINDOW)
+			if (difference > window || difference < -window)
 				continue;
 		}
 		/* (the work, without the lock: the game's threads need not wait) */
@@ -716,6 +728,13 @@ void p2p_lobby_quit(void)
 }
 
 /* ---------- the game's side */
+
+void p2p_set_hosting_dedicated(int dedicated)
+{
+	pthread_mutex_lock(&p2p_lock);
+	lobby.dedicated = dedicated ? 1 : 0;
+	pthread_mutex_unlock(&p2p_lock);
+}
 
 void p2p_set_hosting_public(int public)
 {
@@ -761,7 +780,7 @@ void p2p_set_game_listing(const char *name, const char *map, const char *gametyp
 	char new_map[P2P_LISTING_MAP_SIZE + 1];
 	char new_gametype[P2P_LISTING_GAMETYPE_SIZE + 1];
 	int flags = (open ? _listing_open : 0) | (in_progress ? _listing_in_progress : 0) |
-		(has_teams ? _listing_has_teams : 0);
+		(has_teams ? _listing_has_teams : 0) | (lobby.dedicated ? _listing_dedicated : 0);
 
 	sanitize(new_name, P2P_LISTING_NAME_SIZE, name ? name : lobby.name, P2P_LISTING_NAME_SIZE);
 	sanitize(new_map, P2P_LISTING_MAP_SIZE, map ? map : lobby.map, P2P_LISTING_MAP_SIZE);

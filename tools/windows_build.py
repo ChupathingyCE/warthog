@@ -9,8 +9,9 @@ configure.py runs on Windows. See port/windows/README.md for the design.
 
 ``ninja windows64`` compiles the same units for x64 Windows
 (x86_64-pc-windows-msvc) into ``build/windows64/halo.exe``, with the 64-bit
-builds' code paths (HALO_64BIT: source/cseries/xbox_address.h) and Halo PC's
-Custom Edition maps, as ``ninja linux64`` and ``ninja macos`` have them.
+builds' code paths (HALO_64BIT: source/cseries/xbox_address.h), as
+``ninja linux64`` and ``ninja macos`` have them. Both play Halo PC's Custom
+Edition maps (HALO_CUSTOM_EDITION).
 Windows keeps `long` 32 bits wide on x64 (LLP64), as the Xbox's compiler
 did, so the sources need none of the LP64 builds' `long` rewrite
 (tools/lp64_build.py).
@@ -29,7 +30,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from .version import release_build, version
+from .version import VERSION_SOURCES, identity_defines, release_build, version
 from .linux_build import (CUSTOM_EDITION_DEFINES, LINUX_PROFILE, MBEDTLS_DIR, MINIUPNPC_DIR, OPTIMISATION, STB_DIR, WINDOWS_PROFILE,
                           XDK_INCLUDE, game_browser_defines, lto_mode, march_flag, miniupnpc_sources, pgo_mode, compile_launcher, game_defines_and_includes,
                           game_sources, musl_math_cflags, musl_math_sources, pgo_profile, profile_use_flags,
@@ -82,10 +83,10 @@ def updater_defines(release: bool) -> str:
     """the version's defines (port/linux/src/updater.c, the self-updater, has
     them, and gives the version to the rest): the version (tools/version.py),
     whether this build is a release's (only those look for updates), and its
-    configuration"""
+    configuration; and the channel and commit (build_identity.c)"""
     flavor = "release" if release else "debug"
     return (f'-DHALO_VERSION=\\"{version()}\\" -DHALO_RELEASE_BUILD={int(release_build())} '
-            f'-DHALO_BUILD_FLAVOR=\\"{flavor}\\"')
+            f'-DHALO_BUILD_FLAVOR=\\"{flavor}\\" {identity_defines()}')
 
 WINDOWS_ABI_FLAGS = [
     "--target=i686-pc-windows-msvc",
@@ -192,7 +193,10 @@ WINDOWS32 = WindowsTarget(
     name="windows",
     triple="i686-pc-windows-msvc",
     sdl_arch="x86",
-    abi_flags=WINDOWS_ABI_FLAGS,
+    # Halo PC's Custom Edition maps (linux_build.py, CUSTOM_EDITION_DEFINES),
+    # as the 32-bit Linux build has them: their tag cache is mapped at the
+    # host address they are linked to (port/linux/src/xbox_memory.c)
+    abi_flags=[*WINDOWS_ABI_FLAGS, *CUSTOM_EDITION_DEFINES],
     game_flags=GAME_FLAGS,
     platform_flags=PLATFORM_FLAGS,
     win32_flags=WIN32_FLAGS,
@@ -449,7 +453,9 @@ def generate_windows_target(n: Writer, sln: Any, target: WindowsTarget) -> None:
         [_quote(sdl_lib / "SDL3.lib")]
         + [f"-l{lib}" for lib in config.get("libraries", [])]
     )
-    base_ldflags = list(target.ldflags)
+    # (the linker's map beside the program, halo.map: its functions'
+    # addresses, kept with the symbols, tools/ci_build.py)
+    base_ldflags = list(target.ldflags) + ["-Wl,/MAP"]
     if getattr(sln, "port_release", False):
         # no console window (the port's log goes to halo.log instead,
         # win32_posix.c): under Wine (Proton, gamescope) the console window
@@ -538,7 +544,7 @@ def generate_windows_target(n: Writer, sln: Any, target: WindowsTarget) -> None:
         for source in sorted(linux_platform.glob("*.c")):
             if source.name in replaced:
                 continue
-            if source.name == "updater.c":
+            if source.name in VERSION_SOURCES:
                 add_object(source, f"{platform_cflags} {updater_defines(getattr(sln, 'port_release', False))}")
             elif source.name == "posix_browser.c":
                 # (the game list's requests: on Winsock, with Mbed TLS, as
@@ -559,9 +565,6 @@ def generate_windows_target(n: Writer, sln: Any, target: WindowsTarget) -> None:
         for source in sorted((PORT_DIR / "src").glob("*.c")):
             if source.name == "win32_upnp.c":
                 add_object(source, f"{win32_cflags} {miniupnpc_include}")
-            elif source.name == "win32_crash.c":
-                # the build's number and configuration name its crash reports
-                add_object(source, f"{win32_cflags} {updater_defines(getattr(sln, 'port_release', False))}")
             else:
                 add_object(source, win32_cflags if source.name.startswith("win32_") else platform_cflags)
         # internet play's UPnP (port/third_party/miniupnpc), on Winsock, as
