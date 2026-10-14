@@ -1777,7 +1777,7 @@ static long draw_base_vertex;
 static BOOL setup_vertices(struct shader *vertex, unsigned long vertex_start, unsigned long vertex_end)
 {
 	D3DVERTEXELEMENT9 elements[ATTRIBUTES + 1];
-	static D3DVertexBuffer stream_headers[2][BINDINGS + 1];
+	static D3DVertexBuffer stream_headers[2][ATTRIBUTES + 1];
 	D3DVertexBuffer *streams = stream_headers[gl.frame_half];
 	int element_count = 0, stream_count = 0;
 	int stream_of_binding[BINDINGS];
@@ -1799,7 +1799,44 @@ static BOOL setup_vertices(struct shader *vertex, unsigned long vertex_start, un
 		element->Method = D3DDECLMETHOD_DEFAULT;
 		element->Usage = D3DDECLUSAGE_TEXCOORD;
 		element->UsageIndex = (BYTE)index;
-		if (attribute->enabled && attribute->binding < BINDINGS && gl.bindings[attribute->binding].buffer)
+		if (attribute->enabled && attribute->binding < BINDINGS && gl.bindings[attribute->binding].buffer &&
+			((attribute->relative_offset & 3) || (gl.bindings[attribute->binding].stride & 3)))
+		{
+			/* (the GPU fetches whole words: an attribute not on a word of its
+			vertex, such as a model vertex's node weight at byte 30, is copied
+			to a stream of its own, a word a vertex) */
+			struct binding *binding = &gl.bindings[attribute->binding];
+			struct buffer *buffer = object_get(binding->buffer, _object_buffer);
+			unsigned long element_bytes = attribute_bytes(attribute, packed);
+			unsigned long slot = (element_bytes + 3) & ~3UL;
+			unsigned long stride = (unsigned long)binding->stride;
+			unsigned long vertex_index;
+			unsigned char *copy;
+			int stream;
+
+			if (!buffer || !buffer->data || !vertex_end || element_bytes > 16)
+				return FALSE;
+			copy = ring_reserve(gl.vertex_ring, RING_VERTEX_SIZE, &gl.vertex_ring_offset, slot * vertex_end);
+			if (!copy)
+				return FALSE;
+			memset(copy, 0, slot * vertex_end);
+			for (vertex_index = 0; vertex_index < vertex_end; vertex_index++)
+			{
+				long source = (long)binding->offset + ((long)vertex_index + draw_base_vertex) * (long)stride +
+					(long)attribute->relative_offset;
+
+				if (source >= 0 && (unsigned long)source + element_bytes <= buffer->size)
+					memcpy(copy + vertex_index * slot, buffer->data + source, element_bytes);
+			}
+			stream = stream_count++;
+			XGSetVertexBufferHeader(slot * vertex_end, 0, 0, 0, &streams[stream]);
+			XGOffsetResourceAddress((D3DResource *)&streams[stream], copy);
+			IDirect3DDevice9_SetStreamSource(gl.device, (UINT)stream, &streams[stream], 0, (UINT)slot);
+			element->Stream = (WORD)stream;
+			element->Offset = 0;
+			element->Type = vertex_type(attribute, packed);
+		}
+		else if (attribute->enabled && attribute->binding < BINDINGS && gl.bindings[attribute->binding].buffer)
 		{
 			struct binding *binding = &gl.bindings[attribute->binding];
 			int stream = stream_of_binding[attribute->binding];
