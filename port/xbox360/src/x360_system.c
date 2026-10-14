@@ -258,21 +258,30 @@ int halo_xbox360_access(const char *path, int mode)
 /* ---------- C99's formatted output (the console's runtime has MSVC's
 _vsnprintf, which leaves a cut-short buffer unterminated and returns -1) */
 
+/* (the SDK's stdarg.h is MSVC's: va_list is a pointer, and it has no va_copy) */
+#ifndef va_copy
+#define va_copy(destination, source) ((destination) = (source))
+#endif
+
 int halo_xbox360_vsnprintf(char *buffer, size_t size, const char *format, va_list arguments)
 {
+	va_list again;
 	int length;
 
 	if (!buffer || !size)
 		return _vscprintf(format, arguments);
+	/* (a copy for measuring a cut-short result: the first walk uses the
+	arguments up; callers size a second buffer from the full length) */
+	va_copy(again, arguments);
 	length = _vsnprintf(buffer, size, format, arguments);
 	if (length < 0 || (size_t)length >= size)
 	{
-		/* (cut short: the arguments are not walked a second time for the
-		full length, as the first walk may have used them up; a caller
-		sees at least the buffer's size, which says it was cut short) */
 		buffer[size - 1] = '\0';
-		length = (int)size;
+		length = _vscprintf(format, again);
+		if (length < (int)size)
+			length = (int)size;
 	}
+	va_end(again);
 	return length;
 }
 
