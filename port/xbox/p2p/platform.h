@@ -17,6 +17,10 @@ and streams, not a 128-machine game's */
 #define P2P_JOINER_ONLY 1
 /* and logs what becomes of each datagram a peer sends the game */
 #define P2P_TRACE_DATAGRAMS 1
+/* XNet lets one thread at a time use a socket (another thread's call fails
+with WSAEINPROGRESS), and its select holds every socket it waits on for the
+whole wait: the game's datagrams for peers go out from the tunnel's thread */
+#define P2P_SEND_FROM_THREAD 1
 
 /* (the tunnel's select lists: its sockets, the brokers' and the stand-ins') */
 #define FD_SETSIZE 256
