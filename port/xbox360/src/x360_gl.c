@@ -1659,7 +1659,17 @@ static void apply_sampler(int sampler_register, struct texture *texture, const s
 	IDirect3DDevice9_SetSamplerState(device, (DWORD)sampler_register, D3DSAMP_MIPMAPLODBIAS, *(DWORD *)&lod_bias);
 	IDirect3DDevice9_SetSamplerState(device, (DWORD)sampler_register, D3DSAMP_MAXMIPLEVEL, 0);
 	IDirect3DDevice9_SetSamplerState(device, (DWORD)sampler_register, D3DSAMP_MINMIPLEVEL, (DWORD)top_level);
-	IDirect3DDevice9_SetSamplerState(device, (DWORD)sampler_register, D3DSAMP_BORDERCOLOR, border_color(border));
+	{
+		/* (the console's border is one of four colors, black or white,
+		clear or opaque: the nearest; a motion tracker's 0x46000000 was
+		taken as white) */
+		D3DCOLOR color = border_color(border);
+		D3DCOLOR alpha = (color >> 24) >= 0x80 ? 0xFF000000 : 0;
+		D3DCOLOR white = ((color >> 16 & 0xFF) + (color >> 8 & 0xFF) + (color & 0xFF)) >= 3 * 0x80 ? 0x00FFFFFF : 0;
+
+		IDirect3DDevice9_SetSamplerState(device, (DWORD)sampler_register, D3DSAMP_BORDERCOLOR,
+			alpha ? alpha | white : 0);
+	}
 }
 
 /* the texture a program's sampler reads, by its unit */
@@ -1691,7 +1701,7 @@ static void draw_log_targets_and_textures(struct program *program)
 	struct framebuffer *framebuffer = object_get(gl.draw_framebuffer, _object_framebuffer);
 	struct texture *color = framebuffer ? object_get(framebuffer->color, _object_texture) : NULL;
 	struct texture *depth = framebuffer ? object_get(framebuffer->depth, _object_texture) : NULL;
-	char textures[160];
+	char textures[400];
 	int index, length = 0;
 
 	textures[0] = 0;
@@ -1703,9 +1713,17 @@ static void draw_log_targets_and_textures(struct program *program)
 		if (!uniform->sampler || uniform->sampler_register < 0)
 			continue;
 		texture = unit_texture(uniform->unit, uniform->slot);
-		length += _snprintf(textures + length, sizeof(textures) - length, " s%d=%lux%lu%s", uniform->sampler_register,
-			texture ? texture->width : 0, texture ? texture->height : 0,
-			texture && texture->surface ? "(target)" : "");
+		{
+			struct sampler *sampler = object_get(gl.samplers[uniform->unit], _object_sampler);
+			const GLfloat *border = sampler ? sampler->border : texture ? texture->border : NULL;
+
+			length += _snprintf(textures + length, sizeof(textures) - length, " s%d=%lux%lu%s[%x,%x b%08lx]",
+				uniform->sampler_register, texture ? texture->width : 0, texture ? texture->height : 0,
+				texture && texture->surface ? "(target)" : "",
+				sampler ? sampler->wrap_s : texture ? texture->wrap_s : 0,
+				sampler ? sampler->wrap_t : texture ? texture->wrap_t : 0,
+				border ? (unsigned long)border_color(border) : 0UL);
+		}
 	}
 	/* (each program's shaders once, to game:\glsl\p<program>.vs.glsl and so on) */
 	{
