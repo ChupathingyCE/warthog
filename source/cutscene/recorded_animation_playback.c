@@ -131,8 +131,15 @@ struct direction_playback_controller
 
 struct animation_event_header
 {
+#if defined(__BIG_ENDIAN__) || (defined(__BYTE_ORDER__) && __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__)
+	/* port: a big-endian compiler gives the first field the high bits; the
+	tag data has the delta in the low two */
+	byte event_type : 6;
+	byte time_delta : 2;
+#else
 	byte time_delta : 2;
 	byte event_type : 6;
+#endif
 };
 
 struct vector_char_difference_data
@@ -239,6 +246,38 @@ static void apply_vector_short_difference(
 	struct animation_event_header const *header,
 	byte const **playback_stream);
 
+
+/* port: the recording's words are little-endian (the map's); these read
+them on any machine */
+static short recording_short(void const *data)
+{
+	byte const *bytes = data;
+
+	return (short)(bytes[0] | (bytes[1] << 8));
+}
+
+static void recording_shorts(short *destination, void const *data, long count)
+{
+	long index;
+
+	for (index = 0; index < count; index++)
+		destination[index] = recording_short((byte const *)data + index * 2);
+}
+
+static void recording_reals(real *destination, void const *data, long count)
+{
+	byte const *bytes = data;
+	long index;
+
+	for (index = 0; index < count; index++)
+	{
+		unsigned long word = bytes[index * 4] | ((unsigned long)bytes[index * 4 + 1] << 8) |
+			((unsigned long)bytes[index * 4 + 2] << 16) | ((unsigned long)bytes[index * 4 + 3] << 24);
+
+		memcpy(&destination[index], &word, 4);
+	}
+}
+
 /* ---------- globals */
 
 static struct recorded_animation_playback_data data_002dcf20 =
@@ -341,7 +380,7 @@ void recorded_animation_initialize_event_stream(
 		playback_stream,
 		unit_control_data_version);
 
-	memcpy(animation_state, *playback_stream, sizeof(*animation_state));
+	recording_shorts((short *)animation_state, *playback_stream, sizeof(*animation_state) / sizeof(short));
 	*playback_stream += sizeof(*animation_state);
 
 	return;
@@ -403,7 +442,7 @@ boolean recorded_animation_apply_event_stream(
 			break;
 
 		case _time_delta_word:
-			memcpy(&time_delta, (byte const *)header + 1, sizeof(time_delta));
+			time_delta = (word)recording_short((byte const *)header + 1);
 			header_size = 3;
 			match_assert(
 				"c:\\halo\\SOURCE\\cutscene\\recorded_animation_playback.c",
@@ -505,7 +544,7 @@ static void apply_control_flags(
 	match_assert("c:\\halo\\SOURCE\\cutscene\\recorded_animation_playback.c", 27, header);
 	match_assert("c:\\halo\\SOURCE\\cutscene\\recorded_animation_playback.c", 27, header->event_type==_playback_control_flags_set);
 
-	memcpy(&control->word_field2, event_data, sizeof(control->word_field2));
+	control->word_field2 = recording_short(event_data);
 	*playback_stream += sizeof(control->word_field2);
 
 	return;
@@ -523,7 +562,7 @@ static void apply_weapon_index(
 	match_assert("c:\\halo\\SOURCE\\cutscene\\recorded_animation_playback.c", 28, header);
 	match_assert("c:\\halo\\SOURCE\\cutscene\\recorded_animation_playback.c", 28, header->event_type==_playback_weapon_index_set);
 
-	memcpy(&control->word_field4, event_data, sizeof(control->word_field4));
+	control->word_field4 = recording_short(event_data);
 	*playback_stream += sizeof(control->word_field4);
 
 	return;
@@ -541,7 +580,7 @@ static void apply_throttle(
 	match_assert("c:\\halo\\SOURCE\\cutscene\\recorded_animation_playback.c", 35, header);
 	match_assert("c:\\halo\\SOURCE\\cutscene\\recorded_animation_playback.c", 36, header->event_type==_playback_throttle_set);
 
-	memcpy(&control->vector2d_field12, event_data, sizeof(control->vector2d_field12));
+	recording_reals((real *)&control->vector2d_field12, event_data, 2);
 	control->long_field20 = 0;
 	*playback_stream += sizeof(control->vector2d_field12);
 
@@ -570,7 +609,7 @@ static void update_controller_short(
 	struct vector_short_difference_data const *event_data,
 	struct direction_playback_controller *control)
 {
-	control->yaw += event_data->delta_yaw;
+	control->yaw += recording_short(&event_data->delta_yaw);
 	if (control->yaw > 1000)
 	{
 		control->yaw -= 1000;
@@ -579,7 +618,7 @@ static void update_controller_short(
 	{
 		control->yaw += 1000;
 	}
-	control->pitch += event_data->delta_pitch;
+	control->pitch += recording_short(&event_data->delta_pitch);
 
 	return;
 }
