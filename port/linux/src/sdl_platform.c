@@ -589,11 +589,11 @@ static int platform_display_mode(void)
 {
 	const char *mode = config_string("display.mode");
 
-	if (!strcmp(mode, "fullscreen"))
+	if (!SDL_strcasecmp(mode, "fullscreen"))
 		return _display_mode_fullscreen;
-	if (!strcmp(mode, "borderless"))
+	if (!SDL_strcasecmp(mode, "borderless"))
 		return _display_mode_borderless;
-	if (!strcmp(mode, "windowed"))
+	if (!SDL_strcasecmp(mode, "windowed"))
 		return _display_mode_windowed;
 	return config_boolean("display.fullscreen") ? _display_mode_borderless : _display_mode_windowed;
 }

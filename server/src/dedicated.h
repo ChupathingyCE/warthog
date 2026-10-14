@@ -49,6 +49,8 @@ struct dedicated_status
 	long maximum_players;
 	long idle_limit;
 	boolean public_game;
+	/* blocked names kicked (sv_name_filter) */
+	boolean name_filter;
 	char name[16];
 	unsigned long uptime_seconds;
 };
@@ -74,6 +76,7 @@ void dedicated_server_set_maximum_players(long maximum_players);
 void dedicated_server_set_minimum_players(long minimum_players);
 void dedicated_server_set_idle_limit(long idle_limit);
 void dedicated_server_set_name(char const *name);
+void dedicated_server_set_name_filter(boolean name_filter);
 
 /* a playlist (a path in the data folder, "admin/playlists/x.txt") played
 from the next game, or at once in the lobby; from its first entry, or

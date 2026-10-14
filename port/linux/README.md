@@ -15,35 +15,49 @@ You do not need the Xbox SDK. The declarations that the game uses are in
 
 To build:
 
-- Python and ninja.
-- clang. The option `--linux-cc` of `configure.py` selects a different
+- Python and ninja (`python3` and `ninja-build` on Debian and Ubuntu,
+  `python` and `ninja` on Arch Linux).
+- clang and lld. A release build is optimised with the profiles in `pgo/`
+  only with clang 22, the version that wrote them; with an older clang it
+  is built without them. Debian and Ubuntu get clang 22 from
+  [apt.llvm.org](https://apt.llvm.org) (`clang-22`, `lld-22`, `llvm-22`);
+  put `/usr/lib/llvm-22/bin` first on `PATH`, or give `configure.py` the
+  compiler with `--linux-cc clang-22`. Arch Linux has it as `clang` and
+  `lld`. The option `--linux-cc` of `configure.py` selects a different
   compiler.
-- The 32-bit glibc development files: `lib32-glibc` on Arch Linux,
-  `gcc-multilib` and `libc6-dev-i386` on Debian and Ubuntu.
-- The 32-bit SDL3: `lib32-sdl3` on Arch Linux, `libsdl3-dev:i386` on Debian
-  and Ubuntu. The portable build does not need it: refer to "Portable
+- The 32-bit glibc development files: `gcc-multilib` and `libc6-dev-i386`
+  on Debian and Ubuntu, `lib32-glibc` on Arch Linux.
+- The 32-bit SDL3: `libsdl3-dev:i386` on Debian and Ubuntu, `lib32-sdl3` on
+  Arch Linux. The portable build does not need it: refer to "Portable
   build".
 
 To start the game:
 
 - glibc 2.31 or later (32-bit), for the builds from GitHub Actions, which
   are built against glibc 2.31. They should start on Debian 11, Ubuntu
-  20.04, Fedora 32, SteamOS 3 and later distributions. A build that you
+  20.04, Fedora 32 and later distributions. A build that you
   make without `--portable` needs the glibc of the computer that built it,
   or a later one.
-- The 32-bit OpenGL libraries (`lib32-mesa`).
-- The 32-bit PipeWire or PulseAudio client libraries (`lib32-pipewire` or
-  `lib32-libpulse`).
-- The 32-bit X11 libraries (`lib32-libx11`, `lib32-libxext`). In a Wayland
-  session, the game uses them through XWayland. SDL uses Wayland itself
-  only if the 32-bit Wayland libraries are version 1.20 or later
-  (`lib32-wayland`, `lib32-libxkbcommon`; Debian 11, Ubuntu 20.04 and
-  Fedora 32 have older ones) and the compositor has the fifo-v1 protocol.
-  On GNOME, the window then has borders only with the 32-bit libdecor
-  (`lib32-libdecor`).
+- The 32-bit OpenGL libraries: `libgl1:i386` and `libgl1-mesa-dri:i386`
+  on Debian and Ubuntu, `lib32-mesa` on Arch Linux.
+- The 32-bit PipeWire or PulseAudio client libraries:
+  `libpipewire-0.3-0:i386` or `libpulse0:i386` on Debian and Ubuntu,
+  `lib32-pipewire` or `lib32-libpulse` on Arch Linux.
+- The 32-bit X11 libraries: `libx11-6:i386` and `libxext6:i386` on Debian
+  and Ubuntu, `lib32-libx11` and `lib32-libxext` on Arch Linux. In a
+  Wayland session, the game uses them through XWayland. SDL uses Wayland
+  itself only if the 32-bit Wayland libraries are version 1.20 or later
+  (`libwayland-client0:i386`, `libwayland-cursor0:i386`,
+  `libwayland-egl1:i386` and `libxkbcommon0:i386` on Debian and Ubuntu,
+  `lib32-wayland` and `lib32-libxkbcommon` on Arch Linux; Debian 11,
+  Ubuntu 20.04 and Fedora 32 have older ones) and the compositor has the
+  fifo-v1 protocol. On GNOME, the window then has borders only with the
+  32-bit libdecor (`libdecor-0-0:i386` on Debian and Ubuntu,
+  `lib32-libdecor` on Arch Linux).
 
-SteamOS has all of these. Its system is read-only, and the builds from
-GitHub Actions need no package: they bring their own SDL3
+On Debian and Ubuntu, the 32-bit packages need the i386 architecture
+first: `sudo dpkg --add-architecture i386 && sudo apt update`. The builds
+from GitHub Actions need no SDL3 package: they bring their own
 (`libSDL3.so.0`, next to the executable).
 
 ### Portable build
@@ -77,8 +91,9 @@ for the 64-bit build). `tools/linux_sysroot.cmake` (`tools/linux64_sysroot.cmake
 builds SDL against it.
 
 To make the portable build you need, in addition to the tools above,
-CMake, `pkg-config` (`pkgconf`) and `wayland-scanner` (`wayland` on Arch
-Linux, `libwayland-bin` on Debian and Ubuntu). You do not need the
+CMake, `pkg-config` and `wayland-scanner`: `cmake`, `pkg-config` and
+`libwayland-bin` on Debian and Ubuntu, `cmake`, `pkgconf` and `wayland` on
+Arch Linux. You do not need the
 system's SDL3. You need the 32-bit glibc only for the tests.
 
 To see the glibc version that a build needs, enter
@@ -89,9 +104,25 @@ Linux executable and library they make, fails on any version later than
 
 ## Build the game
 
-1. Go to the root folder of the repository.
-2. Enter `python configure.py`.
-3. Enter `ninja linux`.
+1. Install the tools. On Debian and Ubuntu, after adding apt.llvm.org's
+   `llvm-toolchain-<release>-22` repository (its instructions are at
+   [apt.llvm.org](https://apt.llvm.org); its script does it with
+   `sudo ./llvm.sh 22`), enter:
+
+   ```sh
+   sudo apt install clang-22 lld-22 llvm-22 gcc-multilib libc6-dev-i386 \
+     python3 ninja-build cmake pkg-config libwayland-bin
+   export PATH=/usr/lib/llvm-22/bin:$PATH
+   ```
+
+   On Arch Linux, enable the multilib repository and enter
+   `sudo pacman -S clang lld lib32-glibc python ninja cmake pkgconf wayland`.
+   GitHub Actions builds on Ubuntu 24.04 this way
+   (`.github/workflows/build.yml`).
+2. Go to the root folder of the repository.
+3. Enter `python3 configure.py` (with `--portable` for a build that
+   starts on other computers, as the releases are: "Portable build").
+4. Enter `ninja linux`.
 
 ### 64-bit
 
@@ -99,8 +130,8 @@ Linux executable and library they make, fails on any version later than
 `build/linux64/halo`, the way the macOS build does (the 64-bit build in
 [port/macos/README.md](../macos/README.md): `HALO_64BIT` and the `long`
 rewrite, `tools/lp64_build.py`). It needs the 64-bit glibc and SDL3
-development files (`sdl3` on Arch Linux, `libsdl3-dev` on Debian 13 and
-Ubuntu 25.04 or later) instead of the 32-bit ones, and the 64-bit OpenGL and
+development files (`libsdl3-dev` on Debian 13 and Ubuntu 25.04 or later,
+`sdl3` on Arch Linux) instead of the 32-bit ones, and the 64-bit OpenGL and
 sound libraries to start. An SDL3 built by hand is found through
 `LIBRARY_PATH` when linking and `LD_LIBRARY_PATH` when starting. With
 `--portable`, as the releases are built, it needs neither: it is built
@@ -116,10 +147,10 @@ network, and it is a dedicated server too (`server/README.md`).
 
 Enter `build/linux/halo`.
 
-To play on a Steam Deck, unpack `chupathingyce-linux64-release.zip` into a
-folder (in Desktop Mode), and add `halo` to Steam as a non-Steam game ("Add
-a Game" in the Games menu of Steam). The game then starts in Game Mode as
-well.
+The Steam Deck is not a supported platform yet. The Linux build may run
+on it: unpack `chupathingyce-linux64-release.zip` into a folder (in Desktop
+Mode), and add `halo` to Steam as a non-Steam game ("Add a Game" in the
+Games menu of Steam). Reports are welcome in #bug-reports on the Discord.
 
 The game data is the folder that contains `maps/`, from an Xbox disc image
 of any version of the game. The game looks for this folder in this
@@ -330,9 +361,16 @@ the settings that you (or the Settings menu) change are lines without `#`;
 those stay as they are, also if a later version changes the default. To get
 the default values again, delete the file.
 
-The game reads the file at start-up. If a key is not correct, or a value
-has the wrong type, the game writes the line to the log and uses the default
-value. The Settings menu (Video, Mouse, Audio, Network and Controls Setup)
+The game reads the file once, when it starts: restart the game after you
+edit it. If a key is not correct, or a value has the wrong type, the game
+writes the line to the log and uses the default value. If a line has a
+mistake that TOML cannot read, such as a word without quotes (`menus = pc`
+for `menus = "pc"`) or `True` for `true`, the game skips that line, reads
+all of the others, and the log names the line and the likely fix. If you
+change the value of a line but do not remove its `# `, the line does
+nothing, and the log names it. Words such as `"borderless"` can be in any
+case; a word that a setting does not know is in the log, with what the game
+uses in its place. The Settings menu (Video, Mouse, Audio, Network and Controls Setup)
 changes the useful settings, writes them into the file (only their lines
 change: the line of a setting at its default loses its `#`) and applies
 them at once, but `audio.enabled`, and `display.menus` from the next main
@@ -340,18 +378,19 @@ menu. A new version adds its new settings to the file, commented out.
 
 Earlier versions wrote every setting as a value. The first start of this
 version updates such a file once (`config_version = 2` at the top
-marks it): a setting that holds the default of this version, or the
-default of an earlier version (`display.menus = "pc"`, the default before
-0.5.2b), is commented out, so that it follows the default. A setting with
-another value stays. The log has one line that tells what changed.
+marks it): a setting that holds the default of this version is commented
+out, so that it follows the default. A setting with another value stays,
+also the default of an earlier version (`display.menus = "pc"`, the default
+before 0.5.2b), which you may have chosen; the log names it. The log has one
+line that tells how many lines changed.
 
 Each setting has an environment variable. The environment variable changes
 the setting for one start of the game. It has priority over the file.
 
 | Setting | Default | Environment variable | Function |
 | --- | --- | --- | --- |
-| `display.mode` | `""` | `HALO_DISPLAY_MODE` | `"fullscreen"`: the display, taken at the mode of `display.resolution` (the nearest the display has), or at its desktop mode. `"borderless"`: a window over the whole desktop, whose mode does not change. `"windowed"`: a window of `display.window_size`. Empty: `display.fullscreen` decides (`true`: borderless). F11 changes between the window and the fullscreen mode. Video Setup sets it. |
-| `display.fullscreen` | `true` | `HALO_FULLSCREEN` | `true`: borderless, as `display.mode = "borderless"`. `false`: a window, as `display.mode = "windowed"`. Used when `display.mode` is empty. |
+| `display.mode` | `""` | `HALO_DISPLAY_MODE` | `"fullscreen"`: the display, taken at the mode of `display.resolution` (the nearest the display has), or at its desktop mode. `"borderless"`: a window over the whole desktop, whose mode does not change. `"windowed"`: a window of `display.window_size`. Empty: `display.fullscreen` decides (`true`: borderless). When it is set, `display.fullscreen` is ignored, and the log says so if both are set. F11 changes between the window and the fullscreen mode. Video Setup sets it. |
+| `display.fullscreen` | `true` | `HALO_FULLSCREEN` | `true`: borderless, as `display.mode = "borderless"`. `false`: a window, as `display.mode = "windowed"`. Used only when `display.mode` is empty. |
 | `display.resolution` | `"native"` | `HALO_RESOLUTION` | What fullscreen and borderless draw at: `"native"`, the display's own resolution, or `"<width>x<height>"`, such as `"1920x1080"`, 640x480 or more. Fullscreen sets the display to it. Borderless draws at it and scales the picture to the display, where the display has room for it. The picture has 480 lines of the game and the width of the resolution's shape. A window draws at its own size instead. Video Setup's Resolution sets it, from the display's modes; it shows with Fullscreen and Borderless. |
 | `display.resolution_scaling` | `"native"` | `HALO_RESOLUTION_SCALING` | `"native"`: the game draws at the resolution of the window, or of the display (or `display.resolution`) fullscreen. `"original"`: the game draws the 640x480 picture of the Xbox and scales it up to the window or the display, whatever `display.mode` is. Video Setup sets it. |
 | `display.window_size` | `""` | `HALO_WINDOW_SIZE` | The size of the window, as `"<width>x<height>"`, such as `"1920x1080"`, 640x480 or more. You can change the size of the window; the game's picture takes its shape. Empty: `display.window_scale` decides. Video Setup's Window Size sets it, from sizes of each shape (4:3, 16:10, 16:9 and 21:9) that fit the desktop; it shows with Windowed. |
@@ -363,7 +402,7 @@ the setting for one start of the game. It has priority over the file.
 | `display.interpolation` | `true` | `HALO_INTERPOLATION` | `true`: one frame for each refresh of the display. `false`: 30 frames each second, as on the Xbox. Refer to "Frame rate". |
 | `display.direct_camera` | `true` | `HALO_DIRECT_CAMERA` | `true`: in first person, on foot, the view points where the player aims in each frame, not where the last tick left it. Refer to "Frame rate". |
 | `display.high_res_hud` | `true` | `HALO_HIGH_RES_HUD` | `true`: the HUD (meters, counters, panels and their outlines, the motion sensor, reticles, waypoints, scopes) is drawn from the high-res assets in `port/assets/hud`, 8x the size of the maps' bitmaps. The bitmaps with English text keep the maps' own. `false`: the maps' own bitmaps. |
-| `display.high_res_text` | `true` | `HALO_HIGH_RES_TEXT` | `true`: the menus' and HUD's text is drawn with the fonts in `port/assets/fonts` (Overpass, in place of the maps' Interstate) at the resolution the game draws at, laid out as before, and the menus' titles are drawn from the high-res pictures in `port/assets/titles`. `false`: the maps' bitmap fonts and titles. |
+| `display.high_res_text` | `true` | `HALO_HIGH_RES_TEXT` | `true`: the menus' and HUD's text is drawn with the fonts in `port/assets/fonts` (Overpass, in place of the maps' Interstate) at the resolution the game draws at, laid out as before, and the menus' titles are drawn from the high-res pictures in `port/assets/titles`. `false`: the maps' bitmap fonts and titles. It covers the game's own text only: the Server Browser and the moderation overlays use the system's fonts in any case. For the blocky look of the Xbox, also set `display.resolution_scaling = "original"`. |
 | `display.shadow_resolution` | `128` | `HALO_SHADOW_RESOLUTION` | The size of the maps that the shadows of the objects are drawn in, in pixels each way: `128`, `256`, `512` or `1024` (other values go down to one of these). The game draws the shadow of each object into a map of 128x128 pixels, blurs it and projects it onto the ground. On a large screen, the edges of these shadows show steps that move when the object moves. A larger map makes the edges smooth; the blur is made wider to match, so the shadows are as soft as on the Xbox. Each doubling adds two passes of the blur. `128`: as on the Xbox. |
 | `display.menus` | `"xbox"` | `HALO_MENUS` | `"xbox"`: the Xbox's menus, with Online Games (ChupathingyCE's default). `"pc"`: the PC version's menus, from the files in `port/assets/menus` and a `menus` folder next to `config.toml`. Refer to "Menus". |
 | `display.player_names` | `"all"` | `HALO_PLAYER_NAMES` | In multiplayer, whose names are drawn above their heads: `"all"`, `"allies"`, `"enemies"` or `"none"`. An ally's name is drawn above the triangle the game shows over teammates. An enemy's name shows only within the motion sensor's reach, while the enemy is in sight and not camouflaged, so it never shows where an enemy hides. The gametype's motion tracker setting also applies: no names if it shows no players, only allies' if it shows only friends. |

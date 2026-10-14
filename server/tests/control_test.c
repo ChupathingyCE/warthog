@@ -17,6 +17,7 @@ failure.
 
 #include "../src/command_line.h"
 #include "../src/server_config.h"
+#include "../src/server_names.h"
 #include "../platform/control_protocol.h"
 #include "../platform/control_web.h"
 #include "../platform/control_roles.h"
@@ -1380,6 +1381,76 @@ static void test_server_config(int rounds)
 
 /* ---------- Delta Control's link (control_link_protocol.c) */
 
+/* ---------- blocked names (server/blocked_names.txt) */
+
+/* a name written in ROT13 (as the list is, so this file prints no slurs)
+decoded; anything but ASCII letters as it is */
+static int names_blocked_rot13(const char *text)
+{
+	char name[64];
+	size_t index;
+
+	for (index = 0; text[index] && index < sizeof(name) - 1; index++)
+	{
+		char c = text[index];
+
+		if (c >= 'a' && c <= 'z')
+			c = (char)('a' + (c - 'a' + 13) % 26);
+		else if (c >= 'A' && c <= 'Z')
+			c = (char)('A' + (c - 'A' + 13) % 26);
+		name[index] = c;
+	}
+	name[index] = 0;
+	return server_names_blocked_text(name);
+}
+
+static void test_names(void)
+{
+	static char text[64 * 1024];
+	char path[1024];
+	const char *slash = strrchr(__FILE__, '/');
+	FILE *file;
+	size_t length = 0;
+	static const unsigned int empty[] = { 0 };
+
+	/* (the repository's list, beside this folder) */
+	snprintf(path, sizeof(path), "%.*s/../blocked_names.txt", slash ? (int)(slash - __FILE__) : 1,
+		slash ? __FILE__ : ".");
+	file = fopen(path, "rb");
+	CHECK(file != NULL);
+	if (file)
+	{
+		length = fread(text, 1, sizeof(text) - 1, file);
+		fclose(file);
+	}
+	CHECK(server_names_parse(text, length) > 20);
+	CHECK(names_blocked_rot13("rivyencvfg"));
+	CHECK(!names_blocked_rot13("gurencvfg"));
+	CHECK(!names_blocked_rot13("CP Fcvpr"));
+	CHECK(!names_blocked_rot13("fcvpxl"));
+	CHECK(!names_blocked_rot13("CRQBS"));
+	CHECK(!names_blocked_rot13("XVXR"));
+	CHECK(!names_blocked_rot13("xvxr01"));
+	CHECK(names_blocked_rot13("avvvttn"));
+	CHECK(names_blocked_rot13("N ERGNEQ"));
+	CHECK(!names_blocked_rot13("Xavtug"));
+	/* (look-alikes: a Cyrillic letter, digits and signs, digits at the end) */
+	CHECK(names_blocked_rot13("e\xd0\xb0" "cvfg"));
+	CHECK(names_blocked_rot13("R.I.V.L_e4c1fg99"));
+	CHECK(!names_blocked_rot13(""));
+	CHECK(!names_blocked_rot13("1234"));
+	CHECK(!names_blocked_rot13("Znfgre Puvrs"));
+	CHECK(!server_names_blocked(empty, 0));
+	/* (an empty list blocks nothing) */
+	server_names_clear();
+	CHECK(!names_blocked_rot13("rivyencvfg"));
+	{
+		static const char bad[] = "# nothing\nanywhere\nbogus nop\nwhole 12\n";
+
+		CHECK(server_names_parse(bad, sizeof(bad) - 1) == 0);
+	}
+}
+
 static void test_link(int rounds)
 {
 	static struct control_link_poll poll;
@@ -1553,6 +1624,7 @@ int main(int argc, char **argv)
 	test_fields();
 	test_server_config(rounds);
 	test_link(rounds);
+	test_names();
 	printf("%d checks, %d failures\n", checks, failures);
 	return failures ? 1 : 0;
 }

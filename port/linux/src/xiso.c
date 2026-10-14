@@ -272,6 +272,53 @@ static int names_match(const char *a, const char *b)
 	return !*a && !*b;
 }
 
+/* the maps folder among the root's folders: "maps", or on a multi-language
+European disc (no "maps", a "maps_xx" per language instead) the one for the
+language the system is set to, else English, else the first */
+static int find_maps_folder(const struct xiso_file *entries, int count)
+{
+	static const char *const variables[] = { "LC_ALL", "LC_MESSAGES", "LANG" };
+	char wanted[8] = "maps_en";
+	int english = count, first = count;
+	int index;
+
+	for (index = 0; index < (int)(sizeof(variables) / sizeof(variables[0])); index++)
+	{
+		const char *value = getenv(variables[index]);
+
+		if (value && value[0] >= 'a' && value[0] <= 'z' && value[1] >= 'a' && value[1] <= 'z')
+		{
+			wanted[5] = value[0];
+			wanted[6] = value[1];
+			break;
+		}
+	}
+	for (index = 0; index < count; index++)
+	{
+		if (names_match(entries[index].name, "maps"))
+			return index;
+	}
+	for (index = 0; index < count; index++)
+	{
+		const char *name = entries[index].name;
+		char prefix[6];
+
+		if (strlen(name) != 7)
+			continue;
+		memcpy(prefix, name, 5);
+		prefix[5] = 0;
+		if (!names_match(prefix, "maps_"))
+			continue;
+		if (names_match(name, wanted))
+			return index;
+		if (english == count && names_match(name, "maps_en"))
+			english = index;
+		if (first == count)
+			first = index;
+	}
+	return english != count ? english : first;
+}
+
 static int copy_file(struct xiso_image *image, const struct xiso_file *file, const char *path,
 	unsigned char *buffer, unsigned long long *done, unsigned long long total,
 	xiso_progress_proc progress, void *context)
@@ -354,13 +401,14 @@ int xiso_extract_maps(const char *image_path, const char *destination, xiso_prog
 		struct directory_walk walk = { table, root_size, entries, 0, MAXIMUM_FILES, 0, 1 };
 
 		walk_directory(&walk, 0, 0);
-		for (index = 0; index < walk.entry_count && !names_match(entries[index].name, "maps"); index++)
-			;
+		index = find_maps_folder(entries, walk.entry_count);
 		if (index == walk.entry_count)
 		{
 			fail(&image, "The disc image has no maps folder: it is not a Halo disc.%s", NULL);
 			goto done;
 		}
+		if (!names_match(entries[index].name, "maps"))
+			platform_log("the disc image has no maps folder but one per language; extracting %s", entries[index].name);
 		free(table);
 		table = read_directory(&image, entries[index].sector, entries[index].size);
 		if (!table)

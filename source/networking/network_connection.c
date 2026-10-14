@@ -301,6 +301,16 @@ struct network_server_connection
 	boolean allow_client_connections;
 };
 
+/* port: what the unreliable incoming queue keeps after each datagram, where
+the game kept only the source's address: its port too, so that readers see
+where a datagram came from rather than port 0. Local to the queue; nothing
+of it is sent */
+struct queued_datagram_source
+{
+	unsigned long ipv4_address;
+	word port;
+};
+
 /* ---------- prototypes */
 
 static boolean network_client_reliable_connection_read(
@@ -621,7 +631,7 @@ static boolean network_client_unreliable_connection_read(
 	struct transport_address *source_address)
 {
 	message_header header;
-	unsigned long source_ipv4_address;
+	struct queued_datagram_source source;
 	word message_size;
 
 	match_assert(
@@ -665,9 +675,9 @@ static boolean network_client_unreliable_connection_read(
 				message_size,
 				*buffer_size);
 		}
-		else if (message_size + sizeof(source_ipv4_address) <= (unsigned long)circular_queue_size(connection->unreliable_incoming_queue) &&
+		else if (message_size + sizeof(source) <= (unsigned long)circular_queue_size(connection->unreliable_incoming_queue) &&
 			circular_queue_dequeue_data(connection->unreliable_incoming_queue, message, message_size, TRUE) &&
-			circular_queue_dequeue_data(connection->unreliable_incoming_queue, &source_ipv4_address, sizeof(source_ipv4_address), TRUE))
+			circular_queue_dequeue_data(connection->unreliable_incoming_queue, &source, sizeof(source), TRUE))
 		{
 			*(message_header *)message = header;
 			match_vassert(
@@ -677,8 +687,8 @@ static boolean network_client_unreliable_connection_read(
 				"encryption should not be active");
 			if (source_address)
 			{
-				source_address->address.long_words[0] = source_ipv4_address;
-				source_address->port = 0;
+				source_address->address.long_words[0] = source.ipv4_address;
+				source_address->port = source.port;
 				source_address->address_length = IPV4_ADDRESS_LENGTH;
 			}
 			*buffer_size = message_size;
@@ -1631,7 +1641,7 @@ boolean network_connection_idle(
 	long timeout,
 	struct network_connection **new_client_connection)
 {
-	byte buffer[DATAGRAM_MAXIMUM_SIZE + sizeof(unsigned long)];
+	byte buffer[DATAGRAM_MAXIMUM_SIZE + sizeof(struct queued_datagram_source)];
 	unsigned long current_time = system_milliseconds();
 	boolean success = TRUE;
 
@@ -1718,11 +1728,11 @@ boolean network_connection_idle(
 		long skipped = 0;
 
 		while (success &&
-			free_space >= DATAGRAM_MAXIMUM_SIZE + sizeof(unsigned long))
+			free_space >= DATAGRAM_MAXIMUM_SIZE + sizeof(struct queued_datagram_source))
 		{
 			struct transport_address source_address;
 			long buffer_size;
-			unsigned long source_ipv4_address;
+			struct queued_datagram_source source;
 
 			if ((boolean)endpoint_connected(connection->unreliable_endpoint))
 			{
@@ -1770,7 +1780,9 @@ boolean network_connection_idle(
 				return success;
 			}
 
-			source_ipv4_address = source_address.address.long_words[0];
+			csmemset(&source, 0, sizeof(source));
+			source.ipv4_address = source_address.address.long_words[0];
+			source.port = source_address.port;
 			/* the queue frames a datagram by its header's length, the source
 			address after it: one whose header said otherwise than what came
 			would be read with its own bytes for a source address, the rest
@@ -1782,13 +1794,10 @@ boolean network_connection_idle(
 			{
 				/* (dropped) */
 			}
-			else if (source_ipv4_address)
+			else if (source.ipv4_address)
 			{
-				csmemcpy(
-					buffer + buffer_size,
-					&source_ipv4_address,
-					sizeof(source_ipv4_address));
-				buffer_size += sizeof(source_ipv4_address);
+				csmemcpy(buffer + buffer_size, &source, sizeof(source));
+				buffer_size += sizeof(source);
 				success = circular_queue_queue_data(
 					connection->unreliable_incoming_queue,
 					buffer,

@@ -1678,6 +1678,8 @@ int p2p_broadcast_targets(unsigned short port, unsigned long *addresses, unsigne
 
 static void datagram_send(struct peer *peer, unsigned short source_port, unsigned short port, const void *data,
 	int size);
+static void game_datagram_send(struct peer *peer, unsigned short source_port, unsigned short port,
+	const void *data, int size);
 
 int p2p_send_datagram(unsigned short source_port, unsigned long address, unsigned short port, const void *data,
 	int size)
@@ -1695,7 +1697,7 @@ int p2p_send_datagram(unsigned short source_port, unsigned long address, unsigne
 		result = -1;
 	else
 	{
-		datagram_send(peer, source_port, port, data, size);
+		game_datagram_send(peer, source_port, port, data, size);
 		result = 1;
 	}
 	pthread_mutex_unlock(&p2p_lock);
@@ -1714,7 +1716,7 @@ int p2p_broadcast_datagram(unsigned short source_port, unsigned short port, cons
 	{
 		if (p2p.peers[index].used && p2p.peers[index].connected)
 		{
-			datagram_send(&p2p.peers[index], source_port, port, data, size);
+			game_datagram_send(&p2p.peers[index], source_port, port, data, size);
 			count++;
 		}
 	}
@@ -1839,14 +1841,13 @@ static int game_port_open(int stream, unsigned short port)
 
 /* ---------- datagrams */
 
-/* a datagram from the game's port source_port to the peer's port */
-static void datagram_send(struct peer *peer, unsigned short source_port, unsigned short port, const void *data,
-	int size)
+/* a datagram from the game's port source_port to the peer's port, as the
+tunnel carries it (inner); its size, -1 if it cannot be */
+static int datagram_inner(unsigned short source_port, unsigned short port, const void *data, int size,
+	unsigned char *inner)
 {
-	unsigned char inner[MAXIMUM_INNER_SIZE];
-
 	if (size < 0 || size > MAXIMUM_INNER_SIZE - 5)
-		return;
+		return -1;
 	/* (the peer answers to that port) */
 	if (!game_port_open(0, source_port))
 		p2p.sent_ports[p2p.sent_port_next++ % MAXIMUM_SENT_PORTS] = source_port;
@@ -1854,7 +1855,71 @@ static void datagram_send(struct peer *peer, unsigned short source_port, unsigne
 	put_short(inner + 1, source_port);
 	put_short(inner + 3, port);
 	memcpy(inner + 5, data, (size_t)size);
-	peer_send(peer, inner, size + 5);
+	return size + 5;
+}
+
+/* (from the tunnel's thread) */
+static void datagram_send(struct peer *peer, unsigned short source_port, unsigned short port, const void *data,
+	int size)
+{
+	unsigned char inner[MAXIMUM_INNER_SIZE];
+	int inner_size = datagram_inner(source_port, port, data, size, inner);
+
+	if (inner_size > 0)
+		peer_send(peer, inner, inner_size);
+}
+
+#ifdef P2P_SEND_FROM_THREAD
+/* the game's datagrams for peers, sent by the tunnel's thread (the
+platform's sockets take one thread at a time: platform.h). A full queue
+drops a datagram, as a network may */
+enum
+{
+	MAXIMUM_QUEUED_DATAGRAMS = 16,
+};
+
+static struct
+{
+	unsigned char identifier[P2P_IDENTIFIER_SIZE];
+	int size;
+	unsigned char inner[MAXIMUM_INNER_SIZE];
+} queued_datagrams[MAXIMUM_QUEUED_DATAGRAMS];
+static int queued_datagram_first, queued_datagram_count;
+
+static void send_queued_datagrams(void)
+{
+	while (queued_datagram_count > 0)
+	{
+		int index = queued_datagram_first;
+		struct peer *peer = find_peer(queued_datagrams[index].identifier);
+
+		queued_datagram_first = (queued_datagram_first + 1) % MAXIMUM_QUEUED_DATAGRAMS;
+		queued_datagram_count--;
+		/* (a peer that went meanwhile gets nothing) */
+		if (peer && peer->connected)
+			peer_send(peer, queued_datagrams[index].inner, queued_datagrams[index].size);
+	}
+}
+#endif
+
+/* (from the game's thread) */
+static void game_datagram_send(struct peer *peer, unsigned short source_port, unsigned short port,
+	const void *data, int size)
+{
+#ifdef P2P_SEND_FROM_THREAD
+	int index;
+
+	if (queued_datagram_count >= MAXIMUM_QUEUED_DATAGRAMS)
+		return;
+	index = (queued_datagram_first + queued_datagram_count) % MAXIMUM_QUEUED_DATAGRAMS;
+	queued_datagrams[index].size = datagram_inner(source_port, port, data, size, queued_datagrams[index].inner);
+	if (queued_datagrams[index].size <= 0)
+		return;
+	memcpy(queued_datagrams[index].identifier, peer->identifier, P2P_IDENTIFIER_SIZE);
+	queued_datagram_count++;
+#else
+	datagram_send(peer, source_port, port, data, size);
+#endif
 }
 
 /* a datagram from the game to a peer, through its stand-in (from a socket
@@ -3102,6 +3167,11 @@ static void *p2p_thread(void *unused)
 		memcpy(asked_read, read, sizeof(*read) * (size_t)read_count);
 		memcpy(asked_write, write, sizeof(*write) * (size_t)write_count);
 
+#ifdef P2P_SEND_FROM_THREAD
+		/* (the game's datagrams queued meanwhile go out soon) */
+		wait = LOOP_INTERVAL;
+		send_queued_datagrams();
+#endif
 		pthread_mutex_unlock(&p2p_lock);
 		if (posix_socket_select(read, &read_count, write, &write_count, NULL, &error_count, 0,
 			wait * 1000, 0) < 0)
@@ -3109,6 +3179,9 @@ static void *p2p_thread(void *unused)
 			read_count = write_count = 0;
 		}
 		pthread_mutex_lock(&p2p_lock);
+#ifdef P2P_SEND_FROM_THREAD
+		send_queued_datagrams();
+#endif
 
 		/* what is ready (the lists now hold only ready sockets, in the order
 		asked, so each one's owner is found going along both); a socket

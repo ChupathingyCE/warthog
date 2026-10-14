@@ -37,6 +37,7 @@ SOURCES = [
     ROOT / "server" / "tests" / "control_test.c",
     ROOT / "server" / "src" / "command_line.c",
     ROOT / "server" / "src" / "server_config.c",
+    ROOT / "server" / "src" / "server_names.c",
     PLATFORM / "control_protocol.c",
     PLATFORM / "control_web.c",
     PLATFORM / "control_roles.c",

@@ -125,7 +125,13 @@ struct browser_report_player
 
 /* (the most a line's extra, and a report's, may be) */
 #define BROWSER_REPORT_EXTRA_SIZE 1024
+/* (room for every player who left a full game early, at about 500 bytes
+each; the original Xbox keeps the smaller one for its memory) */
+#ifdef HALO_XBOX_CONSOLE
 #define BROWSER_REPORT_GAME_EXTRA_SIZE 8192
+#else
+#define BROWSER_REPORT_GAME_EXTRA_SIZE 32768
+#endif
 
 /* a hosted game that ended (reached the postgame): its carnage report, sent
 to the list server if the game is listed there (game_engine.c); extra, JSON

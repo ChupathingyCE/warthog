@@ -40,7 +40,8 @@ small VPS will do.
 ## Quick start
 
 1. Download the server for your machine and unpack it. You get
-   `chupathingyce-server`, a `playlists` folder and this README.
+   `chupathingyce-server`, a `playlists` folder, `blocked_names.txt` and
+   this README.
 2. Make a data folder with a `maps` folder in it, and copy in the game's
    `ui.map` and the multiplayer maps (all of them: about 300 MB). Use the
    maps of the North American (NTSC) Xbox disc, as the players do. Halo PC
@@ -162,7 +163,8 @@ line (`command_line.c`) and the game list's probe (`probe.c`); `platform/` is
 the server's own platform layer, with no window, input or sound, and its
 console, control API and web admin page; `webui/` that page's files;
 `tests/` the control API's tests; `docs/` the server's documents;
-`playlists/` the playlists; `deploy/` the container and services.
+`playlists/` the playlists; `blocked_names.txt` the names `sv_name_filter`
+blocks; `deploy/` the container and services.
 
 ## Stats (Delta Stats)
 

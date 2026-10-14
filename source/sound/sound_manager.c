@@ -1140,6 +1140,10 @@ static real sound_manager_port_volume(
 		read_at = config_changes();
 		music_volume = PIN((real)config_real("audio.music_volume"), 0.f, 1.f);
 		effects_volume = PIN((real)config_real("audio.effects_volume"), 0.f, 1.f);
+#ifdef HALO_XBOX_CONSOLE
+		error(_error_silent, "sound: music volume %.2f, effects volume %.2f",
+			music_volume, effects_volume);
+#endif
 	}
 	return class_index == _sound_class_music ? music_volume : effects_volume;
 }

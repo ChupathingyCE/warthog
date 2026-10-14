@@ -1293,6 +1293,22 @@ struct sound_platform_definition platform_sound_dsound =
 
 static char dsound_error_string[MAXIMUM_DSOUND_ERROR_STRING_LENGTH+1];
 
+#ifdef HALO_XBOX_CONSOLE
+/* port: the first channels to start, into debug.txt, and whether each then
+went on to stream (its packets are refilled from DirectSound's callback,
+which cannot log, so the count is read from the main loop) */
+enum
+{
+	XBOX_SOUND_LOG_LINES = 24,
+	/* past the first fill: refilled from the callback */
+	XBOX_SOUND_STREAMING_PACKETS = MAXIMUM_SOUND_PACKETS+2,
+};
+
+static long xbox_sound_log_lines;
+static volatile long xbox_channel_packets[MAXIMUM_SOUND_CHANNELS];
+static boolean xbox_channel_watched[MAXIMUM_SOUND_CHANNELS];
+#endif
+
 /* ---------- public code */
 
 unsigned long sound_samples_per_second(
@@ -1443,6 +1459,24 @@ static void dsound_begin_scene(
 
 	dsound_error_string[0]= 0;
 	interrupt_result= 0;
+
+#ifdef HALO_XBOX_CONSOLE
+	{
+		short index;
+
+		for (index= 0; index<dsound_globals.actual_channel_count && index<MAXIMUM_SOUND_CHANNELS; index++)
+		{
+			if (xbox_channel_watched[index] && xbox_channel_packets[index]>=XBOX_SOUND_STREAMING_PACKETS)
+			{
+				struct sound_channel *channel= channel_get(index);
+
+				xbox_channel_watched[index]= FALSE;
+				error(_error_silent, "sound: channel %d refilled (%ld packets, gain %.2f)",
+					index, xbox_channel_packets[index], channel->gain);
+			}
+		}
+	}
+#endif
 
 	return;
 }
@@ -2649,6 +2683,12 @@ static boolean dsound_channel_queue_packet(
 						sound_cache_sound_hardware_lock(sound);
 
 						queued= TRUE;
+#ifdef HALO_XBOX_CONSOLE
+						if (index<MAXIMUM_SOUND_CHANNELS)
+						{
+							xbox_channel_packets[index]++;
+						}
+#endif
 					}
 					else
 					{
@@ -2737,6 +2777,17 @@ static void dsound_channel_queue_sound(
 			channel->playing_permutation= sound;
 			channel->sample_offset= 0;
 			channel->packet_count= 0;
+
+#ifdef HALO_XBOX_CONSOLE
+			if (index<MAXIMUM_SOUND_CHANNELS && xbox_sound_log_lines<XBOX_SOUND_LOG_LINES)
+			{
+				xbox_sound_log_lines++;
+				xbox_channel_packets[index]= 0;
+				xbox_channel_watched[index]= TRUE;
+				error(_error_silent, "sound: channel %d (type %d) starts %.32s, %ld bytes, gain %.2f",
+					index, channel->type_flags, sound->name, sound->samples.size, channel->gain);
+			}
+#endif
 
 			result= IDirectSound_CommitDeferredSettings(dsound_globals.direct_sound);
 

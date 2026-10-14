@@ -138,6 +138,7 @@ static const struct command_permission command_permissions[] =
 	{ "sv_playlist_save", CONTROL_PERMISSION_MAP, 1, 0 },
 	{ "sv_maxplayers", CONTROL_PERMISSION_SETTINGS, 1, 1 },
 	{ "sv_name", CONTROL_PERMISSION_SETTINGS, 1, 1 },
+	{ "sv_name_filter", CONTROL_PERMISSION_SETTINGS, 1, 1 },
 	{ "sv_set", CONTROL_PERMISSION_SETTINGS, 1, 0 },
 	{ "sv_gametype_new", CONTROL_PERMISSION_SETTINGS, 1, 0 },
 	{ "sv_gametype_set", CONTROL_PERMISSION_SETTINGS, 1, 0 },

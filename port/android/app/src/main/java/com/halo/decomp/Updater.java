@@ -183,9 +183,8 @@ final class Updater {
 
     /**
      * Whether version is newer than current: [v]<major>.<minor>.<patch> and a
-     * pre-release suffix (0.5.0b, 1.0.0rc1) or none, by the numbers, then a
-     * version without a suffix after the ones with, and suffixes in order (as
-     * updater.c's updater_newer).
+     * hotfix letter (0.7.5a) or none, by the numbers, then the letter, a
+     * version without one first (as updater.c's updater_newer).
      */
     static boolean newer(String version, String current) {
         java.util.regex.Pattern pattern = java.util.regex.Pattern.compile("v?(\\d+)\\.(\\d+)\\.(\\d+)(.*)");
@@ -199,11 +198,7 @@ final class Updater {
             if (a != b)
                 return a > b;
         }
-        String latestSuffix = latest.group(4), currentSuffix = now.group(4);
-
-        if (latestSuffix.isEmpty() || currentSuffix.isEmpty())
-            return latestSuffix.isEmpty() && !currentSuffix.isEmpty();
-        return latestSuffix.compareTo(currentSuffix) > 0;
+        return latest.group(4).compareTo(now.group(4)) > 0;
     }
 
     /** GitHub's latest release's version (its tag, without the v), null if there is none */

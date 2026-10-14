@@ -643,9 +643,20 @@ void game_stats_game_extra(
 		host ? "host" : "synced");
 	for (index = 0; index < game_stats.departed_count; index++)
 	{
+		long before = used;
+
 		if (index)
 			used = stats_append(text, size, used, ", ");
 		used = stats_departed_json(&game_stats.departed[index], text, size, used);
+		/* (a player who doesn't fit is left out whole, with room kept for
+		the closing bracket: a report cut off mid-player isn't JSON, and the
+		site turns it away) */
+		if (used >= size - 2)
+		{
+			text[before] = 0;
+			used = before;
+			break;
+		}
 	}
 	stats_append(text, size, used, "]");
 }
