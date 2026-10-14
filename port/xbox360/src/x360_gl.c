@@ -68,11 +68,16 @@ static void first_use(const char *name)
 static struct
 {
 	BOOL loaded;
-	BOOL no_draws, constant_stream, no_resolves, log_draws, clear_red, green, no_cull, no_depth, no_blend, probe, dump;
+	unsigned long white_units;
+	BOOL no_mips, equal_as_lequal, no_draws, constant_stream, no_resolves, log_draws, clear_red, green, no_cull, no_depth, no_blend, probe, dump;
 	/* log_frame=N: every draw and clear of frame N; dump_at=N: the picture
 	of frame N too; skip_program=N: that program's draws left out */
 	unsigned long log_frame, dump_at;
 	GLuint skip_programs[16];
+	/* dump_draw=K (with dump_at=N): the draw target's picture after draw K
+	of frame N, to game:\\draw<K>.raw */
+	unsigned long dump_draws[16];
+	int dump_draw_count;
 	int skip_program_count;
 } debug;
 
@@ -100,7 +105,17 @@ static void debug_load(void)
 		if (!strcmp(word, "no_blend")) debug.no_blend = TRUE;
 		if (!strcmp(word, "probe")) debug.probe = TRUE;
 		if (!strcmp(word, "dump")) debug.dump = TRUE;
+		if (!strcmp(word, "lequal")) debug.equal_as_lequal = TRUE;
+		if (!strcmp(word, "no_mips")) debug.no_mips = TRUE;
+		{
+			unsigned long unit;
+
+			if (sscanf(word, "white_unit=%lu", &unit) == 1 && unit < 32)
+				debug.white_units |= 1UL << unit;
+		}
 		sscanf(word, "log_frame=%lu", &debug.log_frame);
+		if (debug.dump_draw_count < 16 && sscanf(word, "dump_draw=%lu", &debug.dump_draws[debug.dump_draw_count]) == 1)
+			debug.dump_draw_count++;
 		if (sscanf(word, "dump_at=%lu", &debug.dump_at) == 1)
 			debug.dump = TRUE;
 		if (debug.skip_program_count < 16 &&
@@ -217,6 +232,7 @@ struct uniform
 	BOOL sampler;
 	int sampler_register;    /* the pixel shader's sampler */
 	GLint unit;              /* a sampler's texture unit (glUniform1i) */
+	int slot;                /* the unit's target it samples: 2D, 3D, cube */
 };
 
 struct program
@@ -1231,6 +1247,8 @@ static void program_uniforms(struct program *program, struct shader *vertex, str
 			{
 				uniform->sampler = TRUE;
 				uniform->sampler_register = (int)description.RegisterIndex;
+				uniform->slot = description.Type == D3DXPT_SAMPLER3D ? 1 :
+					description.Type == D3DXPT_SAMPLERCUBE ? 2 : 0;
 			}
 			else if (description.RegisterSet == D3DXRS_FLOAT4)
 			{
@@ -1473,7 +1491,8 @@ static void apply_render_state(void)
 		IDirect3DDevice9_SetRenderState(device, D3DRS_BLENDFACTOR, factor);
 	}
 	IDirect3DDevice9_SetRenderState(device, D3DRS_ZENABLE, gl.depth_test && gl.bound_depth);
-	IDirect3DDevice9_SetRenderState(device, D3DRS_ZFUNC, compare_function(gl.depth_func));
+	IDirect3DDevice9_SetRenderState(device, D3DRS_ZFUNC, compare_function(
+		debug.equal_as_lequal && gl.depth_func == GL_EQUAL ? GL_LEQUAL : gl.depth_func));
 	IDirect3DDevice9_SetRenderState(device, D3DRS_ZWRITEENABLE, gl.depth_test && gl.depth_mask && gl.bound_depth);
 	IDirect3DDevice9_SetRenderState(device, D3DRS_STENCILENABLE, gl.stencil_test && gl.bound_depth);
 	IDirect3DDevice9_SetRenderState(device, D3DRS_STENCILFUNC, compare_function(gl.stencil_func));
@@ -1546,6 +1565,8 @@ static void apply_sampler(int sampler_register, struct texture *texture, const s
 
 	if (texture->max_level < top_level)
 		top_level = texture->max_level;
+	if (debug.no_mips)
+		top_level = 0;
 	IDirect3DDevice9_SetTexture(device, (DWORD)sampler_register, texture->d3d);
 	IDirect3DDevice9_SetSamplerState(device, (DWORD)sampler_register, D3DSAMP_ADDRESSU,
 		address_mode(sampler ? sampler->wrap_s : texture->wrap_s));
@@ -1572,13 +1593,18 @@ static void apply_sampler(int sampler_register, struct texture *texture, const s
 }
 
 /* the texture a program's sampler reads, by its unit */
-static struct texture *unit_texture(GLint unit)
+/* the texture a sampler of this type (slot: 2D, 3D, cube) reads on a unit:
+that target's, or another's if it has none */
+static struct texture *unit_texture(GLint unit, int wanted)
 {
 	struct texture *texture;
 	int slot;
 
 	if (unit < 0 || unit >= TEXTURE_UNITS)
 		return NULL;
+	texture = object_get(gl.textures[unit][wanted], _object_texture);
+	if (texture && texture->d3d)
+		return texture;
 	for (slot = 0; slot < 3; slot++)
 	{
 		texture = object_get(gl.textures[unit][slot], _object_texture);
@@ -1606,7 +1632,7 @@ static void draw_log_targets_and_textures(struct program *program)
 
 		if (!uniform->sampler || uniform->sampler_register < 0)
 			continue;
-		texture = unit_texture(uniform->unit);
+		texture = unit_texture(uniform->unit, uniform->slot);
 		length += _snprintf(textures + length, sizeof(textures) - length, " s%d=%lux%lu%s", uniform->sampler_register,
 			texture ? texture->width : 0, texture ? texture->height : 0,
 			texture && texture->surface ? "(target)" : "");
@@ -1723,7 +1749,7 @@ static BOOL prepare_draw(struct program **program_out, struct shader **vertex_ou
 
 		if (!uniform->sampler || uniform->sampler_register < 0)
 			continue;
-		texture = unit_texture(uniform->unit);
+		texture = unit_texture(uniform->unit, uniform->slot);
 		if (texture)
 			texture_resolve(texture);
 	}
@@ -1735,8 +1761,24 @@ static BOOL prepare_draw(struct program **program_out, struct shader **vertex_ou
 
 		if (!uniform->sampler || uniform->sampler_register < 0)
 			continue;
-		texture = unit_texture(uniform->unit);
-		if (texture)
+		texture = unit_texture(uniform->unit, uniform->slot);
+		if (texture && uniform->slot == 0 && ((debug.white_units >> uniform->unit) & 1))
+		{
+			/* bring-up: white_unit=N samples white on texture unit N */
+			static D3DTexture *white;
+
+			if (!white && SUCCEEDED(IDirect3DDevice9_CreateTexture(gl.device, 1, 1, 1, 0,
+				(D3DFORMAT)MAKELEFMT(D3DFMT_LIN_A8R8G8B8), 0, &white, NULL)))
+			{
+				D3DLOCKED_RECT locked;
+
+				IDirect3DTexture9_LockRect(white, 0, &locked, NULL, 0);
+				memset(locked.pBits, 0xff, 4);
+				IDirect3DTexture9_UnlockRect(white, 0);
+			}
+			IDirect3DDevice9_SetTexture(gl.device, (DWORD)uniform->sampler_register, (D3DBaseTexture *)white);
+		}
+		else if (texture)
 			apply_sampler(uniform->sampler_register, texture,
 				object_get(gl.samplers[uniform->unit], _object_sampler));
 		else
@@ -1983,6 +2025,47 @@ static D3DPRIMITIVETYPE primitive_type(GLenum mode, unsigned long *count)
 	}
 }
 
+static unsigned long frame_first_draw;
+
+/* bring-up: the draw framebuffer's color after one of a frame's draws */
+static void dump_after_draw(unsigned long index)
+{
+	struct framebuffer *framebuffer = object_get(gl.draw_framebuffer, _object_framebuffer);
+	struct texture *color = framebuffer ? object_get(framebuffer->color, _object_texture) : NULL;
+	D3DLOCKED_RECT locked;
+	unsigned long size;
+	unsigned char *linear;
+	char path[64];
+	FILE *file;
+	int which, wanted = 0;
+
+	for (which = 0; which < debug.dump_draw_count; which++)
+		wanted |= debug.dump_draws[which] == index;
+	if (!wanted || !color || !color->surface || !color->d3d)
+		return;
+	color->unresolved = TRUE;
+	texture_resolve(color);
+	IDirect3DDevice9_BlockUntilIdle(gl.device);
+	size = color->width * color->height * 4;
+	linear = malloc(size);
+	if (!linear)
+		return;
+	IDirect3DTexture9_LockRect((D3DTexture *)color->d3d, 0, &locked, NULL, D3DLOCK_READONLY);
+	XGUntileSurface(linear, color->width * 4, NULL, locked.pBits, color->width, color->height, NULL, 4);
+	IDirect3DTexture9_UnlockRect((D3DTexture *)color->d3d, 0);
+	_snprintf(path, sizeof(path) - 1, "game:\\draw%lu.raw", index);
+	path[sizeof(path) - 1] = '\0';
+	file = fopen(path, "wb");
+	if (file)
+	{
+		fwrite(linear, 1, size, file);
+		fclose(file);
+		x360_log("gl: draw %lu of frame %lu: %lux%lu picture in %s", index, gl.frame, color->width, color->height,
+			path);
+	}
+	free(linear);
+}
+
 static void draw(GLenum mode, unsigned long first, unsigned long count, GLenum index_type, const void *indices,
 	long base_vertex)
 {
@@ -2057,6 +2140,8 @@ static void draw(GLenum mode, unsigned long first, unsigned long count, GLenum i
 	}
 	gl.draws++;
 	targets_written();
+	if (debug.dump_draw_count && gl.frame == debug.dump_at)
+		dump_after_draw(gl.draws - 1 - frame_first_draw);
 }
 
 /* ---------- blits: a textured quad */
@@ -3260,6 +3345,7 @@ void x360_gl_swap(void)
 		stats.draws = gl.draws;
 	}
 	gl.frame++;
+	frame_first_draw = gl.draws;
 	if (gl.frame == 1 || gl.frame % 600 == 0)
 		x360_log("gl: frame %lu, %lu draws so far", gl.frame, gl.draws);
 }
