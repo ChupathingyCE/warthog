@@ -68,8 +68,8 @@ static void first_use(const char *name)
 static struct
 {
 	BOOL loaded;
-	unsigned long white_units;
-	BOOL no_mips, equal_as_lequal, no_draws, constant_stream, no_resolves, log_draws, clear_red, green, no_cull, no_depth, no_blend, probe, dump;
+	unsigned long white_units, zclear_draw;
+	BOOL depth_always, no_mips, equal_as_lequal, no_draws, constant_stream, no_resolves, log_draws, clear_red, green, no_cull, no_depth, no_blend, probe, dump;
 	/* log_frame=N: every draw and clear of frame N; dump_at=N: the picture
 	of frame N too; skip_program=N: that program's draws left out */
 	unsigned long log_frame, dump_at;
@@ -107,6 +107,8 @@ static void debug_load(void)
 		if (!strcmp(word, "dump")) debug.dump = TRUE;
 		if (!strcmp(word, "lequal")) debug.equal_as_lequal = TRUE;
 		if (!strcmp(word, "no_mips")) debug.no_mips = TRUE;
+		if (!strcmp(word, "depth_always")) debug.depth_always = TRUE;
+		sscanf(word, "zclear_draw=%lu", &debug.zclear_draw);
 		{
 			unsigned long unit;
 
@@ -1491,7 +1493,7 @@ static void apply_render_state(void)
 		IDirect3DDevice9_SetRenderState(device, D3DRS_BLENDFACTOR, factor);
 	}
 	IDirect3DDevice9_SetRenderState(device, D3DRS_ZENABLE, gl.depth_test && gl.bound_depth);
-	IDirect3DDevice9_SetRenderState(device, D3DRS_ZFUNC, compare_function(
+	IDirect3DDevice9_SetRenderState(device, D3DRS_ZFUNC, compare_function(debug.depth_always ? GL_ALWAYS :
 		debug.equal_as_lequal && gl.depth_func == GL_EQUAL ? GL_LEQUAL : gl.depth_func));
 	IDirect3DDevice9_SetRenderState(device, D3DRS_ZWRITEENABLE, gl.depth_test && gl.depth_mask && gl.bound_depth);
 	IDirect3DDevice9_SetRenderState(device, D3DRS_STENCILENABLE, gl.stencil_test && gl.bound_depth);
@@ -1789,9 +1791,9 @@ static BOOL prepare_draw(struct program **program_out, struct shader **vertex_ou
 	IDirect3DDevice9_SetPixelShader(gl.device, debug.green && gl.green_pixel ? gl.green_pixel : fragment->pixel);
 	if (draw_logged())
 	{
-		x360_log("gl:   viewport %d %d %d %d, scissor %d (%d %d %d %d), depth %d func 0x%x mask %d, blend %d 0x%x 0x%x, "
+		x360_log("gl:   viewport %d %d %d %d z %.4f-%.4f, scissor %d (%d %d %d %d), depth %d func 0x%x mask %d, blend %d 0x%x 0x%x, "
 			"cull %d 0x%x 0x%x, colors %d%d%d%d, constants %d/%d, target %p/%p",
-			gl.viewport[0], gl.viewport[1], gl.viewport[2], gl.viewport[3], gl.scissor_test, gl.scissor[0],
+			gl.viewport[0], gl.viewport[1], gl.viewport[2], gl.viewport[3], gl.depth_near, gl.depth_far, gl.scissor_test, gl.scissor[0],
 			gl.scissor[1], gl.scissor[2], gl.scissor[3], gl.depth_test, gl.depth_func, gl.depth_mask, gl.blend,
 			gl.blend_source, gl.blend_destination, gl.cull_face, gl.cull_mode, gl.front_face, gl.color_mask[0],
 			gl.color_mask[1], gl.color_mask[2], gl.color_mask[3], program->vertex_constant_count,
@@ -2053,6 +2055,49 @@ static void dump_after_draw(unsigned long index)
 	IDirect3DTexture9_LockRect((D3DTexture *)color->d3d, 0, &locked, NULL, D3DLOCK_READONLY);
 	XGUntileSurface(linear, color->width * 4, NULL, locked.pBits, color->width, color->height, NULL, 4);
 	IDirect3DTexture9_UnlockRect((D3DTexture *)color->d3d, 0);
+	/* and its depth, after the color */
+	{
+		struct texture *depth = framebuffer ? object_get(framebuffer->depth, _object_texture) : NULL;
+		static D3DTexture *depth_copy;
+
+		if (depth && depth->surface && depth->width == color->width && depth->height == color->height)
+		{
+			if (!depth_copy)
+				IDirect3DDevice9_CreateTexture(gl.device, color->width, color->height, 1, 0, D3DFMT_D24S8, 0,
+					&depth_copy, NULL);
+			if (depth_copy)
+			{
+				D3DRECT rectangle = { 0, 0, (LONG)color->width, (LONG)color->height };
+				D3DPOINT point = { 0, 0 };
+				unsigned char *depth_linear = malloc(size);
+
+				IDirect3DDevice9_SetRenderTarget(gl.device, 0, color->surface);
+				IDirect3DDevice9_SetDepthStencilSurface(gl.device, depth->surface);
+				IDirect3DDevice9_Resolve(gl.device, D3DRESOLVE_DEPTHSTENCIL, &rectangle, (D3DBaseTexture *)depth_copy,
+					&point, 0, 0, NULL, 1.0f, 0, NULL);
+				IDirect3DDevice9_BlockUntilIdle(gl.device);
+				gl.bound_color = color->surface;
+				gl.bound_depth = depth->surface;
+				gl.bound_screen = FALSE;
+				if (depth_linear)
+				{
+					IDirect3DTexture9_LockRect(depth_copy, 0, &locked, NULL, D3DLOCK_READONLY);
+					XGUntileSurface(depth_linear, color->width * 4, NULL, locked.pBits, color->width, color->height,
+						NULL, 4);
+					IDirect3DTexture9_UnlockRect(depth_copy, 0);
+					_snprintf(path, sizeof(path) - 1, "game:\\depth%lu.raw", index);
+					path[sizeof(path) - 1] = '\0';
+					file = fopen(path, "wb");
+					if (file)
+					{
+						fwrite(depth_linear, 1, size, file);
+						fclose(file);
+					}
+					free(depth_linear);
+				}
+			}
+		}
+	}
 	_snprintf(path, sizeof(path) - 1, "game:\\draw%lu.raw", index);
 	path[sizeof(path) - 1] = '\0';
 	file = fopen(path, "wb");
@@ -2075,6 +2120,18 @@ static void draw(GLenum mode, unsigned long first, unsigned long count, GLenum i
 	unsigned long vertex_end = first + count;
 
 	debug_load();
+	if (debug.zclear_draw && gl.draws - frame_first_draw == debug.zclear_draw - 1)
+	{
+		/* bring-up: zclear_draw=K clears depth before each frame's draw K - 1 */
+		D3DVECTOR4 none = { 0.0f, 0.0f, 0.0f, 0.0f };
+
+		bind_targets();
+		if (gl.bound_depth)
+		{
+			IDirect3DDevice9_SetRenderState(gl.device, D3DRS_SCISSORTESTENABLE, FALSE);
+			IDirect3DDevice9_ClearF(gl.device, D3DCLEAR_ZBUFFER | D3DCLEAR_STENCIL, NULL, &none, 1.0f, 0);
+		}
+	}
 	if (debug.no_draws || !count || !prepare_draw(&program, &vertex))
 		return;
 	type = primitive_type(mode, &count);
@@ -2127,6 +2184,36 @@ static void draw(GLenum mode, unsigned long first, unsigned long count, GLenum i
 		if (draw_logged())
 			x360_log("gl: draw %lu: indexed %lu (vertices to %lu, base %ld), mode 0x%x, program %u, inputs 0x%lx",
 				gl.draws, count, vertex_end, base_vertex, mode, gl.program, vertex->inputs);
+		if (draw_logged() && gl.attributes[0].enabled && gl.attributes[0].binding < BINDINGS)
+		{
+			/* (the first indices and their positions as the GPU reads them) */
+			struct binding *binding = &gl.bindings[gl.attributes[0].binding];
+			struct buffer *positions = object_get(binding->buffer, _object_buffer);
+			int shown;
+
+			for (shown = 0; shown < 6 && (unsigned long)shown < count && positions && positions->data; shown++)
+			{
+				unsigned long value = index_bytes == 4 ? ((const unsigned long *)source)[shown] :
+					((const unsigned short *)source)[shown];
+				long at = (long)binding->offset + ((long)value + base_vertex) * (long)binding->stride +
+					(long)gl.attributes[0].relative_offset;
+				float xyz[3] = { 0.0f, 0.0f, 0.0f };
+				int axis;
+
+				if (at >= 0 && (unsigned long)at + 12 <= positions->size)
+				{
+					for (axis = 0; axis < 3; axis++)
+					{
+						unsigned long word;
+
+						memcpy(&word, positions->data + at + axis * 4, 4);
+						word = __builtin_bswap32(word);
+						memcpy(&xyz[axis], &word, 4);
+					}
+				}
+				x360_log("gl:     index %lu: position %.3f %.3f %.3f", value, xyz[0], xyz[1], xyz[2]);
+			}
+		}
 		IDirect3DDevice9_DrawIndexedVertices(gl.device, type, 0, 0, (UINT)count);
 	}
 	else
@@ -2655,7 +2742,8 @@ static void APIENTRY x360_glClear(GLbitfield mask)
 		rectangle.y2 = gl.scissor[1] + gl.scissor[3];
 	}
 	IDirect3DDevice9_SetRenderState(gl.device, D3DRS_SCISSORTESTENABLE, FALSE);
-	IDirect3DDevice9_ClearF(gl.device, flags, gl.scissor_test ? &rectangle : NULL, &color, (float)gl.clear_depth,
+	IDirect3DDevice9_ClearF(gl.device, flags, gl.scissor_test ? &rectangle : NULL, &color,
+		(float)gl.clear_depth,
 		(DWORD)gl.clear_stencil);
 	if (flags & D3DCLEAR_TARGET)
 		targets_written();

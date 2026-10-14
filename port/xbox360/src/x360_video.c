@@ -32,8 +32,10 @@ void *x360_video_device(void)
 	parameters.BackBufferCount = 1;
 	parameters.MultiSampleType = D3DMULTISAMPLE_NONE;
 	parameters.SwapEffect = D3DSWAPEFFECT_DISCARD;
-	parameters.EnableAutoDepthStencil = TRUE;
-	parameters.AutoDepthStencilFormat = D3DFMT_D24S8;
+	/* (no depth for the screen: nothing drawn to it tests depth, and its
+	depth's EDRAM would be the game's render targets', which follow the back
+	buffer: x360_gl.c) */
+	parameters.EnableAutoDepthStencil = FALSE;
 	parameters.PresentationInterval = D3DPRESENT_INTERVAL_ONE;
 	result = Direct3D_CreateDevice(0, D3DDEVTYPE_HAL, NULL, D3DCREATE_HARDWARE_VERTEXPROCESSING, &parameters,
 		&device);
@@ -124,7 +126,7 @@ void x360_video_probe(void)
 		declaration ? "made" : "not made");
 	for (frame = 0; frame < 60; frame++)
 	{
-		D3DDevice_Clear(probe_device, 0, NULL, D3DCLEAR_TARGET | D3DCLEAR_ZBUFFER, D3DCOLOR_XRGB(0x10, 0x20, 0x30),
+		D3DDevice_Clear(probe_device, 0, NULL, D3DCLEAR_TARGET, D3DCOLOR_XRGB(0x10, 0x20, 0x30),
 			1.0f, 0, FALSE);
 		if (vertex_shader && pixel_shader && declaration)
 		{
