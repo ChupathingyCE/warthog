@@ -27,14 +27,14 @@ int main(void)
 {
 	expect(0, _xbox_memory_class_unknown, 0);
 	/* a stock Xbox: 16,384 pages, or a little less as a system reports it */
-	expect(64UL << 20, _xbox_memory_class_64mb, 1);
-	expect((64UL << 20) - 4096, _xbox_memory_class_64mb, 1);
+	expect(64UL << 20, _xbox_memory_class_64mb, 6);
+	expect((64UL << 20) - 4096, _xbox_memory_class_64mb, 6);
 	/* a devkit, or the common upgrade */
-	expect(128UL << 20, _xbox_memory_class_128mb, 2);
-	expect((128UL << 20) - (1UL << 20), _xbox_memory_class_128mb, 2);
+	expect(128UL << 20, _xbox_memory_class_128mb, 7);
+	expect((128UL << 20) - (1UL << 20), _xbox_memory_class_128mb, 7);
 	/* the bigger mods */
-	expect(256UL << 20, _xbox_memory_class_256mb, 2);
-	expect(192UL << 20, _xbox_memory_class_256mb, 2);
+	expect(256UL << 20, _xbox_memory_class_256mb, 8);
+	expect(192UL << 20, _xbox_memory_class_256mb, 8);
 	if (failures)
 		return 1;
 	printf("memory_test: ok\n");
