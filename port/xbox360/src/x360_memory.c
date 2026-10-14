@@ -62,3 +62,16 @@ int x360_window_commit(void *address, size_t size)
 {
 	return x360_window_contains(address, size);
 }
+
+/* bring-up: every cache line of the window written back to memory, where the
+GPU reads it */
+void x360_window_flush(void)
+{
+	unsigned char *line;
+
+	if (!window_begin)
+		return;
+	for (line = window_begin; line < window_begin + window_size; line += 128)
+		__asm__ volatile ("dcbst 0, %0" : : "r"(line) : "memory");
+	__asm__ volatile ("sync" : : : "memory");
+}

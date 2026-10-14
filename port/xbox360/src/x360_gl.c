@@ -68,8 +68,8 @@ static void first_use(const char *name)
 static struct
 {
 	BOOL loaded;
-	unsigned long white_units, zclear_draw;
-	BOOL depth_always, no_mips, equal_as_lequal, no_draws, constant_stream, no_resolves, log_draws, clear_red, green, no_cull, no_depth, no_blend, probe, dump;
+	unsigned long white_units, zclear_draw, flush_window_every, epilogue, first_indices;
+	BOOL deindex_swap, topdown, deindex, index_le, vertex_swap, packed_float, rebind, simple_world, copy_vertices, skip_based, skip_unbased, depth_always, no_mips, equal_as_lequal, no_draws, constant_stream, no_resolves, log_draws, clear_red, green, no_cull, no_depth, no_blend, probe, dump;
 	/* log_frame=N: every draw and clear of frame N; dump_at=N: the picture
 	of frame N too; skip_program=N: that program's draws left out */
 	unsigned long log_frame, dump_at;
@@ -108,7 +108,21 @@ static void debug_load(void)
 		if (!strcmp(word, "lequal")) debug.equal_as_lequal = TRUE;
 		if (!strcmp(word, "no_mips")) debug.no_mips = TRUE;
 		if (!strcmp(word, "depth_always")) debug.depth_always = TRUE;
+		if (!strcmp(word, "skip_based")) debug.skip_based = TRUE;
+		if (!strcmp(word, "copy_vertices")) debug.copy_vertices = TRUE;
+		if (!strcmp(word, "simple_world")) debug.simple_world = TRUE;
+		if (!strcmp(word, "rebind")) debug.rebind = TRUE;
+		if (!strcmp(word, "packed_float")) debug.packed_float = TRUE;
+		if (!strcmp(word, "index_le")) debug.index_le = TRUE;
+		if (!strcmp(word, "deindex")) debug.deindex = TRUE;
+		if (!strcmp(word, "topdown")) debug.topdown = TRUE;
+		if (!strcmp(word, "deindex_swap")) debug.deindex_swap = TRUE;
+		if (!strcmp(word, "vertex_swap")) debug.vertex_swap = TRUE;
+		if (!strcmp(word, "skip_unbased")) debug.skip_unbased = TRUE;
 		sscanf(word, "zclear_draw=%lu", &debug.zclear_draw);
+		sscanf(word, "flush_window_every=%lu", &debug.flush_window_every);
+		sscanf(word, "epilogue=%lu", &debug.epilogue);
+		sscanf(word, "first_indices=%lu", &debug.first_indices);
 		{
 			unsigned long unit;
 
@@ -380,6 +394,7 @@ static struct
 	D3DVertexShader *blit_vertex;
 	D3DPixelShader *blit_pixel;
 	D3DPixelShader *green_pixel;
+	D3DVertexShader *simple_vertex, *topdown_vertex;
 	struct texture *presented;
 	D3DVertexDeclaration *blit_declaration;
 	unsigned long frame;
@@ -455,6 +470,22 @@ static BOOL gl_ready(void)
 	if (code)
 	{
 		gl.green_pixel = D3DDevice_CreatePixelShader(x360_video_shader_code(code));
+		x360_video_shader_free(code);
+	}
+	code = x360_video_compile("float4 c[4] : register(c0);\n"
+		"float4 main(float4 p : TEXCOORD0) : POSITION\n"
+		"{ return float4(dot(p.xyz, c[0].xyz) + c[0].w, dot(p.xyz, c[1].xyz) + c[1].w,\n"
+		"dot(p.xyz, c[2].xyz) + c[2].w, dot(p.xyz, c[3].xyz) + c[3].w); }\n", "vs_3_0", NULL);
+	if (code)
+	{
+		gl.simple_vertex = D3DDevice_CreateVertexShader(x360_video_shader_code(code));
+		x360_video_shader_free(code);
+	}
+	code = x360_video_compile("float4 main(float4 p : TEXCOORD0) : POSITION\n"
+		"{ return float4((p.x - 60.0) / 80.0, (p.y + 100.0) / 80.0, 0.5, 1.0); }\n", "vs_3_0", NULL);
+	if (code)
+	{
+		gl.topdown_vertex = D3DDevice_CreateVertexShader(x360_video_shader_code(code));
 		x360_video_shader_free(code);
 	}
 	code = x360_video_compile(blit_pixel_source, "ps_3_0", NULL);
@@ -1099,6 +1130,30 @@ static BOOL shader_compile(struct shader *shader)
 	shader->hlsl = x360_glsl_to_hlsl(shader->source, vertex);
 	if (!shader->hlsl)
 		return FALSE;
+	debug_load();
+	if (vertex && debug.epilogue)
+	{
+		/* bring-up: epilogue=1 takes the captured clip branch always,
+		epilogue=2 outputs the captured clip position itself */
+		const char *find = debug.epilogue == 1 ? "if (clip_captured)" : "glsl_position = position;";
+		const char *replace = debug.epilogue == 1 ? "if (true)" : "glsl_position = clip_position;";
+		char *at = strstr(shader->hlsl, find);
+
+		if (at)
+		{
+			size_t before = (size_t)(at - shader->hlsl);
+			char *changed = malloc(strlen(shader->hlsl) + strlen(replace) + 1);
+
+			if (changed)
+			{
+				memcpy(changed, shader->hlsl, before);
+				strcpy(changed + before, replace);
+				strcat(changed, at + strlen(find));
+				free(shader->hlsl);
+				shader->hlsl = changed;
+			}
+		}
+	}
 	/* (which locations the vertex shader reads, and which are packed) */
 	if (vertex)
 	{
@@ -1319,7 +1374,7 @@ static DWORD vertex_type(const struct attribute *attribute, BOOL packed)
 	DWORD type;
 
 	if (packed)
-		type = D3DDECLTYPE_HEND3N;
+		type = debug.packed_float ? D3DDECLTYPE_FLOAT1 : D3DDECLTYPE_HEND3N;
 	else if (attribute->type == GL_FLOAT)
 		type = attribute->size == 1 ? D3DDECLTYPE_FLOAT1 : attribute->size == 2 ? D3DDECLTYPE_FLOAT2 :
 			attribute->size == 3 ? D3DDECLTYPE_FLOAT3 : D3DDECLTYPE_FLOAT4;
@@ -1335,7 +1390,10 @@ static DWORD vertex_type(const struct attribute *attribute, BOOL packed)
 			(attribute->normalized ? D3DDECLTYPE_USHORT4N : D3DDECLTYPE_USHORT4);
 	else
 		type = D3DDECLTYPE_FLOAT4;
-	/* (the game's data is little-endian) */
+	/* (the stream's fetch constant has the byte order that counts:
+	setup_vertices; this one is not used by the fetch) */
+	if (debug.vertex_swap)
+		return type;
 	return (type & ~D3DDECLTYPE_ENDIAN_MASK) | (GPUENDIAN_NONE << D3DDECLTYPE_ENDIAN_SHIFT);
 }
 
@@ -1789,6 +1847,17 @@ static BOOL prepare_draw(struct program **program_out, struct shader **vertex_ou
 	apply_render_state();
 	IDirect3DDevice9_SetVertexShader(gl.device, vertex->vertex);
 	IDirect3DDevice9_SetPixelShader(gl.device, debug.green && gl.green_pixel ? gl.green_pixel : fragment->pixel);
+	if (debug.simple_world && vertex->inputs == 0x19f && gl.simple_vertex && gl.green_pixel)
+	{
+		/* bring-up: the world's draws with c0-c3 alone, green wireframe */
+		IDirect3DDevice9_SetVertexShader(gl.device, debug.topdown && gl.topdown_vertex ? gl.topdown_vertex :
+			gl.simple_vertex);
+		IDirect3DDevice9_SetPixelShader(gl.device, gl.green_pixel);
+		IDirect3DDevice9_SetRenderState(gl.device, D3DRS_FILLMODE, D3DFILL_WIREFRAME);
+		IDirect3DDevice9_SetRenderState(gl.device, D3DRS_ZENABLE, FALSE);
+		IDirect3DDevice9_SetRenderState(gl.device, D3DRS_ALPHABLENDENABLE, FALSE);
+		IDirect3DDevice9_SetRenderState(gl.device, D3DRS_CULLMODE, D3DCULL_NONE);
+	}
 	if (draw_logged())
 	{
 		x360_log("gl:   viewport %d %d %d %d z %.4f-%.4f, scissor %d (%d %d %d %d), depth %d func 0x%x mask %d, blend %d 0x%x 0x%x, "
@@ -1818,12 +1887,75 @@ base vertex does not take a negative one, which the renderer's draws from
 the mirror use) */
 static long draw_base_vertex;
 
+/* A stream's byte order is its fetch constant's (the declaration's is not
+used): the map's vertices are little-endian and read as they are; the
+game's own are the CPU's and keep the default (8IN32). The field is set
+through the dword: the SDK's bitfields are laid out from the low bit by
+Microsoft's compiler, from the high bit by this one. */
+static void fetch_little_endian(D3DVertexBuffer *stream)
+{
+	stream->Format.dword[1] = (stream->Format.dword[1] & ~3UL) | GPUENDIAN_NONE;
+}
+
+/* The console's vertex shaders fetch their inputs with formats and strides
+written into their code, which D3DVertexShader_Bind sets from a declaration
+and the streams' strides; a shader never bound fetches with the compiler's
+defaults (32-bit floats, the CPU's byte order). Each pairing of a shader
+with a layout gets a shader object of its own, bound once, so a binding is
+never changed while the GPU may still run draws made with it. */
+struct bound_shader
+{
+	struct shader *shader;
+	D3DVertexDeclaration *declaration;
+	DWORD strides[ATTRIBUTES + 1];
+	D3DVertexShader *bound;
+	struct bound_shader *next;
+};
+
+static struct bound_shader *bound_shaders;
+
+static D3DVertexShader *vertex_shader_bound(struct shader *shader, D3DVertexDeclaration *declaration,
+	const DWORD *strides, int stream_count)
+{
+	struct bound_shader *entry;
+	static unsigned long made;
+
+	if (!shader->code)
+		return NULL;
+	for (entry = bound_shaders; entry; entry = entry->next)
+	{
+		if (entry->shader == shader && entry->declaration == declaration &&
+			!memcmp(entry->strides, strides, sizeof(entry->strides)))
+		{
+			return entry->bound;
+		}
+	}
+	entry = calloc(1, sizeof(*entry));
+	if (!entry)
+		return NULL;
+	entry->shader = shader;
+	entry->declaration = declaration;
+	memcpy(entry->strides, strides, sizeof(entry->strides));
+	entry->bound = D3DDevice_CreateVertexShader(((LPD3DXBUFFER)shader->code)->lpVtbl->GetBufferPointer((LPD3DXBUFFER)shader->code));
+	if (entry->bound)
+		D3DVertexShader_Bind(entry->bound, 0, declaration, entry->strides, NULL);
+	entry->next = bound_shaders;
+	bound_shaders = entry;
+	if (++made == 1 || made % 100 == 0)
+		x360_log("gl: %lu vertex shader bindings (%d streams in the latest)", made, stream_count);
+	return entry->bound;
+}
+/* bring-up (deindex): the draw's indices, its vertices copied out in their order */
+static const unsigned short *deindex_indices;
+static unsigned long deindex_count;
+
 static BOOL setup_vertices(struct shader *vertex, unsigned long vertex_start, unsigned long vertex_end)
 {
 	D3DVERTEXELEMENT9 elements[ATTRIBUTES + 1];
 	static D3DVertexBuffer stream_headers[2][ATTRIBUTES + 1];
 	D3DVertexBuffer *streams = stream_headers[gl.frame_half];
 	int element_count = 0, stream_count = 0;
+	DWORD strides[ATTRIBUTES + 1];
 	int stream_of_binding[BINDINGS];
 	float *constants = NULL;
 	int constant_stream = -1, constant_count = 0;
@@ -1831,6 +1963,7 @@ static BOOL setup_vertices(struct shader *vertex, unsigned long vertex_start, un
 
 	for (index = 0; index < BINDINGS; index++)
 		stream_of_binding[index] = -1;
+	memset(strides, 0, sizeof(strides));
 	for (index = 0; index < ATTRIBUTES; index++)
 	{
 		struct attribute *attribute = &gl.attributes[index];
@@ -1875,7 +2008,10 @@ static BOOL setup_vertices(struct shader *vertex, unsigned long vertex_start, un
 			stream = stream_count++;
 			XGSetVertexBufferHeader(slot * vertex_end, 0, 0, 0, &streams[stream]);
 			XGOffsetResourceAddress((D3DResource *)&streams[stream], copy);
+			if (buffer->alias)
+				fetch_little_endian(&streams[stream]);
 			IDirect3DDevice9_SetStreamSource(gl.device, (UINT)stream, &streams[stream], 0, (UINT)slot);
+			strides[stream] = slot;
 			element->Stream = (WORD)stream;
 			element->Offset = 0;
 			element->Type = vertex_type(attribute, packed);
@@ -1897,7 +2033,39 @@ static BOOL setup_vertices(struct shader *vertex, unsigned long vertex_start, un
 				/* (read where it is: buffers are in memory the GPU reads) */
 				copy = buffer->data + binding->offset;
 				bytes = buffer->size - (unsigned long)binding->offset;
-				if ((UINT_PTR)copy & 3)
+				if (deindex_indices)
+				{
+					unsigned long k;
+
+					bytes = stride * deindex_count;
+					copy = ring_reserve(gl.vertex_ring, RING_VERTEX_SIZE, &gl.vertex_ring_offset, bytes);
+					if (!copy)
+						return FALSE;
+					for (k = 0; k < deindex_count; k++)
+					{
+						long at = (long)binding->offset + ((long)deindex_indices[k] + draw_base_vertex) * (long)stride;
+
+						if (at >= 0 && (unsigned long)at + stride <= buffer->size)
+						{
+							memcpy(copy + k * stride, buffer->data + at, stride);
+							if (debug.deindex_swap && stride >= 12 && attribute->binding == gl.attributes[0].binding)
+							{
+								/* bring-up: positions made the CPU's floats */
+								unsigned long word, w;
+
+								for (w = 0; w < 3; w++)
+								{
+									memcpy(&word, copy + k * stride + w * 4, 4);
+									word = __builtin_bswap32(word);
+									memcpy(copy + k * stride + w * 4, &word, 4);
+								}
+							}
+						}
+						else
+							memset(copy + k * stride, 0, stride);
+					}
+				}
+				else if (((UINT_PTR)copy & 3) || debug.copy_vertices)
 				{
 					/* (a stream starts on 4 bytes: an odd one is copied) */
 					bytes = stride ? stride * vertex_end : 64;
@@ -1908,7 +2076,7 @@ static BOOL setup_vertices(struct shader *vertex, unsigned long vertex_start, un
 						return FALSE;
 					memcpy(copy, buffer->data + binding->offset, bytes);
 				}
-				if (draw_base_vertex)
+				if (draw_base_vertex && !deindex_indices)
 				{
 					copy += draw_base_vertex * (long)stride;
 					bytes = (unsigned long)((long)bytes - draw_base_vertex * (long)stride);
@@ -1917,7 +2085,24 @@ static BOOL setup_vertices(struct shader *vertex, unsigned long vertex_start, un
 				stream_of_binding[attribute->binding] = stream;
 				XGSetVertexBufferHeader(bytes, 0, 0, 0, &streams[stream]);
 				XGOffsetResourceAddress((D3DResource *)&streams[stream], copy);
+				/* (the map's vertices are little-endian: the stream reads them so) */
+				{
+					static int shown;
+					DWORD before = streams[stream].Format.dword[1];
+
+					if (buffer->alias)
+						fetch_little_endian(&streams[stream]);
+					if (shown < 4)
+					{
+						shown++;
+						x360_log("gl: stream fetch constant %08lx %08lx (was %08lx)", (unsigned long)streams[stream].Format.dword[0],
+							(unsigned long)streams[stream].Format.dword[1], (unsigned long)before);
+					}
+				}
+				if (debug.rebind)
+					IDirect3DDevice9_SetStreamSource(gl.device, (UINT)stream, NULL, 0, 0);
 				IDirect3DDevice9_SetStreamSource(gl.device, (UINT)stream, &streams[stream], 0, (UINT)stride);
+				strides[stream] = stride;
 			}
 			element->Stream = (WORD)stream;
 			element->Offset = (WORD)attribute->relative_offset;
@@ -2007,10 +2192,27 @@ static BOOL setup_vertices(struct shader *vertex, unsigned long vertex_start, un
 		}
 		XGSetVertexBufferHeader(bytes, 0, 0, 0, &streams[constant_stream]);
 		XGOffsetResourceAddress((D3DResource *)&streams[constant_stream], data);
+		/* (swapped above: the GPU's byte order) */
+		fetch_little_endian(&streams[constant_stream]);
 		IDirect3DDevice9_SetStreamSource(gl.device, (UINT)constant_stream, &streams[constant_stream], 0,
 			(UINT)stride);
+		strides[constant_stream] = stride;
 	}
-	IDirect3DDevice9_SetVertexDeclaration(gl.device, declaration_get(elements, element_count));
+	{
+		D3DVertexDeclaration *declaration = declaration_get(elements, element_count);
+
+		IDirect3DDevice9_SetVertexDeclaration(gl.device, declaration);
+		/* the vertex shader as bound to these vertices (vertex_shader_bound) */
+		if (draw_logged())
+			x360_log("gl:     shader %p bound %d", (void *)vertex->vertex, (int)D3DVertexShader_IsBound(vertex->vertex));
+		if (declaration && !(debug.simple_world && vertex->inputs == 0x19f))
+		{
+			D3DVertexShader *bound = vertex_shader_bound(vertex, declaration, strides, stream_count);
+
+			if (bound)
+				IDirect3DDevice9_SetVertexShader(gl.device, bound);
+		}
+	}
 	return TRUE;
 }
 
@@ -2166,6 +2368,24 @@ static void draw(GLenum mode, unsigned long first, unsigned long count, GLenum i
 		}
 		if (lowest > highest)
 			lowest = highest;
+		if ((debug.skip_based && base_vertex) || (debug.skip_unbased && !base_vertex && mode == GL_TRIANGLES))
+			return;
+		if (debug.first_indices && mode == GL_TRIANGLES && count > debug.first_indices)
+			count = debug.first_indices;
+		if (debug.deindex && index_bytes == 2 && mode == GL_TRIANGLES)
+		{
+			/* bring-up: the same triangles without the index buffer */
+			deindex_indices = (const unsigned short *)(buffer->data + offset);
+			deindex_count = count;
+			draw_base_vertex = base_vertex;
+			if (setup_vertices(vertex, 0, count))
+				IDirect3DDevice9_DrawVertices(gl.device, type, 0, (UINT)count);
+			deindex_indices = NULL;
+			draw_base_vertex = 0;
+			gl.draws++;
+			targets_written();
+			return;
+		}
 		/* (vertices by index: the base is in the streams' addresses) */
 		vertex_end = highest + 1;
 		draw_base_vertex = base_vertex;
@@ -2177,9 +2397,11 @@ static void draw(GLenum mode, unsigned long first, unsigned long count, GLenum i
 		}
 		draw_base_vertex = 0;
 		memcpy(copy, source, count * index_bytes);
-		XGSetIndexBufferHeader(count * index_bytes, 0, index_bytes == 4 ? D3DFMT_INDEX32 : D3DFMT_INDEX16, 0,
+		XGSetIndexBufferHeader(count * index_bytes, 0, index_bytes == 4 ? D3DFMT_INDEX32 : debug.index_le ? D3DFMT_LE_INDEX16 : D3DFMT_INDEX16, 0,
 			0, &index_headers[gl.frame_half]);
 		XGOffsetResourceAddress((D3DResource *)&index_headers[gl.frame_half], copy);
+		if (debug.rebind)
+			IDirect3DDevice9_SetIndices(gl.device, NULL);
 		IDirect3DDevice9_SetIndices(gl.device, &index_headers[gl.frame_half]);
 		if (draw_logged())
 			x360_log("gl: draw %lu: indexed %lu (vertices to %lu, base %ld), mode 0x%x, program %u, inputs 0x%lx",
@@ -2211,7 +2433,17 @@ static void draw(GLenum mode, unsigned long first, unsigned long count, GLenum i
 						memcpy(&xyz[axis], &word, 4);
 					}
 				}
-				x360_log("gl:     index %lu: position %.3f %.3f %.3f", value, xyz[0], xyz[1], xyz[2]);
+				{
+					struct program *current = object_get(gl.program, _object_program);
+					float clip[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
+					int row;
+
+					for (row = 0; row < 4 && current; row++)
+						clip[row] = current->vertex_constants[row][0] * xyz[0] + current->vertex_constants[row][1] * xyz[1] +
+							current->vertex_constants[row][2] * xyz[2] + current->vertex_constants[row][3];
+					x360_log("gl:     index %lu: position %.3f %.3f %.3f, screen %.3f %.3f w %.3f", value, xyz[0], xyz[1],
+						xyz[2], clip[3] ? clip[0] / clip[3] : 0.0f, clip[3] ? clip[1] / clip[3] : 0.0f, clip[3]);
+				}
 			}
 		}
 		if (draw_logged() && gl.attributes[0].enabled && gl.attributes[0].binding < BINDINGS)
@@ -3483,6 +3715,8 @@ void x360_gl_swap(void)
 	}
 	gl.frame++;
 	frame_first_draw = gl.draws;
+	if (debug.flush_window_every && gl.frame % debug.flush_window_every == 0)
+		x360_window_flush();
 	if (gl.frame == 1 || gl.frame % 600 == 0)
 		x360_log("gl: frame %lu, %lu draws so far", gl.frame, gl.draws);
 }

@@ -28,6 +28,7 @@ void x360_debug_print(const char *text);
 void x360_log(const char *format, ...);
 
 /* ---------- the Xbox window (x360_memory.c) */
+void x360_window_flush(void);
 
 /* whether [address, address + size) is inside the window */
 int x360_window_contains(const void *address, size_t size);
