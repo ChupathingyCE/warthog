@@ -277,6 +277,10 @@ static const struct
 	{ "debug.exit_after", "0.0" },
 	{ "debug.null_renderer", "false" },
 	{ "debug.log_addresses", "false" },
+	/* the desktop builds' Settings volumes (sound_manager.c), at their
+	defaults: without them both read as 0 and every sound played silent */
+	{ "audio.music_volume", "1.0" },
+	{ "audio.effects_volume", "1.0" },
 };
 
 int xbox_p2p_online(void);
@@ -290,7 +294,19 @@ static const char *setting(const char *name)
 		if (!strcmp(settings[index].name, name))
 			return settings[index].value;
 	}
-	DbgPrint("halo: no setting %s on the console\n", name);
+	/* (into debug.txt too, the first few: a setting the shared code reads
+	that the console lacks reads as empty, 0 or false) */
+	{
+		static int reported;
+
+		if (reported < 16)
+		{
+			reported++;
+			platform_log("no setting %s on the console", name);
+		}
+		else
+			DbgPrint("halo: no setting %s on the console\n", name);
+	}
 	return "";
 }
 

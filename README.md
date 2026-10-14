@@ -24,8 +24,8 @@ PC builds. Expect rough edges, and please report them.
 ## Status
 
 **On the original Xbox (in development)**
-- Boots to the menus at a steady 30 fps on a development kit, with the
-  menu music and profiles
+- Boots to the menus at a steady 30 fps on a development kit, with
+  profiles
 - Gets its address by DHCP, and the game list from the internet
 - **ONLINE GAMES** in the Multiplayer menu: the game list on a screen of its
   own, joining a game by its invite through the PCs' own tunnel (built, not
@@ -35,7 +35,8 @@ PC builds. Expect rough edges, and please report them.
   console's limits; not yet on a console)
 - Reads the console's memory (64, 128 or 256 MB) at the start, and can use
   more on a bigger one
-- Not yet: hosting PC players, Bink movies, reverb, network co-op
+- Not yet: menu music (it doesn't play yet; sound effects do), hosting PC
+  players, Bink movies, reverb, network co-op
 
 **Consoles**
 

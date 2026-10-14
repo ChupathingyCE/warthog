@@ -164,7 +164,10 @@ Kai's for its MAC: yes or no. Kai's address itself (`10.252.EE.FF`, mask
 ## Status
 
 The build booted on a development kit on October 4: the menus at a steady
-30 fps, the menu music and profiles, DHCP, the game list and ONLINE GAMES.
+30 fps, profiles, DHCP, the game list and ONLINE GAMES. The menu music did
+not play (the console had no `audio.music_volume` or `audio.effects_volume`
+setting, so both read as 0; `src/xbox_port.c` now has them at 1.0, not yet
+tried on a console).
 The October 2 build also started on a modified retail console. The code is
 now ChupathingyCE's at network version 28 (it joins hosts of 11 through
 30), merged October 13 and not yet booted on a console since.
