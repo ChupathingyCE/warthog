@@ -2214,6 +2214,55 @@ static void draw(GLenum mode, unsigned long first, unsigned long count, GLenum i
 				x360_log("gl:     index %lu: position %.3f %.3f %.3f", value, xyz[0], xyz[1], xyz[2]);
 			}
 		}
+		if (draw_logged() && gl.attributes[0].enabled && gl.attributes[0].binding < BINDINGS)
+		{
+			/* (every index's vertex through c0-c3: the nearest depth, and
+			those behind the camera) */
+			struct binding *binding = &gl.bindings[gl.attributes[0].binding];
+			struct buffer *positions = object_get(binding->buffer, _object_buffer);
+			struct program *current = object_get(gl.program, _object_program);
+			unsigned long which, behind = 0, outside = 0, nearest_index = 0;
+			float nearest = 2.0f;
+
+			for (which = 0; which < count && positions && positions->data && current; which++)
+			{
+				unsigned long value = index_bytes == 4 ? ((const unsigned long *)source)[which] :
+					((const unsigned short *)source)[which];
+				long at = (long)binding->offset + ((long)value + base_vertex) * (long)binding->stride +
+					(long)gl.attributes[0].relative_offset;
+				float xyz[3], z, w;
+				int axis;
+
+				if (index_bytes == 2 && value == 0xffff)
+					continue;
+				if (at < 0 || (unsigned long)at + 12 > positions->size)
+				{
+					outside++;
+					continue;
+				}
+				for (axis = 0; axis < 3; axis++)
+				{
+					unsigned long word;
+
+					memcpy(&word, positions->data + at + axis * 4, 4);
+					word = __builtin_bswap32(word);
+					memcpy(&xyz[axis], &word, 4);
+				}
+				z = current->vertex_constants[2][0] * xyz[0] + current->vertex_constants[2][1] * xyz[1] +
+					current->vertex_constants[2][2] * xyz[2] + current->vertex_constants[2][3];
+				w = current->vertex_constants[3][0] * xyz[0] + current->vertex_constants[3][1] * xyz[1] +
+					current->vertex_constants[3][2] * xyz[2] + current->vertex_constants[3][3];
+				if (w <= 0.0f)
+					behind++;
+				else if (z / w < nearest)
+				{
+					nearest = z / w;
+					nearest_index = value;
+				}
+			}
+			x360_log("gl:     depth: nearest %.4f (index %lu), %lu behind the camera, %lu outside the buffer", nearest,
+				nearest_index, behind, outside);
+		}
 		IDirect3DDevice9_DrawIndexedVertices(gl.device, type, 0, 0, (UINT)count);
 	}
 	else
