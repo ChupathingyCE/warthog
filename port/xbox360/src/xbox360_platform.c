@@ -92,13 +92,16 @@ void xbox360_main_loop_tick(void)
 	}
 }
 
-/* ---------- the screen (none yet) */
+/* ---------- the screen */
 
+/* the back buffer's size (x360_video.c: 1280x720, 16:9); the game draws
+that shape (the extracted SDK headers have no XGetVideoMode to ask for a
+4:3 set's) */
 BOOL platform_screen_mode(long *width, long *height)
 {
-	(void)width;
-	(void)height;
-	return FALSE;
+	*width = 1280;
+	*height = 720;
+	return TRUE;
 }
 
 int platform_display_resolutions(long *widths, long *heights, int maximum)
