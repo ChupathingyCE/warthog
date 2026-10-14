@@ -4,6 +4,17 @@ What changed in the ChupathingyCE Dedicated Server. The server is released
 with the game and has its version; the game's own changes are in its
 release notes.
 
+## 0.7.5
+
+- `sv_name_filter`: players whose name is on the blocked names list
+  (`blocked_names.txt` in the data folder, shipped with the server) are
+  warned, then removed 3 seconds later unless they change it. Off by
+  default; `sv_name_filter 1`, `name_filter = true` in admin/settings.toml or
+  `HALO_DEDICATED_NAME_FILTER=true` turns it on.
+- Busy games' carnage reports are sent whole (a list of players who left
+  past about 16 was cut off, and the site turned the report away).
+- Network version 28, as 0.7.4e: no redeploy needed for cross-play.
+
 ## 0.7.4e
 
 - OpenCE's network version 28 (build-201). No message changed; the game

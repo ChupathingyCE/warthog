@@ -42,6 +42,7 @@ A name with spaces goes in double quotes: `sv_kick "Master Chief"`.
 | `sv_end_game` | Ends the game in progress, as its score limit would: the carnage report shows, then the next entry's lobby opens. |
 | `sv_maxplayers [count]` | Shows or sets the most players a game takes (1 to 128; no fewer than `HALO_DEDICATED_MINIMUM_PLAYERS`). In the lobby at once, otherwise from the next lobby. |
 | `sv_name [name]` | Shows or sets the server's name on the lists (15 characters at most). In the lobby at once, otherwise from the next lobby. |
+| `sv_name_filter [0\|1]` | Shows or sets the name filter: with `1`, a player whose name is in the data folder's `blocked_names.txt` is warned and kicked ([settings.md](settings.md#blocked-names)). Saved in the settings file, and in effect at once. Off unless set. |
 | `sv_playlists`, `sv_playlist <name>`, `sv_playlist_new`, `sv_playlist_add`, `sv_playlist_remove`, `sv_playlist_move`, `sv_playlist_delete`, `sv_playlist_use`, `sv_mapcycle_add`, `sv_mapcycle_del` | Playlists made and edited on the server ([playlists.md](playlists.md#playlists-made-on-the-server)). |
 | `sv_gametypes`, `sv_gametype <name>`, `sv_gametype_new`, `sv_gametype_set`, `sv_gametype_delete` | Game type files ([playlists.md](playlists.md#game-type-files)). |
 | `sv_settings`, `sv_set <setting> <value>` | The settings file ([settings.md](settings.md)). |

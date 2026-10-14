@@ -33,6 +33,9 @@ boolean server_map_playable(char const *map, struct command_output *output);
 /* (server_commands.c's: the text an API's request brought with its command,
 NULL if none: a playlist's or game type's file to save) */
 char const *server_commands_payload(void);
+/* (server_commands.c's: blocked names kicked or not, from now; the list
+read again when it is turned on) */
+void server_commands_set_name_filter(boolean name_filter);
 
 /* the commands (server/docs/admin.md) */
 boolean server_admin_playlists(struct command_line const *line, boolean json, struct command_output *output);

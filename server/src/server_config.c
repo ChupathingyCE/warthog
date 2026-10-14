@@ -196,6 +196,8 @@ const struct server_setting server_settings_table[SERVER_SETTINGS] =
 	{ "idle_limit", SERVER_FIELD_INTEGER, 0, SERVER_SETTINGS_MAXIMUM_IDLE_LIMIT, "HALO_DEDICATED_IDLE_LIMIT",
 		"Minutes without a score that end a game (0: never)" },
 	{ "public", SERVER_FIELD_BOOLEAN, 0, 1, "HALO_DEDICATED_PUBLIC", "Listed in the in-game Server Browser" },
+	{ "name_filter", SERVER_FIELD_BOOLEAN, 0, 1, "HALO_DEDICATED_NAME_FILTER",
+		"Players with a blocked name kicked (blocked_names.txt)" },
 	{ "playlist", SERVER_FIELD_STRING, 0, SERVER_SETTINGS_PATH_SIZE - 1, NULL, "The playlist sv_playlist_use chose" },
 	{ "playlist_environment", SERVER_FIELD_STRING, 0, SERVER_SETTINGS_PATH_SIZE - 1, NULL,
 		"HALO_DEDICATED when sv_playlist_use chose it" },

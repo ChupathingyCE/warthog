@@ -155,6 +155,8 @@ static struct
 	wchar_t name[16];
 	/* listed in the server browser (HALO_DEDICATED_PUBLIC) */
 	boolean public_game;
+	/* blocked names kicked (sv_name_filter: server_commands.c) */
+	boolean name_filter;
 
 	boolean entry_set;
 	boolean entry_teams;
@@ -298,6 +300,7 @@ static void initialize(
 	char const *playlist = getenv("HALO_DEDICATED");
 	char const *name = getenv("HALO_DEDICATED_NAME");
 	char const *public_game = getenv("HALO_DEDICATED_PUBLIC");
+	char const *name_filter = getenv("HALO_DEDICATED_NAME_FILTER");
 	static struct server_settings settings;
 	long index;
 
@@ -368,6 +371,14 @@ static void initialize(
 		dedicated.public_game = settings.values[SERVER_SETTING_PUBLIC] ? TRUE : FALSE;
 	error(_error_silent, "dedicated: %s game (HALO_DEDICATED_PUBLIC)", dedicated.public_game ? "a public" :
 		"not a public");
+	/* (off unless true, 1, yes or on) */
+	if (name_filter && name_filter[0])
+	{
+		dedicated.name_filter = !_stricmp(name_filter, "true") || !strcmp(name_filter, "1") ||
+			!_stricmp(name_filter, "yes") || !_stricmp(name_filter, "on");
+	}
+	else
+		dedicated.name_filter = settings.set[SERVER_SETTING_NAME_FILTER] && settings.values[SERVER_SETTING_NAME_FILTER];
 	dedicated.active = dedicated.entry_count > 0;
 }
 
@@ -767,6 +778,7 @@ void dedicated_server_get_status(
 	status->maximum_players = dedicated.maximum_players;
 	status->idle_limit = dedicated.idle_limit;
 	status->public_game = dedicated.public_game;
+	status->name_filter = dedicated.name_filter;
 	for (index = 0; index < (long)NUMBEROF(status->name) - 1 && dedicated.name[index]; index++)
 		status->name[index] = (char)dedicated.name[index];
 	status->name[index] = 0;
@@ -887,6 +899,12 @@ void dedicated_server_set_idle_limit(
 	long idle_limit)
 {
 	dedicated.idle_limit = idle_limit;
+}
+
+void dedicated_server_set_name_filter(
+	boolean name_filter)
+{
+	dedicated.name_filter = name_filter;
 }
 
 boolean dedicated_server_use_playlist(

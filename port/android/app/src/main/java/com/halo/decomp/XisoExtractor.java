@@ -9,6 +9,7 @@ import java.nio.channels.FileChannel;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 
 /**
  * Copies the maps folder out of an Xbox disc image (an "xiso", or a whole
@@ -224,6 +225,27 @@ final class XisoExtractor {
         for (Entry entry : directories) {
             if (entry.name.equalsIgnoreCase("maps"))
                 maps = entry;
+        }
+        /* a multi-language European disc has no "maps" but a "maps_xx" per
+        language: the one for the device's language, else English, else the
+        first (as port/linux/src/xiso.c) */
+        if (maps == null) {
+            String wanted = "maps_" + Locale.getDefault().getLanguage();
+            Entry english = null, first = null;
+            for (Entry entry : directories) {
+                if (entry.name.length() != 7 || !entry.name.regionMatches(true, 0, "maps_", 0, 5))
+                    continue;
+                if (entry.name.equalsIgnoreCase(wanted)) {
+                    maps = entry;
+                    break;
+                }
+                if (english == null && entry.name.equalsIgnoreCase("maps_en"))
+                    english = entry;
+                if (first == null)
+                    first = entry;
+            }
+            if (maps == null)
+                maps = english != null ? english : first;
         }
         if (maps == null)
             throw new ExtractException("The disc image has no maps folder: it is not a Halo disc.");

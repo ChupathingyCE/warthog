@@ -235,7 +235,8 @@ def strip_debug(program: Path) -> None:
 
 def server_dist(platform: str, config: str, output: str) -> int:
     """dist/chupathingyce-server-linux-<arch>[-debug]: the server, its
-    README, its playlists and the notices its parts' licenses ask for"""
+    README, its playlists, its blocked names list and the notices its parts'
+    licenses ask for"""
     arch = platform[len("server-"):]
     dist = ROOT / "dist" / f"chupathingyce-server-linux-{arch}{'' if config == 'release' else '-debug'}"
     if dist.exists():
@@ -250,6 +251,8 @@ def server_dist(platform: str, config: str, output: str) -> int:
     shutil.copy2(ROOT / "server/README.md", dist / "README.md")
     for playlist in sorted((ROOT / "server/playlists").glob("*.txt")):
         shutil.copy2(playlist, dist / "playlists")
+    # (sv_name_filter's list, read from the data folder)
+    shutil.copy2(ROOT / "server/blocked_names.txt", dist / "blocked_names.txt")
     for source, name in (("port/third_party/mbedtls/LICENSE", "mbedtls-LICENSE.txt"),
                          ("port/third_party/miniupnpc/LICENSE", "miniupnpc-LICENSE.txt"),
                          ("port/third_party/expat/COPYING", "expat-COPYING.txt"),

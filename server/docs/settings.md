@@ -15,6 +15,7 @@ the file.
 | `HALO_DEDICATED_MAXIMUM_PLAYERS` | `12` | The players a game takes, up to 128 (`sv_maxplayers` in [admin.md](admin.md) changes it while running). |
 | `HALO_DEDICATED_IDLE_LIMIT` | `5` | A game in which nobody scores for this many minutes ends. `0`: never. |
 | `HALO_DEDICATED_PUBLIC` | `true` | A public game, listed in every in-game Server Browser (OpenCE's and ChupathingyCE's) through internet play's brokers. `false`: not listed there; the game list still lists it, and its invite still works. |
+| `HALO_DEDICATED_NAME_FILTER` | `false` | `true`: players with a blocked name are warned and kicked ([below](#blocked-names)); `sv_name_filter 1` on the console does the same. |
 | `HALO_DEDICATED_COMMANDS` | (none) | A file of [commands](admin.md#startup-commands) in the data folder, run once the server first hosts. |
 | `HALO_DEDICATED_CONSOLE` | on in a terminal | Commands typed on the server's standard input ([the console](admin.md#the-console)). `true`: read them even when it is not a terminal; `false`: never. |
 | `HALO_DEDICATED_CONTROL` | (off) | The [control API](admin.md#the-control-api)'s address: a port (`8080`, on 127.0.0.1 only) or an address and port (`127.0.0.1:8080`, `[::1]:8080`, `0.0.0.0:8443`). Its token is made and printed the first time, and the first owner's setup link. The [control panel](moderation.md#the-control-panel) is on the same address: plain HTTP on the loopback address, HTTPS beyond it. |
@@ -26,7 +27,31 @@ the file.
 
 The settings file's keys (`sv_settings` lists them, with where each value
 comes from): `name`, `maximum_players`, `minimum_players`, `idle_limit`,
-`public` (from the next start), and the playlist `sv_playlist_use` chose.
+`public` (from the next start), `name_filter`, and the playlist
+`sv_playlist_use` chose.
+
+## Blocked names
+
+`sv_name_filter` (the settings file's `name_filter`, or
+`HALO_DEDICATED_NAME_FILTER`) is off unless it is turned on. On, the server
+looks at each player's name as they join and whenever it changes, and a
+player whose name is blocked is sent a warning, "That name isn't allowed
+here. Pick another and rejoin.", which a ChupathingyCE game shows, and is
+kicked three seconds later (at once if their game cannot show it), as
+`sv_kick` kicks. They may rejoin under another name. The log and the audit
+file say "kicked player 3: blocked name", never the name or the address.
+
+The names are `blocked_names.txt` in the data folder, which the server's
+download and its container's deploy scripts include: the same list the
+ChupathingyCE site uses, read as the server starts and again whenever the
+filter is turned on (`sv_name_filter 1` after editing it). Without the
+file the filter blocks nothing, and the log says so. Its header explains
+its form: a line an entry, `anywhere`, `whole` or `allow` and a word in
+ROT13. A name is compared after it is put in lower case, its accents,
+spaces, dots, underscores, dashes and the digits at its end dropped, and
+digits, signs and Cyrillic and Greek letters that stand for Latin letters
+read as those letters (`0` as `o`, `1` as `i`, `@` as `a`, ...), and also
+with each run of a repeated letter squeezed to one.
 
 A game everyone has left ends after 30 seconds. After each game the
 carnage report shows for 20 seconds, then the next entry's lobby opens.

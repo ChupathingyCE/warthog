@@ -59,6 +59,7 @@ types only) */
 #endif
 #include "server_admin.h"
 #include "server_moderation.h"
+#include "server_names.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -91,6 +92,12 @@ enum
 	MAXIMUM_LISTED_BANS = 500,
 	/* the maps sv_maps lists, at most */
 	MAXIMUM_LISTED_MAPS = 512,
+	/* the blocked names list file, at most */
+	NAMES_FILE_SIZE = 64 * 1024,
+	/* how often the players' names are looked at, and how long a player with a
+	blocked name has to read the warning before they are kicked */
+	NAMES_CHECK_MILLISECONDS = 500,
+	NAMES_KICK_DELAY_MILLISECONDS = 3000,
 };
 
 /* (network_server_manager_internal.h's) */
@@ -150,6 +157,7 @@ static boolean command_mapcycle_next(struct command_line const *line, boolean js
 static boolean command_end_game(struct command_line const *line, boolean json, struct command_output *output);
 static boolean command_maxplayers(struct command_line const *line, boolean json, struct command_output *output);
 static boolean command_name(struct command_line const *line, boolean json, struct command_output *output);
+static boolean command_name_filter(struct command_line const *line, boolean json, struct command_output *output);
 static boolean command_maps(struct command_line const *line, boolean json, struct command_output *output);
 static boolean command_console_only(struct command_line const *line, boolean json, struct command_output *output);
 static boolean command_warn(struct command_line const *line, boolean json, struct command_output *output);
@@ -198,6 +206,8 @@ static struct server_command const server_commands[] =
 		"lobby, or the lobby now).", 1, 2, FALSE, command_maxplayers },
 	{ "sv_name", "sv_name [name]", "Shows or sets the server's name on the lists (15 characters at most).", 1, 2, FALSE,
 		command_name },
+	{ "sv_name_filter", "sv_name_filter [0|1]", "Shows or sets whether players with a blocked name (blocked_names.txt "
+		"in the data folder) are warned and kicked; saved in admin/settings.toml.", 1, 2, FALSE, command_name_filter },
 	/* (the playlists, game types and settings: server_admin.c) */
 	{ "sv_playlists", "sv_playlists", "The playlists: the server's own (playlists/) and those made here "
 		"(admin/playlists/), and which is played.", 1, 1, FALSE, server_admin_playlists },
@@ -304,6 +314,23 @@ static struct
 	char target[96];
 	char reason[96];
 } server_command_running;
+
+/* the blocked names (sv_name_filter): each player slot's name as it was
+last looked at, and a kick waiting for a player who was warned */
+static struct
+{
+	boolean loaded;
+	unsigned long check_time;
+	struct
+	{
+		boolean checked;
+		long machine_index;
+		unsigned int name[32];
+		long name_length;
+		/* a kick waiting: when (system_milliseconds), 0 none */
+		unsigned long kick_time;
+	} slots[HALO_PORT_MAXIMUM_NETWORK_PLAYERS];
+} server_names_globals;
 
 static struct
 {
@@ -1762,6 +1789,171 @@ static void link_status(
 }
 #endif
 
+/* ---------- blocked names (sv_name_filter) */
+
+#define NAMES_MESSAGE "That name isn't allowed here. Pick another and rejoin."
+
+/* the list file (blocked_names.txt in the data folder) read again; a file
+that is not there leaves the list empty, and the filter does nothing */
+static void names_load(
+	void)
+{
+	static char text[NAMES_FILE_SIZE + 1];
+	FILE *file = fopen("d:\\" SERVER_NAMES_FILE, "rb");
+	size_t length;
+
+	server_names_globals.loaded = TRUE;
+	csmemset(server_names_globals.slots, 0, sizeof(server_names_globals.slots));
+	if (!file)
+	{
+		server_names_clear();
+		error(_error_silent, "dedicated: no %s in the data folder: the name filter blocks nothing", SERVER_NAMES_FILE);
+		return;
+	}
+	length = fread(text, 1, NAMES_FILE_SIZE, file);
+	fclose(file);
+	text[length] = 0;
+	error(_error_silent, "dedicated: %d blocked names from %s", server_names_parse(text, length), SERVER_NAMES_FILE);
+}
+
+/* the players' names looked at (a player who joined, or whose name
+changed): one with a blocked name is warned, then kicked a few seconds on,
+through sv_kick's own way (network_game_server_drop_machine). Their name is
+never logged, nor their address */
+static void names_update(
+	void)
+{
+	struct network_game_server *server = global_network_game_server_get();
+	struct network_game *game = server ? network_game_server_get_game(server) : NULL;
+	struct dedicated_status status;
+	unsigned long now = system_milliseconds();
+	long index;
+
+	if (now - server_names_globals.check_time < NAMES_CHECK_MILLISECONDS && server_names_globals.check_time)
+		return;
+	server_names_globals.check_time = now;
+	dedicated_server_get_status(&status);
+	if (!status.name_filter || !game)
+	{
+		csmemset(server_names_globals.slots, 0, sizeof(server_names_globals.slots));
+		return;
+	}
+	if (!server_names_globals.loaded)
+		names_load();
+	for (index = 0; index < HALO_PORT_MAXIMUM_NETWORK_PLAYERS; index++)
+	{
+		struct network_player *network_player = &game->players[index];
+		unsigned int name[32];
+		long length;
+		boolean same;
+
+		if (!network_player_is_valid(network_player))
+		{
+			server_names_globals.slots[index].checked = FALSE;
+			server_names_globals.slots[index].kick_time = 0;
+			continue;
+		}
+		for (length = 0; length < (long)NUMBEROF(network_player->name) && length < (long)NUMBEROF(name) &&
+			network_player->name[length]; length++)
+		{
+			name[length] = (unsigned short)network_player->name[length];
+		}
+		same = server_names_globals.slots[index].checked &&
+			server_names_globals.slots[index].machine_index == network_player->machine_index &&
+			server_names_globals.slots[index].name_length == length &&
+			!memcmp(server_names_globals.slots[index].name, name, (size_t)length * sizeof(name[0]));
+		if (!same)
+		{
+			server_names_globals.slots[index].checked = TRUE;
+			server_names_globals.slots[index].machine_index = network_player->machine_index;
+			server_names_globals.slots[index].name_length = length;
+			csmemcpy(server_names_globals.slots[index].name, name, (size_t)length * sizeof(name[0]));
+			server_names_globals.slots[index].kick_time = 0;
+			if (server_names_blocked(name, (int)length))
+			{
+				/* (a game that cannot show the warning is kicked at once) */
+				boolean shown = server_moderation_notice(network_player->machine_index, TRUE, "Warning", NAMES_MESSAGE);
+
+				error(_error_silent, "dedicated: player %ld has a blocked name: warned, kicked in %d seconds", index + 1,
+					shown ? (int)(NAMES_KICK_DELAY_MILLISECONDS / 1000) : 0);
+				server_names_globals.slots[index].kick_time = shown ? now + NAMES_KICK_DELAY_MILLISECONDS : now;
+				if (!server_names_globals.slots[index].kick_time)
+					server_names_globals.slots[index].kick_time = 1;
+			}
+		}
+		if (server_names_globals.slots[index].kick_time && (long)(now - server_names_globals.slots[index].kick_time) >= 0)
+		{
+			char target[32];
+			boolean ok;
+
+			server_moderation_notice(network_player->machine_index, TRUE, "Kicked", NAMES_MESSAGE);
+			ok = network_game_server_drop_machine(network_player->machine_index, _rejection_code_game_is_closed);
+			/* (a machine that has not joined yet: tried again in a second) */
+			server_names_globals.slots[index].kick_time = ok ? 0 : now + 1000;
+			if (ok)
+			{
+				snprintf(target, sizeof(target), "player %ld", index + 1);
+				server_audit("server", "name filter", SERVER_ROLE_OWNER, "sv_kick", target, "blocked name", TRUE, NULL);
+				error(_error_silent, "dedicated: kicked player %ld: blocked name", index + 1);
+			}
+		}
+	}
+}
+
+void server_commands_set_name_filter(
+	boolean name_filter)
+{
+	dedicated_server_set_name_filter(name_filter);
+	/* (the list read again as it is turned on: an edited file is taken) */
+	if (name_filter)
+		names_load();
+}
+
+static boolean command_name_filter(
+	struct command_line const *line,
+	boolean json,
+	struct command_output *output)
+{
+	struct dedicated_status status;
+	struct command_line set_line;
+	char problem[96];
+	char set_text[64];
+	boolean on;
+
+	dedicated_server_get_status(&status);
+	if (line->count == 1)
+	{
+		if (!server_names_globals.loaded)
+			names_load();
+		command_output_printf(output, "%d (%d blocked names in %s)\n", status.name_filter ? 1 : 0, server_names_count(),
+			SERVER_NAMES_FILE);
+		return TRUE;
+	}
+	if (!strcmp(line->words[1], "1") || !_stricmp(line->words[1], "on") || !_stricmp(line->words[1], "true"))
+		on = TRUE;
+	else if (!strcmp(line->words[1], "0") || !_stricmp(line->words[1], "off") || !_stricmp(line->words[1], "false"))
+		on = FALSE;
+	else
+	{
+		command_output_printf(output, "sv_name_filter is 0 or 1\n");
+		return FALSE;
+	}
+	/* (the environment's wins over the settings file: then until a restart) */
+	if (getenv("HALO_DEDICATED_NAME_FILTER") && getenv("HALO_DEDICATED_NAME_FILTER")[0])
+	{
+		server_commands_set_name_filter(on);
+		error(_error_silent, "dedicated: a command turns the name filter %s", on ? "on" : "off");
+		command_output_printf(output, "the name filter is %s until a restart (HALO_DEDICATED_NAME_FILTER is set in "
+			"the server's environment)\n", on ? "on" : "off");
+		return TRUE;
+	}
+	/* (else as sv_set name_filter, saved in the settings file) */
+	snprintf(set_text, sizeof(set_text), "sv_set name_filter %s", on ? "true" : "false");
+	if (!command_line_parse(set_text, &set_line, problem, sizeof(problem)))
+		return FALSE;
+	return server_admin_set(&set_line, json, output);
+}
+
 /* ---------- public code */
 
 void server_commands_update(
@@ -1775,12 +1967,14 @@ void server_commands_update(
 		server_commands_globals.started = TRUE;
 		server_roles_start();
 		load_startup_commands();
+		names_load();
 #ifdef HALO_SERVER
 		server_control_start();
 		server_link_begin();
 #endif
 	}
 	server_moderation_update();
+	names_update();
 #ifdef HALO_SERVER
 	/* the console's and the control API's, as they came */
 	for (;;)

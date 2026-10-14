@@ -499,16 +499,17 @@ ChupathingyCE has its own code and roadmap. Since October 9, 2026 it takes no
 code from OpenCE; it follows OpenCE's **network version**, so players of both
 keep sharing games.
 
-- **Bumps, not features.** When OpenCE raises its network version, we follow
-  the number. An additive raise (messages older machines drop) is followed by
-  the legacy table or the watch, after the cross-play gate passes. A raise
+- **Bumps, not features, by hand.** When OpenCE raises its network version,
+  Donut posts it in #crossplay-watch on the Discord, and a person decides
+  whether to follow. Nothing follows on its own. An additive raise (messages
+  older machines drop) is followed with the legacy table or a run of the
+  watch, after the cross-play gate passes. A raise
   that changes how a game plays, or internet play's signalling, gets the
   smallest port that keeps games in agreement, in a release, and nothing else
   of that build.
 - **Servers first.** Our dedicated servers move to each follow as soon as it
   ships, so OpenCE players always have a server to join.
-- **Weekly at most, for ports.** An additive raise is followed on its own,
-  by the table or the watch, once the gate passes. A raise that needs ported
+- **Weekly at most, for ports.** A raise that needs ported
   code is batched into a release about once a week, unless cross-play is
   broken now. A port that would cost more than an evening is weighed against
   the players it keeps.

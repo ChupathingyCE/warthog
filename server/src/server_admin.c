@@ -1788,6 +1788,7 @@ static void setting_now(
 	case SERVER_SETTING_MINIMUM_PLAYERS: snprintf(text, (size_t)size, "%ld", status->minimum_players); break;
 	case SERVER_SETTING_IDLE_LIMIT: snprintf(text, (size_t)size, "%ld", status->idle_limit); break;
 	case SERVER_SETTING_PUBLIC: snprintf(text, (size_t)size, "%s", status->public_game ? "true" : "false"); break;
+	case SERVER_SETTING_NAME_FILTER: snprintf(text, (size_t)size, "%s", status->name_filter ? "true" : "false"); break;
 	case SERVER_SETTING_PLAYLIST: snprintf(text, (size_t)size, "%s", status->playlist); break;
 	default: text[0] = 0; break;
 	}
@@ -1891,7 +1892,7 @@ boolean server_admin_settings(
 			json_string_or_null(output, environment);
 			command_output_printf(output, ", \"source\": \"%s\", \"applies\": \"%s\"}", source,
 				setting == SERVER_SETTING_PUBLIC ? "restart" : setting == SERVER_SETTING_PLAYLIST ? "sv_playlist_use" :
-				setting == SERVER_SETTING_IDLE_LIMIT ? "now" : "lobby");
+				setting == SERVER_SETTING_IDLE_LIMIT || setting == SERVER_SETTING_NAME_FILTER ? "now" : "lobby");
 		}
 		else
 		{
@@ -1923,7 +1924,7 @@ boolean server_admin_set(
 		command_output_printf(output, "%s%s\n", setting < 0 ? "no setting " : "", setting < 0 ? line->words[1] :
 			"the playlist is set with sv_playlist_use");
 		if (setting < 0)
-			command_output_printf(output, "(name, maximum_players, minimum_players, idle_limit, public)\n");
+			command_output_printf(output, "(name, maximum_players, minimum_players, idle_limit, public, name_filter)\n");
 		return FALSE;
 	}
 	environment = environment_value((short)setting);
@@ -1959,11 +1960,13 @@ boolean server_admin_set(
 	case SERVER_SETTING_MAXIMUM_PLAYERS: dedicated_server_set_maximum_players(change.values[setting]); break;
 	case SERVER_SETTING_MINIMUM_PLAYERS: dedicated_server_set_minimum_players(change.values[setting]); break;
 	case SERVER_SETTING_IDLE_LIMIT: dedicated_server_set_idle_limit(change.values[setting]); break;
+	case SERVER_SETTING_NAME_FILTER: server_commands_set_name_filter(change.values[setting] ? TRUE : FALSE); break;
 	}
 	error(_error_silent, "dedicated: a command sets %s to %s", server_settings_table[setting].key, line->words[2]);
 	command_output_printf(output, "%s is %s, saved in %s (%s)\n", server_settings_table[setting].key, line->words[2],
 		SETTINGS_FILE, setting == SERVER_SETTING_PUBLIC ? "from when the server restarts" :
-		setting == SERVER_SETTING_IDLE_LIMIT ? "now" : status.state == _dedicated_state_lobby ? "now" :
+		setting == SERVER_SETTING_IDLE_LIMIT || setting == SERVER_SETTING_NAME_FILTER ? "now" :
+		status.state == _dedicated_state_lobby ? "now" :
 		"from the next lobby");
 	return TRUE;
 }

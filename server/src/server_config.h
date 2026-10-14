@@ -258,6 +258,7 @@ enum
 	SERVER_SETTING_MINIMUM_PLAYERS,
 	SERVER_SETTING_IDLE_LIMIT,
 	SERVER_SETTING_PUBLIC,
+	SERVER_SETTING_NAME_FILTER,
 	/* the playlist sv_playlist_use chose, and HALO_DEDICATED's value then
 	(once it is another, HALO_DEDICATED's is played) */
 	SERVER_SETTING_PLAYLIST,

@@ -366,8 +366,8 @@ done:
 
 /* ---------- checking */
 
-/* a version's numbers and pre-release suffix: [v]<major>.<minor>.<patch>
-followed by a suffix (0.5.0b, 1.0.0rc1) or nothing; 0 if it is not one */
+/* a version's numbers and hotfix letter: [v]<major>.<minor>.<patch>
+followed by a letter (0.7.5a) or nothing; 0 if it is not one */
 static int updater_parse_version(const char *text, long numbers[3], const char **suffix)
 {
 	int part;
@@ -389,9 +389,8 @@ static int updater_parse_version(const char *text, long numbers[3], const char *
 	return 1;
 }
 
-/* whether version is newer than this build's: by its numbers, then a
-version without a suffix comes after the ones with (0.5.0b, then 0.5.0),
-and suffixes in order (a, b, rc1) */
+/* whether version is newer than this build's: by its numbers, then its
+hotfix letter, a version without one first (0.7.5, then 0.7.5a, 0.7.5b) */
 static int updater_newer(const char *version)
 {
 	long latest[3], current[3];
@@ -408,8 +407,6 @@ static int updater_newer(const char *version)
 		if (latest[part] != current[part])
 			return latest[part] > current[part];
 	}
-	if (!*latest_suffix || !*current_suffix)
-		return !*latest_suffix && *current_suffix;
 	return strcmp(latest_suffix, current_suffix) > 0;
 }
 

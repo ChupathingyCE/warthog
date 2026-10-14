@@ -4352,8 +4352,28 @@ static boolean profile_save_changes(struct widget_instance *widget, boolean *wid
 {
 	if (player_ui_edit_profile_is_dirty())
 	{
+		/* (Settings edits the profile in use, pc_menu_profile_edit_begin: the
+		players playing it get the saved one. They kept the old controls until
+		it was chosen again, and the campaign's next save of the level played
+		wrote the old copy back over the changes) */
+		long profile_index = player_ui_get_active_player_profile_index(0);
+
 		if (player_ui_save_profile())
+		{
+			struct player_profile profile;
+			short local_player_index;
+
+			for (local_player_index = 0; local_player_index < MAXIMUM_NUMBER_OF_LOCAL_PLAYERS; local_player_index++)
+			{
+				if (profile_index != NONE &&
+					player_ui_get_active_player_profile_index(local_player_index) == profile_index &&
+					player_profile_get(profile_index, &profile))
+				{
+					player_ui_set_active_player_profile(local_player_index, profile_index, &profile);
+				}
+			}
 			return TRUE;
+		}
 		platform_log("menus: could not save the profile's changes");
 		return campaign_fail();
 	}
