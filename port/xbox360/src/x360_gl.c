@@ -518,6 +518,9 @@ static struct
 	DWORD last_report;
 	unsigned long frames, draws, idle_waits, fence_waits, ring_bytes, textures_deleted;
 	double idle_wait_ms, fence_wait_ms, frame_ms;
+	/* (time inside the GL layer: draws, texture and buffer uploads, the
+	present's resolve and blit) */
+	double draw_ms, texture_ms, buffer_ms, present_ms;
 	LARGE_INTEGER frame_start;
 } stats;
 
@@ -831,8 +834,21 @@ static unsigned long level_size(unsigned long size, int level)
 
 /* copies texels into a level: rows of row_bytes, rows of blocks for a
 compressed format */
+static void texture_upload_timed(struct texture *texture, GLenum target, int level, unsigned long x,
+	unsigned long y, unsigned long width, unsigned long height, unsigned long depth, const void *data, GLenum format);
+
 static void texture_upload(struct texture *texture, GLenum target, int level, unsigned long x, unsigned long y,
 	unsigned long width, unsigned long height, unsigned long depth, const void *data, GLenum format)
+{
+	LARGE_INTEGER start;
+
+	QueryPerformanceCounter(&start);
+	texture_upload_timed(texture, target, level, x, y, width, height, depth, data, format);
+	stats.texture_ms += stats_ms_since(start);
+}
+
+static void texture_upload_timed(struct texture *texture, GLenum target, int level, unsigned long x,
+	unsigned long y, unsigned long width, unsigned long height, unsigned long depth, const void *data, GLenum format)
 {
 	unsigned long block = texture->compressed ? 4 : 1;
 	unsigned long bytes_per_block = texture->compressed ? (texture->format == (D3DFORMAT)MAKELEFMT(D3DFMT_LIN_DXT1) ?
@@ -2341,8 +2357,21 @@ static void dump_after_draw(unsigned long index)
 	free(linear);
 }
 
+static void draw_timed(GLenum mode, unsigned long first, unsigned long count, GLenum index_type,
+	const void *indices, long base_vertex);
+
 static void draw(GLenum mode, unsigned long first, unsigned long count, GLenum index_type, const void *indices,
 	long base_vertex)
+{
+	LARGE_INTEGER start;
+
+	QueryPerformanceCounter(&start);
+	draw_timed(mode, first, count, index_type, indices, base_vertex);
+	stats.draw_ms += stats_ms_since(start);
+}
+
+static void draw_timed(GLenum mode, unsigned long first, unsigned long count, GLenum index_type,
+	const void *indices, long base_vertex)
 {
 	struct program *program;
 	struct shader *vertex;
@@ -3198,6 +3227,9 @@ static void APIENTRY x360_glBufferData(GLenum target, GLsizeiptr size, const voi
 static void APIENTRY x360_glBufferSubData(GLenum target, GLintptr offset, GLsizeiptr size, const void *data)
 {
 	struct buffer *buffer = bound_buffer(target);
+	LARGE_INTEGER start;
+
+	QueryPerformanceCounter(&start);
 
 	if (!buffer || !buffer->data || (unsigned long)offset + (unsigned long)size > buffer->size)
 		return;
@@ -3205,6 +3237,7 @@ static void APIENTRY x360_glBufferSubData(GLenum target, GLintptr offset, GLsize
 	if (data != buffer->data + offset)
 		memcpy(buffer->data + offset, data, (size_t)size);
 	storage_flush(buffer->data + offset, (unsigned long)size);
+	stats.buffer_ms += stats_ms_since(start);
 }
 
 static struct
@@ -3653,7 +3686,18 @@ static void APIENTRY x360_glGetQueryBufferObjectuiv(GLuint id, GLuint buffer, GL
 /* ---------- presenting */
 
 /* the frame (sdl_platform.c's platform_video_swap): the screen presented */
+static void x360_gl_swap_timed(void);
+
 void x360_gl_swap(void)
+{
+	LARGE_INTEGER start;
+
+	QueryPerformanceCounter(&start);
+	x360_gl_swap_timed();
+	stats.present_ms += stats_ms_since(start);
+}
+
+static void x360_gl_swap_timed(void)
 {
 	if (!gl_ready())
 		return;
@@ -3735,10 +3779,15 @@ void x360_gl_swap(void)
 				stats.frames, stats.frame_ms / stats.frames, (gl.draws - stats.draws) / stats.frames,
 				stats.ring_bytes / stats.frames / 1024, stats.idle_waits, stats.idle_wait_ms, stats.fence_waits,
 				stats.fence_wait_ms, stats.textures_deleted);
+			x360_log("gl: a frame's time in the GL layer: draws %.1f ms, textures %.1f ms, buffers %.1f ms, "
+				"present %.1f ms; the rest (the game) %.1f ms", stats.draw_ms / stats.frames,
+				stats.texture_ms / stats.frames, stats.buffer_ms / stats.frames, stats.present_ms / stats.frames,
+				(stats.frame_ms - stats.draw_ms - stats.texture_ms - stats.buffer_ms - stats.present_ms) / stats.frames);
 		}
 		stats.last_report = GetTickCount();
 		stats.frames = stats.idle_waits = stats.fence_waits = stats.ring_bytes = stats.textures_deleted = 0;
 		stats.idle_wait_ms = stats.fence_wait_ms = stats.frame_ms = 0.0;
+		stats.draw_ms = stats.texture_ms = stats.buffer_ms = stats.present_ms = 0.0;
 		stats.draws = gl.draws;
 	}
 	gl.frame++;
