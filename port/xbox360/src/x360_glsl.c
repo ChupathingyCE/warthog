@@ -173,7 +173,9 @@ static const char *function_name(const char *name)
 	{
 		{ "fract", "frac" }, { "mix", "lerp" }, { "inversesqrt", "rsqrt" }, { "mod", "glsl_mod" },
 		{ "texture", "glsl_texture" }, { "textureLod", "glsl_texture_lod" }, { "dFdx", "ddx" },
-		{ "dFdy", "ddy" }, { "atan", "glsl_atan" },
+		{ "dFdy", "ddy" }, { "atan", "glsl_atan" }, { "lessThan", "glsl_less_than" },
+		{ "lessThanEqual", "glsl_less_than_equal" }, { "greaterThan", "glsl_greater_than" },
+		{ "greaterThanEqual", "glsl_greater_than_equal" },
 	};
 	size_t index;
 
@@ -340,6 +342,10 @@ static const char prelude[] =
 	"float2 glsl_mod(float2 x, float2 y) { return x - y * floor(x / y); }\n"
 	"float3 glsl_mod(float3 x, float3 y) { return x - y * floor(x / y); }\n"
 	"float4 glsl_mod(float4 x, float4 y) { return x - y * floor(x / y); }\n"
+	"float4 glsl_less_than(float4 a, float4 b) { return a < b ? 1.0 : 0.0; }\n"
+	"float4 glsl_less_than_equal(float4 a, float4 b) { return a <= b ? 1.0 : 0.0; }\n"
+	"float4 glsl_greater_than(float4 a, float4 b) { return a > b ? 1.0 : 0.0; }\n"
+	"float4 glsl_greater_than_equal(float4 a, float4 b) { return a >= b ? 1.0 : 0.0; }\n"
 	"float glsl_atan(float y, float x) { return atan2(y, x); }\n"
 	"float glsl_atan(float x) { return atan(x); }\n"
 	"float4 glsl_texture(sampler2D s, float2 uv) { return tex2D(s, uv); }\n"
