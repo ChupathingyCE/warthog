@@ -76,6 +76,11 @@ enum
 	/* nor a button this soon after Link Profile's panel opens or closes (a
 	press seen twice would close it, or the screen) */
 	CONNECT_SETTLE = 400,
+	/* a held direction: the first repeat waits this long, then it repeats
+	this often; a gap longer than the last is a new press */
+	STEP_FIRST_REPEAT_DELAY = 350,
+	STEP_REPEAT_INTERVAL = 110,
+	STEP_RELEASE_GAP = 150,
 	/* whether the selected game's Halo PC map is in its family's folders,
 	asked again this often */
 	CE_MAP_CHECK_INTERVAL = 1000,
@@ -590,6 +595,34 @@ static void step(
 		MAX(0, browser_screen.count - 1));
 }
 
+/* a step held down: the event manager sends the d-pad's and the stick's
+direction every frame while it's held, so the list moved a row a frame.
+The first press moves at once; held, it waits, then repeats at a steady
+pace, as the menus do */
+static void held_step(
+	short move)
+{
+	static unsigned long last_event_time, last_step_time;
+	static short last_move;
+	static boolean repeating;
+	unsigned long now = system_milliseconds();
+
+	if (move != last_move || now - last_event_time > STEP_RELEASE_GAP)
+	{
+		step(move);
+		last_step_time = now;
+		repeating = FALSE;
+	}
+	else if (now - last_step_time >= (repeating ? STEP_REPEAT_INTERVAL : STEP_FIRST_REPEAT_DELAY))
+	{
+		step(move);
+		last_step_time = now;
+		repeating = TRUE;
+	}
+	last_move = move;
+	last_event_time = now;
+}
+
 /* a button pressed: the controller's, or the pointer's on its prompt */
 static void press(
 	short button)
@@ -604,10 +637,10 @@ static void press(
 	}
 	switch (button)
 	{
-	case _gamepad_binary_button_dpad_up: step(-1); break;
-	case _gamepad_binary_button_dpad_down: step(1); break;
-	case _gamepad_binary_button_dpad_left: step(-ROWS_PER_PAGE); break;
-	case _gamepad_binary_button_dpad_right: step(ROWS_PER_PAGE); break;
+	case _gamepad_binary_button_dpad_up: held_step(-1); break;
+	case _gamepad_binary_button_dpad_down: held_step(1); break;
+	case _gamepad_binary_button_dpad_left: held_step(-ROWS_PER_PAGE); break;
+	case _gamepad_binary_button_dpad_right: held_step(ROWS_PER_PAGE); break;
 	case _gamepad_analog_button_a:
 		if (!browser_screen.connecting && system_milliseconds() - browser_screen.opened_time > OPEN_SETTLE)
 			join_selected();
@@ -668,13 +701,13 @@ void browser_screen_process(
 		else if (event.type == BROWSER_EVENT_LEFT_STICK && !browser_screen.connect_open)
 		{
 			if (event.data.stick.y == SHORT_MAX)
-				step(-1);
+				held_step(-1);
 			else if (event.data.stick.y == SHORT_MIN)
-				step(1);
+				held_step(1);
 			else if (event.data.stick.x == SHORT_MIN)
-				step(-ROWS_PER_PAGE);
+				held_step(-ROWS_PER_PAGE);
 			else if (event.data.stick.x == SHORT_MAX)
-				step(ROWS_PER_PAGE);
+				held_step(ROWS_PER_PAGE);
 		}
 	}
 	if (browser_screen.selected >= browser_screen.count)
