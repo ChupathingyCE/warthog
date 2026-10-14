@@ -986,16 +986,25 @@ static BOOL texture_surface(struct texture *texture)
 		return TRUE;
 	format = texture->depth_format ? D3DFMT_D24S8 : D3DFMT_A8R8G8B8;
 	tiles = XGSurfaceSize(texture->width, texture->height, format, D3DMULTISAMPLE_NONE);
+	static BOOL screen_shared;
+	DWORD base = gl.edram_next;
+	DWORD screen_tiles = XGSurfaceSize(1280, 720, D3DFMT_A8R8G8B8, D3DMULTISAMPLE_NONE);
+
 	if (gl.edram_next + tiles > EDRAM_TILES)
 	{
-		x360_log("gl: EDRAM is full (%lux%lu wants %lu tiles from %lu): targets share it from the start",
+		/* (the screen's back buffer is only drawn when a frame is presented,
+		after the game's targets are resolved and the next frame clears
+		them: a target past the end shares the back buffer's tiles, never
+		another target's) */
+		x360_log("gl: EDRAM is full (%lux%lu wants %lu tiles from %lu): this target shares the screen's",
 			texture->width, texture->height, (unsigned long)tiles, (unsigned long)gl.edram_next);
-		gl.edram_next = XGSurfaceSize(1280, 720, D3DFMT_A8R8G8B8, D3DMULTISAMPLE_NONE);
-		if (gl.edram_next + tiles > EDRAM_TILES)
+		if (screen_shared || tiles > screen_tiles)
 			return FALSE;
+		screen_shared = TRUE;
+		base = 0;
 	}
 	memset(&parameters, 0, sizeof(parameters));
-	parameters.Base = gl.edram_next;
+	parameters.Base = base;
 	parameters.HierarchicalZBase = 0xFFFFFFFF;
 	if (texture->depth_format)
 		result = IDirect3DDevice9_CreateDepthStencilSurface(gl.device, texture->width, texture->height, format,
@@ -1010,7 +1019,8 @@ static BOOL texture_surface(struct texture *texture)
 		texture->surface = NULL;
 		return FALSE;
 	}
-	gl.edram_next += tiles;
+	if (base == gl.edram_next)
+		gl.edram_next += tiles;
 	/* (its texels: a texture the resolve can write, tiled) */
 	if (!texture->depth_format)
 	{
