@@ -2323,7 +2323,7 @@ static void animation_get_keyframe_translation(
 
 	if (keyframe_count==0)
 	{
-		*translation = default_translations[node_index];
+		memcpy(translation, &default_translations[node_index], sizeof(*translation));
 	}
 	else
 	{
@@ -2348,7 +2348,7 @@ static void animation_get_keyframe_translation(
 		frame) holds the last one */
 		if (frame_index>keyframe_frame_indices[keyframe_count-1])
 		{
-			*translation = keyframe_translations[keyframe_count-1];
+			memcpy(translation, &keyframe_translations[keyframe_count-1], sizeof(*translation));
 			return;
 		}
 
@@ -2383,7 +2383,7 @@ static void animation_get_keyframe_translation(
 
 		if (real_frame_index==(real)this_keyframe_frame_index)
 		{
-			*translation = *this_keyframe;
+			memcpy(translation, this_keyframe, sizeof(*translation));
 		}
 		else
 		{
@@ -2398,7 +2398,15 @@ static void animation_get_keyframe_translation(
 				1584,
 				real_frame_index< (real)next_keyframe_frame_index);
 
-			points_interpolate(this_keyframe, next_keyframe, fraction, translation);
+			{
+				/* port: keyframes are where the map put them, not always on 4
+				bytes, which a PowerPC's float loads need */
+				real_point3d this_point, next_point;
+
+				memcpy(&this_point, this_keyframe, sizeof(this_point));
+				memcpy(&next_point, next_keyframe, sizeof(next_point));
+				points_interpolate(&this_point, &next_point, fraction, translation);
+			}
 		}
 	}
 
@@ -2457,7 +2465,7 @@ static void animation_get_keyframe_scale(
 
 	if (keyframe_count==0)
 	{
-		*scale = default_scales[adjusted_node_index];
+		memcpy(scale, &default_scales[adjusted_node_index], sizeof(*scale));
 	}
 	else
 	{
@@ -2482,23 +2490,23 @@ static void animation_get_keyframe_scale(
 		frame) holds the last one */
 		if (frame_index>keyframe_frame_indices[keyframe_count-1])
 		{
-			*scale = keyframe_scales[keyframe_count-1];
+			memcpy(scale, &keyframe_scales[keyframe_count-1], sizeof(*scale));
 			return;
 		}
 
 		if (frame_index<keyframe_frame_indices[0])
 		{
 			this_keyframe_frame_index = 0;
-			this_keyframe_scale = default_scales[adjusted_node_index];
+			memcpy(&this_keyframe_scale, &default_scales[adjusted_node_index], sizeof(real));
 			next_keyframe_frame_index = keyframe_frame_indices[0];
-			next_keyframe_scale = keyframe_scales[0];
+			memcpy(&next_keyframe_scale, &keyframe_scales[0], sizeof(real));
 		}
 		else if (frame_index==keyframe_frame_indices[keyframe_count-1])
 		{
 			this_keyframe_frame_index = keyframe_frame_indices[keyframe_count-1];
-			this_keyframe_scale = keyframe_scales[keyframe_count-1];
+			memcpy(&this_keyframe_scale, &keyframe_scales[keyframe_count-1], sizeof(real));
 			next_keyframe_frame_index = this_keyframe_frame_index+1;
-			next_keyframe_scale = default_scales[adjusted_node_index];
+			memcpy(&next_keyframe_scale, &default_scales[adjusted_node_index], sizeof(real));
 		}
 		else
 		{
@@ -2510,9 +2518,9 @@ static void animation_get_keyframe_scale(
 				keyframe_index>=0 && keyframe_index<keyframe_count-1);
 
 			this_keyframe_frame_index = keyframe_frame_indices[keyframe_index];
-			this_keyframe_scale = keyframe_scales[keyframe_index];
+			memcpy(&this_keyframe_scale, &keyframe_scales[keyframe_index], sizeof(real));
 			next_keyframe_frame_index = keyframe_frame_indices[keyframe_index+1];
-			next_keyframe_scale = keyframe_scales[keyframe_index+1];
+			memcpy(&next_keyframe_scale, &keyframe_scales[keyframe_index+1], sizeof(real));
 		}
 
 		if (real_frame_index==(real)this_keyframe_frame_index)
