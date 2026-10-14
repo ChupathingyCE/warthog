@@ -164,10 +164,12 @@ Kai's for its MAC: yes or no. Kai's address itself (`10.252.EE.FF`, mask
 ## Status
 
 The build booted on a development kit on October 4: the menus at a steady
-30 fps, profiles, DHCP, the game list and ONLINE GAMES. The menu music did
-not play (the console had no `audio.music_volume` or `audio.effects_volume`
-setting, so both read as 0; `src/xbox_port.c` now has them at 1.0, not yet
-tried on a console).
+30 fps, profiles, DHCP, the game list and ONLINE GAMES. Music played from
+October 13 (until then the console had no `audio.music_volume` or
+`audio.effects_volume` setting, so both read as 0; `src/xbox_port.c` has
+them at 1.0): the menu music and the campaign's music and effects play on a
+development kit. The same day it joined a [D] dedicated server through
+ONLINE GAMES.
 The October 2 build also started on a modified retail console. The code is
 now ChupathingyCE's at network version 28 (it joins hosts of 11 through
 30), merged October 13 and not yet booted on a console since.
