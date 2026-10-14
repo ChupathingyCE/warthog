@@ -223,8 +223,15 @@ unsigned long string_hash(char const *string);
 
 void system_exit(long code);
 #ifdef HALO_RELEASE
-/* set by display_assert when a release build skips a fatal assertion */
+/* set by display_assert when a release build skips a fatal assertion (one
+for each thread; the console's one, whose compiler's thread-local storage
+the Xbox's loader does not lay out, is shared: its asserts are the game
+thread's) */
+#ifndef HALO_XBOX_CONSOLE
 extern __thread boolean display_assert_skipped;
+#else
+extern boolean display_assert_skipped;
+#endif
 #endif
 
 /* ---------- prototypes/MAIN.C */
