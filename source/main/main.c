@@ -3296,6 +3296,7 @@ void main_loop(
 		{
 			extern void xbox360_main_loop_tick(void);
 
+			MAIN_STAGE("xbox360_main_loop_tick (the port's log)");
 			xbox360_main_loop_tick();
 		}
 #endif

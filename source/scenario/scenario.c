@@ -1066,6 +1066,10 @@ boolean scenario_switch_structure_bsp(
 		had_old_structure_bsp = FALSE;
 
 		match_assert("c:\\halo\\SOURCE\\scenario\\scenario.c", 0x2B7, global_scenario);
+#ifdef HALO_XBOX360
+		/* port: bring-up, which bsp is loaded when */
+		error(_error_silent, "structure bsp switch: %d -> %d", global_structure_bsp_index, structure_bsp_index);
+#endif
 		main_stop_time();
 		collision_log_enable(FALSE);
 
