@@ -1988,7 +1988,15 @@ void hs_evaluate_equality(
 	arguments = hs_arguments_evaluate(thread_index, 2, parameter_types, initialize);
 	if (arguments)
 	{
+		/* port: a value narrower than its slot is in the slot's last bytes on
+		a big-endian machine (HS_SLOT), where its first are the high ones a
+		constant leaves as they were (an enum's 0xffff) */
+#ifdef HALO_BIG_ENDIAN
+		long skip = 4 - hs_type_sizes[type];
+		boolean equal = csmemcmp((byte *)arguments + skip, (byte *)(arguments+1) + skip, hs_type_sizes[type])==0;
+#else
 		boolean equal = csmemcmp(arguments, arguments+1, hs_type_sizes[type])==0;
+#endif
 
 		if (function_index==_hs_function_not_equal)
 			equal = !equal;
