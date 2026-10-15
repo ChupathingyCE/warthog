@@ -3,7 +3,7 @@ X360_PROFILE.C
 
 Where a frame's time goes, without the debugger: the main loop and the
 game's own steps name the stage they enter (frame_profile.h), each stage
-gets the time until the next one starts, and every few seconds the log has
+gets the time until the next one starts, and every ten seconds the log has
 the costliest stages in milliseconds a pass of the main loop.
 
 Flat on purpose: a stage runs until the next one is named, so a label
@@ -20,8 +20,8 @@ the caller names its next stage. One thread (the game's) only.
 enum
 {
 	PROFILE_SLOTS = 256,
-	PROFILE_REPORT_MS = 5000,
-	PROFILE_REPORT_LINES = 24,
+	PROFILE_REPORT_MS = 10000,
+	PROFILE_REPORT_LINES = 14,
 };
 
 struct profile_slot

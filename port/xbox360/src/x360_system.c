@@ -32,6 +32,8 @@ leaving for the launcher.
 static HANDLE port_log = INVALID_HANDLE_VALUE;
 static CRITICAL_SECTION log_lock;
 static volatile LONG log_lock_state;
+static DWORD log_flushed;
+static volatile int log_flush_now;
 
 static void log_lock_enter(void)
 {
@@ -93,7 +95,15 @@ void x360_debug_print(const char *text)
 	if (port_log != INVALID_HANDLE_VALUE)
 	{
 		WriteFile(port_log, text, (DWORD)length, &written, NULL);
-		FlushFileBuffers(port_log);
+		/* (to the disk at most once a second, and at once for a crash's
+		backtrace: a flush a line was a frame's worth of time when the
+		profile was logged; what is written survives the title's exit) */
+		if (log_flush_now || GetTickCount() - log_flushed >= 1000)
+		{
+			FlushFileBuffers(port_log);
+			log_flushed = GetTickCount();
+			log_flush_now = 0;
+		}
 	}
 	LeaveCriticalSection(&log_lock);
 }
@@ -588,6 +598,7 @@ void x360_log_backtrace(const char *why)
 		length += (size_t)_snprintf(text + length, sizeof(text) - length - 1, " %08x",
 			(unsigned int)(UINT_PTR)frames[index]);
 	text[sizeof(text) - 1] = '\0';
+	log_flush_now = 1;
 	x360_log("%s; calls:%s", why, text);
 }
 
