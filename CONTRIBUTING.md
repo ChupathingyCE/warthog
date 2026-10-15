@@ -27,7 +27,7 @@ with OXDK and clang today (docs/building.md). We need someone to set up and
 document the Windows side: a Visual Studio project or solution, or another
 Windows build path; the official XDK and RDK tooling; XBDM and debugging on
 a development kit; and a Windows CI job or build recipe. Coordinate in
-#warthog-dev on the [Discord](https://discord.gg/4BUm2FwuCB) before you
+#warthog-dev on the [Discord](https://discord.gg/chupathingy) before you
 start, so the work isn't duplicated. The SDK rules below apply: describe
 where the SDK's files go, never commit them.
 
@@ -36,7 +36,7 @@ where the SDK's files go, never commit them.
 You don't have to write code to help.
 
 - **Play and test.** New builds that need trying are in the Testing column of the [roadmap](https://github.com/orgs/ChupathingyCE/projects/1). Pick up the Testers role in the Discord to get pinged when one is ready.
-- **Report bugs and share ideas** with the [bug report form](https://github.com/ChupathingyCE/chupathingyce/issues/new?template=bug.yml), or in #bug-reports and #ideas on the [Discord](https://discord.gg/4BUm2FwuCB). New reports go into the roadmap's Inbox and get sorted each week.
+- **Report bugs and share ideas** with the [bug report form](https://github.com/ChupathingyCE/chupathingyce/issues/new?template=bug.yml), or in #bug-reports and #ideas on the [Discord](https://discord.gg/chupathingy). New reports go into the roadmap's Inbox and get sorted each week.
 - **Write code.** Issues labeled [good first issue](https://github.com/ChupathingyCE/chupathingyce/labels/good%20first%20issue) are small and self-contained, and each one says where to start. [help wanted](https://github.com/ChupathingyCE/chupathingyce/labels/help%20wanted) issues are a bit bigger. Ask in #dev on the Discord if you get stuck.
 - **Host a server, make maps, or help run events.** Ask for the Server Hosts, Mappers or Game Night role in the Discord.
 
@@ -74,7 +74,7 @@ Test builds are the `nightly` release and `-testing` tags, outside the numbering
 ## Bugs
 
 Use the bug report form, or #warthog-support on the
-[Discord](https://discord.gg/4BUm2FwuCB). Attach `D:\debug.txt`; for a
+[Discord](https://discord.gg/chupathingy). Attach `D:\debug.txt`; for a
 join that fails, run once with an empty `D:\trace.txt` beside
 `default.xbe` (it shows other hosts only as tags, never their Ethernet
 addresses).
