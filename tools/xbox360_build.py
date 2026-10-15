@@ -45,8 +45,6 @@ TARGET_TRIPLE = "powerpc-unknown-none-elf"
 # calling convention is the patched clang's xenon-abi feature
 BASE_FLAGS = [
     "-target", TARGET_TRIPLE,
-    "-ffreestanding",
-    "-fno-builtin",
     "-fms-extensions",
     "-fms-compatibility",
     "-fms-compatibility-version=14",
@@ -76,8 +74,24 @@ BASE_FLAGS = [
     # thread-local variables through x360_tls.c: the console's TLS is
     # Microsoft's compiler's, and ELF TLS reads through r2, which it leaves 0
     "-femulated-tls",
+    # the Xenon core's square root instruction (the generic PowerPC has
+    # none: every sqrtf was a call), and no errno from the math functions,
+    # so sqrtf and fabsf are single instructions as on the other ports
+    "-Xclang", "-target-feature", "-Xclang", "+fsqrt",
+    "-fno-math-errno",
     "-O2",
 ]
+
+# the console's own units, the third-party libraries and the SDK's helpers
+# keep oxdk360.mk's freestanding build (x360_system.c defines C99 math the
+# runtime lacks, which the compiler's builtins would turn into calls to
+# themselves); the game and the platform layer have the builtins (memcpy of
+# a small structure inlined, sqrtf an instruction), less the roundings whose
+# float forms the runtime lacks (the compiler would make floorf of a float's
+# floor) and stpcpy
+FREESTANDING_FLAGS = ["-ffreestanding", "-fno-builtin"]
+HOSTED_FLAGS = [f"-fno-builtin-{name}" for name in ("floor", "ceil", "fmod", "trunc", "round", "rint",
+                                                     "nearbyint", "stpcpy")]
 
 # the game's and the desktop platform layer's ABI, as the other ports give
 # it (tools/linux_build.py): tentative definitions shared between units, no
@@ -375,6 +389,7 @@ def generate_xbox360_build(n: Writer, sln: Any) -> None:
 
     game_cflags = " ".join([
         *BASE_FLAGS,
+        *HOSTED_FLAGS,
         *GAME_ABI_FLAGS,
         *GAME_FLAGS,
         f"-include {prefix_header}",
@@ -390,6 +405,7 @@ def generate_xbox360_build(n: Writer, sln: Any) -> None:
     ])
     platform_cflags = " ".join([
         *BASE_FLAGS,
+        *HOSTED_FLAGS,
         *GAME_ABI_FLAGS,
         *PLATFORM_FLAGS,
         version_define,
@@ -416,6 +432,7 @@ def generate_xbox360_build(n: Writer, sln: Any) -> None:
     ])
     console_cflags = " ".join([
         *BASE_FLAGS,
+        *FREESTANDING_FLAGS,
         "-DHALO_XBOX360=1",
         "-DHALO_64BIT",
         "-DHALO_XBOX_WINDOW",
@@ -430,7 +447,7 @@ def generate_xbox360_build(n: Writer, sln: Any) -> None:
         f"-I{gen_dir}",
         *sdk_includes,
     ])
-    third_party_cflags = " ".join([*BASE_FLAGS, *GAME_ABI_FLAGS, "-std=gnu11", "-w",
+    third_party_cflags = " ".join([*BASE_FLAGS, *FREESTANDING_FLAGS, *GAME_ABI_FLAGS, "-std=gnu11", "-w",
                                    f"-include {prefix_header}", f"-I{crt_wrappers}", f"-I{XDK_INCLUDE}",
                                    *crt_includes])
     implicit_common = [*xdk_headers(), prefix_header, PORT_DIR / "include" / "halo_xbox360_api_names.h"]
@@ -478,7 +495,7 @@ def generate_xbox360_build(n: Writer, sln: Any) -> None:
     # the menus' XML parser, as on Windows (its hash salt from rand_s), over
     # the console's SDK
     for name in ("xmlparse.c", "xmlrole.c", "xmltok.c", "random_rand_s.c"):
-        add_object(EXPAT_DIR / name, " ".join([*BASE_FLAGS, "-std=gnu11", "-w", f"-I{PORT_DIR / 'include' / 'sdk'}",
+        add_object(EXPAT_DIR / name, " ".join([*BASE_FLAGS, *FREESTANDING_FLAGS, "-std=gnu11", "-w", f"-I{PORT_DIR / 'include' / 'sdk'}",
                                                f"-I{EXPAT_DIR}", *sdk_includes]), [])
     add_object(KCP_DIR / "ikcp.c", third_party_cflags, [])
     add_object(QRCODEGEN_DIR / "qrcodegen.c", third_party_cflags, [])
@@ -493,7 +510,7 @@ def generate_xbox360_build(n: Writer, sln: Any) -> None:
     builtins_obj = obj_dir / "oxdk360_builtins.o"
     objects.append(builtins_obj)
     n.build(outputs=builtins_obj, rule="xbox360_cc", inputs=builtins,
-            variables={"cflags": " ".join([*BASE_FLAGS, *sdk_includes])})
+            variables={"cflags": " ".join([*BASE_FLAGS, *FREESTANDING_FLAGS, *sdk_includes])})
 
     # each part on its own, to see what compiles
     n.build(outputs="xbox360-game-objects", rule="phony", inputs=game_objects)
