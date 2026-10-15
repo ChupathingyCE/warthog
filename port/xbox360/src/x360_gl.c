@@ -235,6 +235,10 @@ struct shader
 	BOOL compiled;
 	/* the vertex shader's inputs: bit n, location n */
 	unsigned long inputs, packed_inputs;
+	/* the programs it is attached to; deleted (glDeleteShader) it goes
+	when it is in none */
+	int attachments;
+	BOOL deleted;
 };
 
 #define MAXIMUM_UNIFORMS 64
@@ -262,6 +266,8 @@ struct program
 	float pixel_constants[256][4];
 	int vertex_constant_count, pixel_constant_count;
 	char log[512];
+	/* deleted while in use (glDeleteProgram): it goes when another is */
+	BOOL deleted;
 };
 
 struct query
@@ -675,6 +681,56 @@ static void texture_retire(struct texture *texture)
 	retired_textures.textures[half][retired_textures.count[half]++] = texture;
 }
 
+static void shader_release(struct shader *shader)
+{
+	if (shader->vertex)
+		D3DVertexShader_Release(shader->vertex);
+	if (shader->pixel)
+		D3DPixelShader_Release(shader->pixel);
+	if (shader->constants)
+		shader->constants->lpVtbl->Release(shader->constants);
+	if (shader->code)
+		((LPD3DXBUFFER)shader->code)->lpVtbl->Release((LPD3DXBUFFER)shader->code);
+	free(shader->source);
+	free(shader->hlsl);
+	free(shader);
+}
+
+#define RETIRED_SHADERS_MAXIMUM 256
+
+static struct
+{
+	struct shader *shaders[2][RETIRED_SHADERS_MAXIMUM];
+	int count[2];
+} retired_shaders;
+
+static void retired_shaders_free(int half)
+{
+	int index;
+
+	for (index = 0; index < retired_shaders.count[half]; index++)
+		shader_release(retired_shaders.shaders[half][index]);
+	retired_shaders.count[half] = 0;
+}
+
+/* (a shader a draw may have set: released once the GPU is done with it) */
+static void shader_retire(struct shader *shader)
+{
+	int half = gl.frame_half;
+
+	if (!gl.ready)
+	{
+		shader_release(shader);
+		return;
+	}
+	if (retired_shaders.count[half] == RETIRED_SHADERS_MAXIMUM)
+	{
+		gpu_idle_wait();
+		retired_shaders_free(half);
+	}
+	retired_shaders.shaders[half][retired_shaders.count[half]++] = shader;
+}
+
 static void rings_next_frame(void)
 {
 	gl.frame_fences[gl.frame_half] = IDirect3DDevice9_InsertFence(gl.device);
@@ -690,6 +746,7 @@ static void rings_next_frame(void)
 	}
 	/* (storage retired two frames ago: the GPU is done with it) */
 	retired_textures_free(gl.frame_half);
+	retired_shaders_free(gl.frame_half);
 	{
 		int index;
 
@@ -2826,6 +2883,32 @@ static void APIENTRY x360_glDeleteTextures(GLsizei n, const GLuint *names)
 static void APIENTRY x360_glActiveTexture(GLenum unit) { gl.active_unit = unit - GL_TEXTURE0; }
 static void APIENTRY x360_glBindTexture(GLenum target, GLuint name) { *bound_texture_slot(target) = name; }
 
+/* (GL 4.4's multi-bind: each unit's texture bound to the target it was
+made as; none unbinds all of the unit's targets) */
+static void APIENTRY x360_glBindTextures(GLuint first, GLsizei count, const GLuint *names)
+{
+	GLsizei index;
+
+	for (index = 0; index < count; index++)
+	{
+		GLuint unit = first + (GLuint)index;
+		GLuint name = names ? names[index] : 0;
+		struct texture *texture = object_get(name, _object_texture);
+
+		if (unit >= TEXTURE_UNITS)
+			break;
+		if (!name)
+		{
+			gl.textures[unit][0] = gl.textures[unit][1] = gl.textures[unit][2] = 0;
+			continue;
+		}
+		if (!texture)
+			continue;
+		gl.textures[unit][texture->target == GL_TEXTURE_3D ? 1 :
+			texture->target == GL_TEXTURE_CUBE_MAP ? 2 : 0] = name;
+	}
+}
+
 static void APIENTRY x360_glTexImage2D(GLenum target, GLint level, GLint internal, GLsizei width, GLsizei height,
 	GLint border, GLenum format, GLenum type, const GLvoid *pixels)
 {
@@ -3484,10 +3567,37 @@ static void APIENTRY x360_glGetShaderInfoLog(GLuint shader, GLsizei size, GLsize
 		*length = 0;
 }
 
+/* a deleted shader goes when no program has it (a program made from it
+uses its compiled code) */
+static void shader_free_if_unused(GLuint name)
+{
+	struct shader *shader = object_get(name, _object_shader);
+
+	if (!shader || !shader->deleted || shader->attachments > 0)
+		return;
+	objects[name].type = _object_none;
+	objects[name].data = NULL;
+	shader_retire(shader);
+}
+
+static void shader_detach(GLuint name)
+{
+	struct shader *shader = object_get(name, _object_shader);
+
+	if (!shader)
+		return;
+	shader->attachments--;
+	shader_free_if_unused(name);
+}
+
 static void APIENTRY x360_glDeleteShader(GLuint name)
 {
-	(void)name;
-	/* (kept: a program made from it still uses its compiled code) */
+	struct shader *shader = object_get(name, _object_shader);
+
+	if (!shader)
+		return;
+	shader->deleted = TRUE;
+	shader_free_if_unused(name);
 }
 
 static GLuint APIENTRY x360_glCreateProgram(void)
@@ -3511,9 +3621,48 @@ static void APIENTRY x360_glAttachShader(GLuint program_name, GLuint shader_name
 	if (!program || !shader)
 		return;
 	if (shader->type == GL_VERTEX_SHADER)
+	{
+		if (program->vertex == shader_name)
+			return;
+		shader->attachments++;
+		shader_detach(program->vertex);
 		program->vertex = shader_name;
+	}
 	else
+	{
+		if (program->fragment == shader_name)
+			return;
+		shader->attachments++;
+		shader_detach(program->fragment);
 		program->fragment = shader_name;
+	}
+}
+
+/* (its shaders detached: those deleted go with it) */
+static void program_free(GLuint name)
+{
+	struct program *program = object_get(name, _object_program);
+
+	if (!program)
+		return;
+	objects[name].type = _object_none;
+	objects[name].data = NULL;
+	shader_detach(program->vertex);
+	shader_detach(program->fragment);
+	free(program);
+}
+
+static void APIENTRY x360_glDeleteProgram(GLuint name)
+{
+	struct program *program = object_get(name, _object_program);
+
+	if (!program)
+		return;
+	/* (the one in use stays until another is: GL's rule) */
+	if (name == gl.program)
+		program->deleted = TRUE;
+	else
+		program_free(name);
 }
 
 static void APIENTRY x360_glBindAttribLocation(GLuint program, GLuint index, const GLchar *name)
@@ -3560,7 +3709,14 @@ static void APIENTRY x360_glGetProgramInfoLog(GLuint program, GLsizei size, GLsi
 		*length = 0;
 }
 
-static void APIENTRY x360_glUseProgram(GLuint program) { gl.program = program; }
+static void APIENTRY x360_glUseProgram(GLuint name)
+{
+	struct program *previous = object_get(gl.program, _object_program);
+
+	if (previous && previous->deleted && gl.program != name)
+		program_free(gl.program);
+	gl.program = name;
+}
 
 static GLint APIENTRY x360_glGetUniformLocation(GLuint name, const GLchar *uniform_name)
 {
@@ -3848,12 +4004,12 @@ static const struct
 {
 	ENTRY(glActiveTexture) ENTRY(glAttachShader) ENTRY(glBeginQuery) ENTRY(glBindAttribLocation) ENTRY(glBindBuffer)
 	ENTRY(glBindBufferBase) ENTRY(glBindFragDataLocation) ENTRY(glBindFramebuffer) ENTRY(glBindRenderbuffer)
-	ENTRY(glBindSampler) ENTRY(glBindTexture) ENTRY(glBindVertexArray) ENTRY(glBindVertexBuffer) ENTRY(glBlendColor)
+	ENTRY(glBindSampler) ENTRY(glBindTexture) ENTRY(glBindTextures) ENTRY(glBindVertexArray) ENTRY(glBindVertexBuffer) ENTRY(glBlendColor)
 	ENTRY(glBlendEquation) ENTRY(glBlendFunc) ENTRY(glBlendFuncSeparate) ENTRY(glBlitFramebuffer) ENTRY(glBufferData)
 	ENTRY(glBufferSubData) ENTRY(glCheckFramebufferStatus) ENTRY(glClear) ENTRY(glClearColor)
 	ENTRY(glClearDepth) ENTRY(glClearStencil) ENTRY(glClipControl) ENTRY(glColorMask) ENTRY(glCompileShader)
 	ENTRY(glCompressedTexImage2D) ENTRY(glCompressedTexImage3D) ENTRY(glCreateProgram)
-	ENTRY(glCreateShader) ENTRY(glCullFace) ENTRY(glDeleteBuffers)
+	ENTRY(glCreateShader) ENTRY(glCullFace) ENTRY(glDeleteBuffers) ENTRY(glDeleteProgram)
 	ENTRY(glDeleteFramebuffers) ENTRY(glDeleteShader) ENTRY(glDeleteTextures) ENTRY(glDepthFunc) ENTRY(glDepthMask)
 	ENTRY(glDepthRange) ENTRY(glDisable) ENTRY(glDisableVertexAttribArray) ENTRY(glDrawArrays) ENTRY(glDrawBuffers)
 	ENTRY(glDrawElements) ENTRY(glDrawElementsBaseVertex) ENTRY(glEnable) ENTRY(glEnableVertexAttribArray)
