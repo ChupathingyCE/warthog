@@ -521,6 +521,12 @@ static struct
 	/* (time inside the GL layer: draws, texture and buffer uploads, the
 	present's resolve and blit) */
 	double draw_ms, texture_ms, buffer_ms, present_ms;
+	/* (a draw's parts: its program, samplers and state; its indices read
+	and copied; its vertex streams; the device's draw call) */
+	double prepare_ms, index_ms, vertices_ms, issue_ms;
+	/* (occlusion queries: begun, ended, read) */
+	double query_ms;
+	unsigned long queries, query_spins;
 	LARGE_INTEGER frame_start;
 } stats;
 
@@ -2391,8 +2397,13 @@ static void draw_timed(GLenum mode, unsigned long first, unsigned long count, GL
 			IDirect3DDevice9_ClearF(gl.device, D3DCLEAR_ZBUFFER | D3DCLEAR_STENCIL, NULL, &none, 1.0f, 0);
 		}
 	}
+	LARGE_INTEGER part;
+
+	QueryPerformanceCounter(&part);
 	if (debug.no_draws || !count || !prepare_draw(&program, &vertex))
 		return;
+	stats.prepare_ms += stats_ms_since(part);
+	QueryPerformanceCounter(&part);
 	type = primitive_type(mode, &count);
 	if (!count)
 		return;
@@ -2447,11 +2458,15 @@ static void draw_timed(GLenum mode, unsigned long first, unsigned long count, GL
 		vertex_end = highest + 1;
 		draw_base_vertex = base_vertex;
 		copy = ring_reserve(gl.index_ring, RING_INDEX_SIZE, &gl.index_ring_offset, count * index_bytes);
+		stats.index_ms += stats_ms_since(part);
+		QueryPerformanceCounter(&part);
 		if (!copy || !setup_vertices(vertex, lowest, vertex_end))
 		{
 			draw_base_vertex = 0;
 			return;
 		}
+		stats.vertices_ms += stats_ms_since(part);
+		QueryPerformanceCounter(&part);
 		draw_base_vertex = 0;
 		memcpy(copy, source, count * index_bytes);
 		XGSetIndexBufferHeader(count * index_bytes, 0, index_bytes == 4 ? D3DFMT_INDEX32 : debug.index_le ? D3DFMT_LE_INDEX16 : D3DFMT_INDEX16, 0,
@@ -2552,7 +2567,10 @@ static void draw_timed(GLenum mode, unsigned long first, unsigned long count, GL
 			x360_log("gl:     depth: nearest %.4f (index %lu), %lu behind the camera, %lu outside the buffer", nearest,
 				nearest_index, behind, outside);
 		}
+		stats.index_ms += stats_ms_since(part);
+		QueryPerformanceCounter(&part);
 		IDirect3DDevice9_DrawIndexedVertices(gl.device, type, 0, 0, (UINT)count);
+		stats.issue_ms += stats_ms_since(part);
 	}
 	else
 	{
@@ -3619,6 +3637,9 @@ static void APIENTRY x360_glBeginQuery(GLenum target, GLuint name)
 	struct query *query = object_get(name, _object_query);
 
 	(void)target;
+	LARGE_INTEGER start;
+
+	QueryPerformanceCounter(&start);
 	if (!query || !gl_ready())
 		return;
 	if (!query->d3d)
@@ -3627,6 +3648,8 @@ static void APIENTRY x360_glBeginQuery(GLenum target, GLuint name)
 		return;
 	bind_targets();
 	D3DQuery_Issue(query->d3d, D3DISSUE_BEGIN);
+	stats.queries++;
+	stats.query_ms += stats_ms_since(start);
 	query->issued = TRUE;
 	query->available = FALSE;
 	active_query = name;
@@ -3636,16 +3659,22 @@ static void APIENTRY x360_glEndQuery(GLenum target)
 {
 	struct query *query = object_get(active_query, _object_query);
 
+	LARGE_INTEGER start;
+
+	QueryPerformanceCounter(&start);
 	(void)target;
 	if (query && query->d3d && query->issued)
 		D3DQuery_Issue(query->d3d, D3DISSUE_END);
+	stats.query_ms += stats_ms_since(start);
 	active_query = 0;
 }
 
 static void APIENTRY x360_glGetQueryObjectuiv(GLuint name, GLenum parameter, GLuint *value)
 {
 	struct query *query = object_get(name, _object_query);
+	LARGE_INTEGER start;
 
+	QueryPerformanceCounter(&start);
 	*value = 0;
 	if (!query || !query->d3d || !query->issued)
 	{
@@ -3665,6 +3694,7 @@ static void APIENTRY x360_glGetQueryObjectuiv(GLuint name, GLenum parameter, GLu
 		}
 		else if (parameter == GL_QUERY_RESULT)
 		{
+			stats.query_spins++;
 			while (D3DQuery_GetData(query->d3d, &result, sizeof(result), D3DGETDATA_FLUSH) != S_OK)
 				;
 			query->available = TRUE;
@@ -3675,6 +3705,7 @@ static void APIENTRY x360_glGetQueryObjectuiv(GLuint name, GLenum parameter, GLu
 		*value = query->available ? GL_TRUE : GL_FALSE;
 	else
 		*value = (GLuint)query->result;
+	stats.query_ms += stats_ms_since(start);
 }
 
 static void APIENTRY x360_glGetQueryBufferObjectuiv(GLuint id, GLuint buffer, GLenum name, GLintptr offset)
@@ -3780,14 +3811,21 @@ static void x360_gl_swap_timed(void)
 				stats.ring_bytes / stats.frames / 1024, stats.idle_waits, stats.idle_wait_ms, stats.fence_waits,
 				stats.fence_wait_ms, stats.textures_deleted);
 			x360_log("gl: a frame's time in the GL layer: draws %.1f ms, textures %.1f ms, buffers %.1f ms, "
-				"present %.1f ms; the rest (the game) %.1f ms", stats.draw_ms / stats.frames,
+				"present %.1f ms; the rest (the game) %.1f ms; a draw's parts: program and state %.1f ms, indices %.1f ms, "
+				"vertices %.1f ms, draw calls %.1f ms", stats.draw_ms / stats.frames,
 				stats.texture_ms / stats.frames, stats.buffer_ms / stats.frames, stats.present_ms / stats.frames,
-				(stats.frame_ms - stats.draw_ms - stats.texture_ms - stats.buffer_ms - stats.present_ms) / stats.frames);
+				(stats.frame_ms - stats.draw_ms - stats.texture_ms - stats.buffer_ms - stats.present_ms) / stats.frames,
+				stats.prepare_ms / stats.frames, stats.index_ms / stats.frames, stats.vertices_ms / stats.frames,
+				stats.issue_ms / stats.frames);
+			x360_log("gl: a frame's occlusion queries: %lu, %.1f ms; %lu waited for", stats.queries / stats.frames,
+				stats.query_ms / stats.frames, stats.query_spins);
 		}
 		stats.last_report = GetTickCount();
 		stats.frames = stats.idle_waits = stats.fence_waits = stats.ring_bytes = stats.textures_deleted = 0;
 		stats.idle_wait_ms = stats.fence_wait_ms = stats.frame_ms = 0.0;
 		stats.draw_ms = stats.texture_ms = stats.buffer_ms = stats.present_ms = 0.0;
+		stats.prepare_ms = stats.index_ms = stats.vertices_ms = stats.issue_ms = stats.query_ms = 0.0;
+		stats.queries = stats.query_spins = 0;
 		stats.draws = gl.draws;
 	}
 	gl.frame++;
