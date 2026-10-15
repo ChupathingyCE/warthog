@@ -7,7 +7,7 @@
 <p align="center">
 <a href="https://github.com/ChupathingyCE/chupathingyce">ChupathingyCE</a> ·
 <a href="https://halo.milenko.org">Games online now</a> ·
-<a href="https://discord.gg/4BUm2FwuCB">Discord</a>
+<a href="https://discord.gg/chupathingy">Discord</a>
 </p>
 
 > Warthog follows ChupathingyCE: the shared game code comes from there, and this repository adds only the consoles' own code. You need your own copy of Halo; no SDK or game files are included.
@@ -167,7 +167,7 @@ the Xbox's Windows tools, we'd love your help to set up and document:
 - debugging through XBDM on a development kit;
 - a Windows CI job or a written build recipe that others can follow.
 
-Say hello in #warthog-dev on the [Discord](https://discord.gg/4BUm2FwuCB)
+Say hello in #warthog-dev on the [Discord](https://discord.gg/chupathingy)
 so we can coordinate, and see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Testing
