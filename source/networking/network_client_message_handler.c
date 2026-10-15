@@ -816,7 +816,7 @@ static boolean network_game_client_handle_message_server_game_advertise(
 			_network_game_packet_class_advertisement))
 		{
 #ifdef HALO_XBOX_CONSOLE
-			/* port: with D:\trace.txt (port/xbox/src/xbox_port.c), each
+			/* port: with console.trace (port/xbox/src/xbox_port.c), each
 			host's advertisement, a few times then every 10 seconds (the
 			console's internet play: port/xbox/src/xbox_winsock_hooks.c
 			traces the hops before this) */

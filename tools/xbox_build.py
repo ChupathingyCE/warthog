@@ -103,6 +103,10 @@ P2P_SOURCES = [
     LINUX_SRC / "p2p.c", LINUX_SRC / "p2p_signal.c", LINUX_SRC / "p2p_crypto.c", KCP_DIR / "ikcp.c",
     MONOCYPHER_DIR / "monocypher.c", MONOCYPHER_DIR / "monocypher-ed25519.c",
 ]
+# the settings, D:\config.toml: the desktop builds' port_config.c and its
+# TOML parser (tools/linux_build.py's TOML_DIR)
+CONFIG_SOURCE = LINUX_SRC / "port_config.c"
+TOMLC17_DIR = Path("port/third_party/tomlc17")
 # the port's zlib (tools/linux_build.py's ZLIB_*): what the game's map
 # decompression inflates with (cache_files_decompress_windows.c), its names
 # prefixed z_
@@ -311,6 +315,17 @@ def generate_xbox_build(n: Writer, sln: Any) -> None:
         n.build(outputs=generated, rule="xbox_source", inputs=source, implicit=[Path("tools/xbox_sources.py")],
                 variables={"kind": "copy"})
         add_object(generated, p2p_cflags, sorted((PORT_DIR / "p2p").glob("*.h")))
+
+    # the settings (port/xbox/src/xbox_config.c): port_config.c as it is,
+    # copied as internet play's are, with the console's headers first
+    config_cflags = " ".join([p2p_cflags, "-DHALO_XBOX_CONSOLE", f"-I{_quote(TOMLC17_DIR)}"])
+    generated = gen_dir / "p2p" / CONFIG_SOURCE.name
+    n.build(outputs=generated, rule="xbox_source", inputs=CONFIG_SOURCE, implicit=[Path("tools/xbox_sources.py")],
+            variables={"kind": "copy"})
+    add_object(generated, config_cflags, sorted((PORT_DIR / "p2p").glob("*.h")))
+    add_object(TOMLC17_DIR / "tomlc17.c", " ".join([*SUPPORT_FLAGS, "-std=gnu11", "-w", "-include",
+                                                    "port/xbox/include/xbox_c99.h", f"-I{_quote(xdk / 'include')}"]),
+               [PORT_DIR / "include" / "xbox_c99.h"])
 
     n.build(
         outputs=exe,

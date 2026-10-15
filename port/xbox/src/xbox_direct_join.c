@@ -1,7 +1,7 @@
 /*
 XBOX_DIRECT_JOIN.C
 
-D:\join.txt (xbox_direct_join.h): read by network_client_manager.c while
+console.join (xbox_direct_join.h): read by network_client_manager.c while
 System Link searches. Only the parse is built on the host
 (port/xbox/tests).
 */
@@ -94,7 +94,7 @@ int xbox_direct_join_parse_invite(const char *text, unsigned long size, char *in
 
 #ifdef _XBOX
 
-#include <stdio.h>
+#include "../include/xbox_config.h"
 
 /* the game's (cseries/errors.c) */
 void error(short priority, const char *format, ...);
@@ -104,22 +104,19 @@ void error(short priority, const char *format, ...);
 int xbox_direct_join_address(unsigned long *address)
 {
 	static int told = 0;
-	char line[64];
-	FILE *file = fopen(XBOX_DIRECT_JOIN_FILE, "rb");
-	size_t size;
+	char line[128];
+	unsigned long size = xbox_config_line(XBOX_DIRECT_JOIN_SETTING, XBOX_DIRECT_JOIN_FILE, line, sizeof(line));
 
-	if (!file)
+	if (!size)
 		return 0;
-	size = fread(line, 1, sizeof(line), file);
-	fclose(file);
-	if (!xbox_direct_join_parse(line, (unsigned long)size, address))
+	if (!xbox_direct_join_parse(line, size, address))
 	{
 		char invite[XBOX_DIRECT_JOIN_INVITE_LENGTH + 1];
 
 		/* (an invite is ONLINE GAMES' to join: xbox_direct_join_invite) */
-		if (!told && !xbox_direct_join_parse_invite(line, (unsigned long)size, invite))
-			error(ERROR_LOG, "cross-play: %s holds neither a host's IPv4 address (a.b.c.d) nor an invite; not joining by it",
-				XBOX_DIRECT_JOIN_FILE);
+		if (!told && !xbox_direct_join_parse_invite(line, size, invite))
+			error(ERROR_LOG, "cross-play: %s is neither a host's IPv4 address (a.b.c.d) nor an invite; not joining by it",
+				XBOX_DIRECT_JOIN_SETTING);
 		told = 1;
 		return 0;
 	}
@@ -129,14 +126,9 @@ int xbox_direct_join_address(unsigned long *address)
 int xbox_direct_join_invite(char *invite)
 {
 	char line[128];
-	FILE *file = fopen(XBOX_DIRECT_JOIN_FILE, "rb");
-	size_t size;
+	unsigned long size = xbox_config_line(XBOX_DIRECT_JOIN_SETTING, XBOX_DIRECT_JOIN_FILE, line, sizeof(line));
 
-	if (!file)
-		return 0;
-	size = fread(line, 1, sizeof(line), file);
-	fclose(file);
-	return xbox_direct_join_parse_invite(line, (unsigned long)size, invite);
+	return size && xbox_direct_join_parse_invite(line, size, invite);
 }
 
 #endif

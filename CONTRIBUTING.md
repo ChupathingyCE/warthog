@@ -75,8 +75,8 @@ Test builds are the `nightly` release and `-testing` tags, outside the numbering
 
 Use the bug report form, or #warthog-support on the
 [Discord](https://discord.gg/4BUm2FwuCB). Attach `D:\debug.txt`; for a
-join that fails, run once with an empty `D:\trace.txt` beside
-`default.xbe` (it shows other hosts only as tags, never their Ethernet
+join that fails, run once with `trace = true` in the `[console]` section of
+`D:\config.toml` (it shows other hosts only as tags, never their Ethernet
 addresses).
 
 ## SDK and game files

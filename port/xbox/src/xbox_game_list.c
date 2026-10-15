@@ -10,8 +10,8 @@ which asks again on X, and logs it to debug.txt. Nothing waits on it: the
 game goes on as if there were no list. Joining comes later (the top level
 README, "Online Games on the Xbox").
 
-No address is ever logged: the host's name, or "the address in
-game_list.txt", only.
+No address is ever logged: the host's name, or "console.game_list_server's"
+(D:\config.toml), only.
 */
 
 #include <xtl.h>
@@ -19,7 +19,9 @@ game_list.txt", only.
 #include <stdlib.h>
 #include <string.h>
 
+#include "../include/xbox_config.h"
 #include "../include/xbox_game_list.h"
+#include "../../linux/src/port_config.h"
 
 ULONG __cdecl DbgPrint(PCSTR format, ...);
 int snprintf(char *buffer, size_t size, const char *format, ...);
@@ -62,37 +64,36 @@ static void set_state(LONG state)
 	__atomic_store_n(&list_state, state, __ATOMIC_SEQ_CST);
 }
 
-/* the server to ask: the list's host, else D:\game_list.txt's */
+/* the server to ask: the list's host, else console.game_list_server's (or
+the old D:\game_list.txt's) */
 static int find_server(unsigned long *address, char *host, int host_size, unsigned short *port)
 {
 	char line[128];
-	FILE *file;
-	size_t size;
+	unsigned long size;
 
 	snprintf(host, host_size, "%s", GAME_LIST_HOST);
 	*port = GAME_LIST_PORT;
 	if (game_list_resolve(GAME_LIST_HOST, address) == GAME_LIST_OK)
 		return 1;
-	file = fopen(GAME_LIST_FALLBACK_FILE, "rb");
-	if (!file)
+	size = xbox_config_line(GAME_LIST_FALLBACK_SETTING, GAME_LIST_FALLBACK_FILE, line, sizeof(line));
+	if (!size)
 	{
-		DbgPrint("halo: game list: %s did not resolve, and there is no %s\n", GAME_LIST_HOST, GAME_LIST_FALLBACK_FILE);
+		DbgPrint("halo: game list: %s did not resolve, and there is no %s\n", GAME_LIST_HOST,
+			GAME_LIST_FALLBACK_SETTING);
 		return 0;
 	}
-	size = fread(line, 1, sizeof(line), file);
-	fclose(file);
-	if (!game_list_parse_server(line, (unsigned long)size, host, host_size, port))
+	if (!game_list_parse_server(line, size, host, host_size, port))
 	{
 		DbgPrint("halo: game list: %s did not resolve, and %s is not a host or address\n", GAME_LIST_HOST,
-			GAME_LIST_FALLBACK_FILE);
+			GAME_LIST_FALLBACK_SETTING);
 		return 0;
 	}
 	if (game_list_resolve(host, address) != GAME_LIST_OK)
 	{
-		DbgPrint("halo: game list: neither %s nor %s's host resolved\n", GAME_LIST_HOST, GAME_LIST_FALLBACK_FILE);
+		DbgPrint("halo: game list: neither %s nor %s's host resolved\n", GAME_LIST_HOST, GAME_LIST_FALLBACK_SETTING);
 		return 0;
 	}
-	DbgPrint("halo: game list: %s did not resolve; using %s's server\n", GAME_LIST_HOST, GAME_LIST_FALLBACK_FILE);
+	DbgPrint("halo: game list: %s did not resolve; using %s's server\n", GAME_LIST_HOST, GAME_LIST_FALLBACK_SETTING);
 	/* (a dotted address: the request still names the list's host, which the
 	server's virtual host answers to) */
 	if (host[0] >= '0' && host[0] <= '9')
@@ -171,13 +172,9 @@ static unsigned long __stdcall game_list_thread(void *parameter)
 	}
 	else if (result == GAME_LIST_ERROR_CONNECT || result == GAME_LIST_ERROR_RESOLVE || result == GAME_LIST_ERROR_TIMEOUT)
 	{
-		FILE *bypass = fopen("d:\\bypass_security.txt", "r");
-
-		if (bypass)
-			fclose(bypass);
-		else
-			DbgPrint("halo: game list: (the internet needs XNet's insecure mode: put an empty "
-				"d:\\bypass_security.txt beside default.xbe)\n");
+		if (!config_boolean("console.bypass_security"))
+			DbgPrint("halo: game list: (the internet needs XNet's insecure mode: console.bypass_security = true "
+				"in D:\\config.toml)\n");
 	}
 	set_state(result == GAME_LIST_OK ? _list_done : _list_failed);
 	return 0;

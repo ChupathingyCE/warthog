@@ -12,13 +12,21 @@ written as a value only when the player chooses one (config_write). Once
 the file exists only those lines, the settings a newer version adds and an
 older file's layout (config_version) are changed in it, so that the player's
 edits and comments stay.
+
+The original Xbox builds this file too (tools/xbox_build.py, HALO_XBOX_CONSOLE):
+its D:\config.toml beside default.xbe has the settings marked for it, read
+and written with the C runtime's files in place of SDL's; it has no
+environment, and a setting not marked for it reads as empty, 0 or false, as
+it did before the console had the file.
 */
 
 #include "platform.h"
 #include "port_config.h"
 #include "tomlc17.h"
 
+#ifndef HALO_XBOX_CONSOLE
 #include <SDL3/SDL.h>
+#endif
 #include <ctype.h>
 #include <pthread.h>
 #include <stdio.h>
@@ -26,6 +34,11 @@ edits and comments stay.
 #include <string.h>
 #ifndef _WIN32
 #include <unistd.h>
+#endif
+
+#ifdef HALO_XBOX_CONSOLE
+/* (the console's C runtime's) */
+#define SDL_strncasecmp _strnicmp
 #endif
 
 /* ---------- the settings */
@@ -58,6 +71,9 @@ enum
 	_platform_all = _platform_desktop | _platform_android,
 	/* (of the desktop builds, only Windows) */
 	_platform_windows = 4,
+	/* the original Xbox (port/xbox): not in _platform_all, each of its
+	settings marked for it */
+	_platform_xbox = 8,
 };
 
 struct config_setting
@@ -66,6 +82,7 @@ struct config_setting
 	enum config_type type;
 	/* as it is written in the file */
 	const char *default_value;
+	/* NULL for a setting only the console has */
 	const char *environment;
 	enum config_environment environment_style;
 	unsigned platforms;
@@ -130,7 +147,8 @@ static const struct config_setting config_settings[] =
 	{ "display.interpolation", _config_boolean, "true", "HALO_INTERPOLATION", _environment_value, _platform_all,
 		"Draw a frame for every display refresh, blending between the game's 30\n"
 		"ticks a second; false keeps the original 30 frames a second." },
-	{ "display.direct_camera", _config_boolean, "true", "HALO_DIRECT_CAMERA", _environment_value, _platform_desktop,
+	{ "display.direct_camera", _config_boolean, "true", "HALO_DIRECT_CAMERA", _environment_value,
+		_platform_desktop | _platform_xbox,
 		"In first person, point the view where the player aims now instead of\n"
 		"where the last tick left it: the view turns the frame the mouse moves,\n"
 		"not up to two ticks (66 ms) later." },
@@ -189,9 +207,11 @@ static const struct config_setting config_settings[] =
 		"Play sound." },
 	{ "audio.volume", _config_real, "1.0", "HALO_VOLUME", _environment_value, _platform_all,
 		"The volume of everything, 0.0 to 1.0." },
-	{ "audio.music_volume", _config_real, "1.0", "HALO_MUSIC_VOLUME", _environment_value, _platform_all,
+	{ "audio.music_volume", _config_real, "1.0", "HALO_MUSIC_VOLUME", _environment_value,
+		_platform_all | _platform_xbox,
 		"The music's volume, 0.0 to 1.0 (of audio.volume)." },
-	{ "audio.effects_volume", _config_real, "1.0", "HALO_EFFECTS_VOLUME", _environment_value, _platform_all,
+	{ "audio.effects_volume", _config_real, "1.0", "HALO_EFFECTS_VOLUME", _environment_value,
+		_platform_all | _platform_xbox,
 		"The volume of every other sound (effects and speech), 0.0 to 1.0 (of\n"
 		"audio.volume)." },
 	{ "audio.buffer_frames", _config_integer, DEFAULT_AUDIO_BUFFER_FRAMES, "HALO_AUDIO_BUFFER_FRAMES", _environment_value,
@@ -276,7 +296,8 @@ static const struct config_setting config_settings[] =
 	{ "controls.pause", _config_string, "\"Escape\"", "HALO_KEY_PAUSE", _environment_value, _platform_all,
 		"The pause menu (the controller's Start)." },
 
-	{ "game.console_log", _config_string, "\"important\"", "HALO_CONSOLE_LOG", _environment_value, _platform_all,
+	{ "game.console_log", _config_string, "\"important\"", "HALO_CONSOLE_LOG", _environment_value,
+		_platform_all | _platform_xbox,
 		"What the game's console shows on screen of what it logs: \"important\"\n"
 		"(bans, players dropped for cheating, what refuses a command, and the\n"
 		"asserts that stop the game), \"all\" (every line, the game's own\n"
@@ -319,7 +340,7 @@ static const struct config_setting config_settings[] =
 		"Comma-separated IPv4 addresses system link sends its announcements to\n"
 		"instead of the local network's broadcast address (for VPNs); empty for\n"
 		"the local network." },
-	{ "network.online", _config_boolean, "true", "HALO_NET_ONLINE", _environment_value, _platform_all,
+	{ "network.online", _config_boolean, "true", "HALO_NET_ONLINE", _environment_value, _platform_all | _platform_xbox,
 		"Internet play: hosting makes an invite link (logged, and put on the\n"
 		"clipboard) that lets whoever has it join over the internet; opening a\n"
 		"link (or copying one before switching to the game) joins. Only people\n"
@@ -328,7 +349,8 @@ static const struct config_setting config_settings[] =
 		_platform_all,
 		"Join the game of an invite link found on the clipboard when the game\n"
 		"comes to the front." },
-	{ "network.tunnel_port", _config_integer, "0", "HALO_NET_TUNNEL_PORT", _environment_value, _platform_all,
+	{ "network.tunnel_port", _config_integer, "0", "HALO_NET_TUNNEL_PORT", _environment_value,
+		_platform_all | _platform_xbox,
 		"The UDP port internet play uses; 0 picks one. A fixed one can be\n"
 		"forwarded on the router, for networks whose NAT stops connections." },
 	{ "network.allow_upnp", _config_boolean, "true", "HALO_NET_ALLOW_UPNP", _environment_value, _platform_all,
@@ -402,13 +424,13 @@ static const struct config_setting config_settings[] =
 		"a level places is this many times as large (2 to 32). Server Setup's\n"
 		"MULTIPLIER in co-op writes its choice here." },
 	{ "network.brokers_file", _config_string, "\"brokers.txt\"",
-		"HALO_NET_BROKERS_FILE", _environment_value, _platform_all,
+		"HALO_NET_BROKERS_FILE", _environment_value, _platform_all | _platform_xbox,
 		"The file of the public MQTT brokers through which the machines of an\n"
 		"invite find each other (its messages are encrypted), beside this file\n"
 		"unless a full path: one host:port on each line, up to 4. Updates\n"
 		"replace brokers.txt: keep a list of your own under another name." },
 	{ "network.stun_servers", _config_string, "\"stun.l.google.com:19302,stun.cloudflare.com:3478\"",
-		"HALO_NET_STUN", _environment_value, _platform_all,
+		"HALO_NET_STUN", _environment_value, _platform_all | _platform_xbox,
 		"Public STUN servers that tell this machine its internet address;\n"
 		"comma-separated host:port." },
 	{ "network.legacy_table", _config_string, "\"\"", "HALO_LEGACY_TABLE", _environment_value, _platform_all,
@@ -459,6 +481,33 @@ static const struct config_setting config_settings[] =
 		"(a full path is best: a relative one is from the working folder); empty\n"
 		"for none." },
 #endif
+
+	/* the original Xbox's own (port/xbox/src/xbox_config.c), once empty
+	files beside default.xbe (D:\memory_64.txt and the rest) */
+	{ "console.bypass_security", _config_boolean, "false", NULL, _environment_value, _platform_xbox,
+		"Start the network in its open mode (XNet without its security), which\n"
+		"internet play, the game list and play with the PC builds need; false\n"
+		"keeps System Link's security, Xboxes only. tools/xbox_package.py\n"
+		"writes true unless --secure. Read when the game starts." },
+	{ "console.simulate_64mb", _config_boolean, "false", NULL, _environment_value, _platform_xbox,
+		"For testing: a 128 MB console (a devkit) acts as a stock 64 MB one, its\n"
+		"memory above 64 MB held for the whole run." },
+	{ "console.large_caches", _config_boolean, "false", NULL, _environment_value, _platform_xbox,
+		"On a 128 MB console, a larger texture cache (44 MB; 64 MB on a 256 MB\n"
+		"console). A stock 64 MB console shows a message and keeps the Xbox's\n"
+		"22 MB." },
+	{ "console.trace", _config_boolean, "false", NULL, _environment_value, _platform_xbox,
+		"Detailed traces in debug.txt, for reporting a join that fails: the main\n"
+		"loop each second, every hop of an internet join, the games advertised.\n"
+		"Other hosts appear only as tags, never by their addresses." },
+	{ "console.join", _config_string, "\"\"", NULL, _environment_value, _platform_xbox,
+		"For testing joins without the game list: a host's LAN address\n"
+		"(\"192.168.1.20\"), which System Link joins directly, or an invite\n"
+		"(\"halo://join/...\"), which Y in ONLINE GAMES joins; empty for none." },
+	{ "console.game_list_server", _config_string, "\"\"", NULL, _environment_value, _platform_xbox,
+		"Where to get the game list (\"host\" or \"a.b.c.d\", \":port\" optional)\n"
+		"when warthog.milenko.org does not resolve; empty for none." },
+
 	{ "discord.application_id", _config_string, "\"1553978809840050229\"", "HALO_DISCORD_APPLICATION",
 		_environment_value, _platform_desktop,
 		"The Discord application internet play invites go through while the\n"
@@ -474,37 +523,45 @@ static const struct config_setting config_settings[] =
 		"\"no\" never does, \"ask\" asks after the next crash and writes the answer\n"
 		"here." },
 
-	{ "debug.network_test", _config_string, "\"\"", "HALO_NETWORK_TEST", _environment_value, _platform_all,
+	{ "debug.network_test", _config_string, "\"\"", "HALO_NETWORK_TEST", _environment_value,
+		_platform_all | _platform_xbox,
 		"Automated system link sessions for testing (port/linux/game/network_test.c):\n"
 		"\"host:<map>\" hosts a game on that map, \"join\" joins the first game found;\n"
 		"empty for none." },
-	{ "debug.network_test_start", _config_real, "15.0", "HALO_NETWORK_TEST_START", _environment_value, _platform_all,
+	{ "debug.network_test_start", _config_real, "15.0", "HALO_NETWORK_TEST_START", _environment_value,
+		_platform_all | _platform_xbox,
 		"Seconds after hosting that an automated test game starts." },
-	{ "debug.network_test_kill", _config_real, "0.0", "HALO_NETWORK_TEST_KILL", _environment_value, _platform_all,
+	{ "debug.network_test_kill", _config_real, "0.0", "HALO_NETWORK_TEST_KILL", _environment_value,
+		_platform_all | _platform_xbox,
 		"Every this many seconds an automated test host kills its last player; 0 never." },
-	{ "debug.network_test_score", _config_integer, "0", "HALO_NETWORK_TEST_SCORE", _environment_value, _platform_all,
+	{ "debug.network_test_score", _config_integer, "0", "HALO_NETWORK_TEST_SCORE", _environment_value,
+		_platform_all | _platform_xbox,
 		"The score an automated test host's game type plays to (a short game, to\n"
 		"test the next); 0 the game type's own." },
-	{ "debug.network_test_shoot", _config_real, "0.0", "HALO_NETWORK_TEST_SHOOT", _environment_value, _platform_all,
+	{ "debug.network_test_shoot", _config_real, "0.0", "HALO_NETWORK_TEST_SHOOT", _environment_value,
+		_platform_all | _platform_xbox,
 		"Every this many seconds each automated test player hits the next with\n"
 		"their weapon, within its reach (the host brings far players near the\n"
 		"first a second before); 0 never." },
-	{ "debug.network_test_vehicle", _config_real, "0.0", "HALO_NETWORK_TEST_VEHICLE", _environment_value, _platform_all,
+	{ "debug.network_test_vehicle", _config_real, "0.0", "HALO_NETWORK_TEST_VEHICLE", _environment_value,
+		_platform_all | _platform_xbox,
 		"This many seconds into an automated test game the host seats its last\n"
 		"player as a vehicle's driver (and out 15 seconds on); 0 never." },
-	{ "debug.network_test_pickup", _config_real, "0.0", "HALO_NETWORK_TEST_PICKUP", _environment_value, _platform_all,
+	{ "debug.network_test_pickup", _config_real, "0.0", "HALO_NETWORK_TEST_PICKUP", _environment_value,
+		_platform_all | _platform_xbox,
 		"This many seconds into an automated test game the host stands its last\n"
 		"player on a weapon, which a joining player then picks up; 0 never." },
 	{ "debug.network_test_pickup_weapon", _config_string, "\"\"", "HALO_NETWORK_TEST_PICKUP_WEAPON", _environment_value,
-		_platform_all,
+		_platform_all | _platform_xbox,
 		"The weapon network_test_pickup stands the player on: the first whose tag\n"
 		"name has this in it (\"sniper\", say); empty any." },
-	{ "debug.telnet_console", _config_boolean, "false", "HALO_TELNET_CONSOLE", _environment_set_is_true, _platform_all,
+	{ "debug.telnet_console", _config_boolean, "false", "HALO_TELNET_CONSOLE", _environment_set_is_true,
+		_platform_all | _platform_xbox,
 		"Listen on 127.0.0.1 (port telnet_console_port) for a script console that\n"
 		"runs what it is sent as the game's console does, with no password; false\n"
 		"none." },
 	{ "debug.telnet_console_port", _config_integer, "2323", "HALO_TELNET_CONSOLE_PORT", _environment_value,
-		_platform_all,
+		_platform_all | _platform_xbox,
 		"The port of the script console (telnet_console); the Xbox's was 23, which\n"
 		"only the administrator can listen on." },
 	{ "debug.log_addresses", _config_boolean, "false", "HALO_LOG_ADDRESSES", _environment_set_is_true, _platform_all,
@@ -595,6 +652,8 @@ static const struct config_setting config_settings[] =
 
 #ifdef HALO_ANDROID
 #define CONFIG_PLATFORM _platform_android
+#elif defined(HALO_XBOX_CONSOLE)
+#define CONFIG_PLATFORM _platform_xbox
 #elif defined(_WIN32)
 #define CONFIG_PLATFORM (_platform_desktop | _platform_windows)
 #else
@@ -619,7 +678,7 @@ static pthread_mutex_t config_lock = PTHREAD_MUTEX_INITIALIZER;
 
 int platform_app_folder(char *path, unsigned long size)
 {
-#if defined(__APPLE__)
+#if defined(__APPLE__) && !defined(HALO_XBOX_CONSOLE)
 	const char *base = SDL_GetBasePath();
 	const char *home = getenv("HOME");
 
@@ -637,7 +696,7 @@ int platform_app_folder(char *path, unsigned long size)
 
 static void config_path(char *path, size_t size)
 {
-#ifdef __APPLE__
+#if defined(__APPLE__) && !defined(HALO_XBOX_CONSOLE)
 	char folder[1024];
 	const char *save_root = getenv("HALO_SAVE_ROOT");
 
@@ -655,7 +714,10 @@ static void config_path(char *path, size_t size)
 		return;
 	}
 #endif
-#ifdef HALO_ANDROID
+#if defined(HALO_XBOX_CONSOLE)
+	/* beside default.xbe */
+	snprintf(path, size, "d:\\config.toml");
+#elif defined(HALO_ANDROID)
 	/* the data folder, which the app names (port/android/host/host_main.c) */
 	const char *root = getenv("HALO_DATA_ROOT");
 
@@ -671,7 +733,7 @@ static void config_path(char *path, size_t size)
 /* the whole file, NUL terminated, or NULL; free() it */
 static char *config_read_file(const char *path, size_t *size)
 {
-#ifdef HALO_ANDROID
+#if defined(HALO_ANDROID) || defined(HALO_XBOX_CONSOLE)
 	FILE *file = fopen(path, "rb");
 	char *text = NULL;
 	long length;
@@ -714,7 +776,7 @@ static char *config_read_file(const char *path, size_t *size)
 
 static int config_write_file(const char *path, const char *text)
 {
-#ifdef HALO_ANDROID
+#if defined(HALO_ANDROID) || defined(HALO_XBOX_CONSOLE)
 	FILE *file = fopen(path, "wb");
 	int written;
 
@@ -833,8 +895,8 @@ static void config_append_setting(struct config_text *text, const struct config_
 		if (*line)
 			line++;
 	}
-#ifndef HALO_ANDROID
-	/* (Android apps have no environment to set) */
+#if !defined(HALO_ANDROID) && !defined(HALO_XBOX_CONSOLE)
+	/* (Android apps and the console have no environment to set) */
 	switch (setting->environment_style)
 	{
 	case _environment_value:
@@ -860,7 +922,18 @@ static char *config_default_text(void)
 	char section[32] = "";
 	size_t index;
 
-#ifdef HALO_ANDROID
+#if defined(HALO_XBOX_CONSOLE)
+	config_append(&text,
+		"# Halo settings\n"
+		"#\n"
+		"# The game writes this file beside default.xbe with the defaults when it\n"
+		"# is missing. A setting at its default is commented out (\"# key =\n"
+		"# value\") and follows the default of the version that runs: take out\n"
+		"# the \"# \" and change the value to choose another. A line starting with\n"
+		"# # does nothing. The game reads this file when it starts: restart it\n"
+		"# after an edit. Delete the file to go back to the defaults.\n"
+		CONFIG_VERSION_TEXT);
+#elif defined(HALO_ANDROID)
 	config_append(&text,
 		"# Halo settings\n"
 		"#\n"
@@ -1023,12 +1096,14 @@ static int config_text_is_false(const char *text)
 	return !strcmp(lower, "0") || !strcmp(lower, "false") || !strcmp(lower, "no") || !strcmp(lower, "off");
 }
 
+#ifndef HALO_XBOX_CONSOLE
 /* whether an environment variable that only has to be set (a
 _environment_set_is_*) is: one empty or false is not */
 static int config_environment_set(const char *text)
 {
 	return text[0] && !config_text_is_false(text);
 }
+#endif
 
 static void config_set_from_text(struct config_value *value, enum config_type type, const char *text)
 {
@@ -1536,7 +1611,7 @@ static int config_skip_line(char *text, int line_number, const char *message)
 	return 1;
 }
 
-#ifndef HALO_ANDROID
+#if !defined(HALO_ANDROID) && !defined(HALO_XBOX_CONSOLE)
 /* a config.toml the game never reads, likely edited in its place: said in
 the log, with the one it reads (path) */
 static void config_report_unread(const char *path)
@@ -1621,7 +1696,7 @@ static void config_load(void)
 	}
 
 	config_path(path, sizeof(path));
-#ifndef HALO_ANDROID
+#if !defined(HALO_ANDROID) && !defined(HALO_XBOX_CONSOLE)
 	config_report_unread(path);
 #endif
 	text = config_read_file(path, &size);
@@ -1704,10 +1779,12 @@ static void config_load(void)
 		free(defaults);
 	}
 
+	/* (the console has no environment) */
+#ifndef HALO_XBOX_CONSOLE
 	for (index = 0; index < NUMBER_OF_CONFIG_SETTINGS; index++)
 	{
 		const struct config_setting *setting = &config_settings[index];
-		const char *environment = getenv(setting->environment);
+		const char *environment = setting->environment ? getenv(setting->environment) : NULL;
 
 		/* (one set to "", "0", "false", "no" or "off" is as if it were not:
 		HALO_LOG_ADDRESSES=0 never turns a setting on) */
@@ -1727,8 +1804,9 @@ static void config_load(void)
 			break;
 		}
 	}
+#endif
 	config_check_words();
-#ifndef HALO_ANDROID
+#if !defined(HALO_ANDROID) && !defined(HALO_XBOX_CONSOLE)
 	{
 		long mode = config_setting_index("display.mode");
 		long fullscreen = config_setting_index("display.fullscreen");
@@ -1764,7 +1842,41 @@ static const struct config_value *config_value(const char *name, enum config_typ
 		platform_log("settings: no %s setting %s", type == _config_string ? "string" : "such", name);
 		return &none;
 	}
+#ifdef HALO_XBOX_CONSOLE
+	/* (the shared code's settings the console has none of: empty, 0 or
+	false, as before it had config.toml; the first few said in the log) */
+	if (!(config_settings[index].platforms & CONFIG_PLATFORM))
+	{
+		static int reported;
+
+		if (reported < 16)
+		{
+			reported++;
+			platform_log("settings: %s is not one of the console's; read as empty", name);
+		}
+		return &none;
+	}
+#endif
 	return &config_values[index];
+}
+
+/* sets a setting for this run only, from its value as text, as its
+environment variable does: config.toml is not changed (the console's old
+switch files, port/xbox/src/xbox_config.c) */
+int config_set(const char *name, const char *value)
+{
+	long index = config_setting_index(name);
+
+	if (index < 0)
+		return 0;
+	/* (the file read first, so that it does not overwrite this) */
+	config_value(name, config_settings[index].type);
+	pthread_mutex_lock(&config_lock);
+	config_set_from_text(&config_values[index], config_settings[index].type, value);
+	config_given[index] = 1;
+	config_change_count++;
+	pthread_mutex_unlock(&config_lock);
+	return 1;
 }
 
 /* ---------- writing a setting */

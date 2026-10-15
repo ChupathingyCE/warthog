@@ -1,7 +1,7 @@
 /*
 DIRECT_JOIN_TEST.C
 
-D:\join.txt's parse (port/xbox/src/xbox_direct_join.c) on the host:
+console.join's parse (port/xbox/src/xbox_direct_join.c) on the host:
 addresses taken, and everything else refused. port/xbox/tests/run.sh.
 */
 
