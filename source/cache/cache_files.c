@@ -1483,6 +1483,16 @@ long scenario_tags_load(
 
 				return NONE;
 			}
+#ifdef HALO_BIG_ENDIAN
+			/* port: and the tags themselves in the console's byte order
+			(port/console/game/tag_byte_swap.c, which checks every block it
+			follows against what was read), before the schema check reads
+			their counts */
+			tag_byte_swap_tags(
+				tag_cache_base_address,
+				XBOX_ADDRESS(tag_cache_base_address),
+				cache_file_globals.header.tag_data_size);
+#endif
 			/* port: and every tag checked against its group's schema before
 			anything reads it (port/linux/game/tag_validate.c): a map whose
 			tags' pointers cannot be trusted is refused; what can be
@@ -1498,13 +1508,6 @@ long scenario_tags_load(
 				return NONE;
 			}
 
-#ifdef HALO_BIG_ENDIAN
-			/* port: and the tags themselves (port/console/game/tag_byte_swap.c) */
-			tag_byte_swap_tags(
-				tag_cache_base_address,
-				XBOX_ADDRESS(tag_cache_base_address),
-				cache_file_globals.header.tag_data_size);
-#endif
 			cache_file_globals.tag_header = tag_cache_base_address;
 			match_vassert(
 				"c:\\halo\\SOURCE\\cache\\cache_files.c",
