@@ -179,11 +179,28 @@ static void test_list(void)
 		INVITE_A "\tA\tb\t2\tslayer\t256\t16\t11\t\topen\n"               /* players */
 		INVITE_A "\tA\tb\t2\tslayer\t1\t16\t11\t\n"                       /* no state */
 		INVITE_A "\tA\tb\t2\tslayer\t1\t16\t11\topen\n"                   /* a field missing */
-		INVITE_A "\tA\xc3\xa9\x01\tb\t2\tslayer\t1\t16\t65535\t\tfull\n"  /* kept, "?" for the rest */
+		INVITE_A "\tA\xc3\xa9\x01\tb\t2\tslayer\t1\t16\t65535\t\tfull\n"  /* kept, plain letters */
 		"end\n", INVITE_A, INVITE_A);
 	CHECK(parse_list(text, strlen(text), &list) == GAME_LIST_OK);
 	CHECK(list.count == 1 && list.skipped == 7);
-	CHECK(!strcmp(list.games[0].name, "A???") && list.games[0].version == 65535);
+	CHECK(!strcmp(list.games[0].name, "Ae") && list.games[0].version == 65535);
+
+	/* names in UTF-8: accented Latin letters plain, the rest left out, a
+	name of nothing else "?"; a name may take more bytes than characters */
+	snprintf(text, sizeof(text), "warthog-list 1 4\n"
+		INVITE_A "\t\xc2\xa1R\xc3\xado \xc5\x81\xc3\xb3" "d\xc5\xba!\xe2\x84\xa2\tb\t2\t\t1\t16\t11\t\topen\n"
+		INVITE_A "\t\xe6\x97\xa5\xe6\x9c\xac\tb\t2\t\t1\t16\t11\t\topen\n"
+		INVITE_A "\t\xc3\x86on \xc3\x9f\xf0\x9f\x98\x80\xc3\tb\t2\t\t1\t16\t11\t\topen\n"
+		INVITE_A "\t\xc3\xa9\xc3\xa9\xc3\xa9\xc3\xa9\xc3\xa9\xc3\xa9\xc3\xa9\xc3\xa9\xc3\xa9\xc3\xa9"
+			"\xc3\xa9\xc3\xa9\xc3\xa9\xc3\xa9\xc3\xa9\xc3\xa9\xc3\xa9\xc3\xa9\xc3\xa9\xc3\xa9"
+			"\xc3\xa9\xc3\xa9\xc3\xa9\xc3\xa9\xc3\xa9\xc3\xa9\xc3\xa9\xc3\xa9\xc3\xa9\xc3\xa9"
+			"\xc3\xa9\xc3\xa9\tb\t2\t\t1\t16\t11\t\topen\n"
+		"end\n");
+	CHECK(parse_list(text, strlen(text), &list) == GAME_LIST_OK && list.count == 4);
+	CHECK(!strcmp(list.games[0].name, "!Rio Lodz!"));
+	CHECK(!strcmp(list.games[1].name, "?"));
+	CHECK(!strcmp(list.games[2].name, "AEon ss"));
+	CHECK(!strcmp(list.games[3].name, "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"));
 
 	/* a line past the limit is left out; one at it is kept */
 	{
@@ -204,7 +221,7 @@ static void test_list(void)
 		static const char with_nul[] = "warthog-list 1 1\n" INVITE_A "\tA\0B\tb\t2\t\t1\t16\t11\t\topen\nend\n";
 
 		CHECK(parse_list(with_nul, sizeof(with_nul) - 1, &list) == GAME_LIST_OK && list.count == 1);
-		CHECK(!strcmp(list.games[0].name, "A?B"));
+		CHECK(!strcmp(list.games[0].name, "AB"));
 	}
 
 	/* 64 games, the most */
