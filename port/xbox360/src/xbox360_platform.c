@@ -79,6 +79,9 @@ void xbox360_main_loop_tick(void)
 	static unsigned long loops, total;
 	DWORD now = GetTickCount();
 
+	extern void x360_profile_pass(void);
+
+	x360_profile_pass();
 	loops++;
 	total++;
 	if (!last_report)

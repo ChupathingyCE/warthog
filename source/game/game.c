@@ -184,6 +184,7 @@ struct game_options;
 #include "rasterizer/common/rasterizer_common.h"
 #endif
 #include "network_coop.h" /* port: port/linux/game/network_coop.c */
+#include "cseries/frame_profile.h"
 
 /* network_game_globals.c's */
 boolean network_game_distributed_client(void);
@@ -324,45 +325,63 @@ void game_tick(
 	/* port: a client of another's game, the host's rules (its own cheats and
 	game speed, set before it joined too, put back) */
 	cheats_network_client_enforce();
+	FRAME_STAGE("game_tick: remove_quitting_players_from_game");
 	remove_quitting_players_from_game();
+	FRAME_STAGE("game_tick: game_allegiance_update");
 	game_allegiance_update();
+	FRAME_STAGE("game_tick: units_update");
 	units_update();
 	/* (the host's actors drive the host's units, which a client of the
 	distributed netcode has from the host: its own would fight the host's
 	positions, and could place objects of their own) */
+	FRAME_STAGE("game_tick: ai_update");
 	if (!network_game_distributed_client())
 		ai_update();
 	else
 		network_actors_drive();
+	FRAME_STAGE("game_tick: players_update_before_game");
 	players_update_before_game();
 
 	seconds_per_tick = game_globals->players_are_double_speed
 		? 1.0f / (2 * TICKS_PER_SECOND)
 		: 1.0f / TICKS_PER_SECOND;
+	FRAME_STAGE("game_tick: effects_update");
 	effects_update(seconds_per_tick);
 	/* An antenna's chain is a simulation of the Xbox's own step, an update a
 	tick: stepped a frame at a time, its springs, its carry and its points'
 	physics act against the frames' own movement of it, and a vehicle at
 	speed swings it far wider than a tick's step does. The frames between the
 	ticks are drawn from what each tick leaves (antenna.c). */
+	FRAME_STAGE("game_tick: antennas_update");
 	antennas_update(seconds_per_tick);
 	lock_global_random_seed();
+	FRAME_STAGE("game_tick: rumble_update");
 	rumble_update();
+	FRAME_STAGE("game_tick: first_person_weapons_update");
 	first_person_weapons_update();
 	unlock_global_random_seed();
+	FRAME_STAGE("game_tick: game_engine_update");
 	game_engine_update();
+	FRAME_STAGE("game_tick: editor_update");
 	editor_update();
 	/* port: in network co-op only the host runs the scripts. A client running
 	them would place the map's actors and objects a second time and make
 	decisions that belong to the host. */
+	FRAME_STAGE("game_tick: hs_update");
 	if (!(network_game_distributed_client() && network_coop_active()))
 		hs_update();
+	FRAME_STAGE("game_tick: recorded_animations_update");
 	recorded_animations_update();
+	FRAME_STAGE("game_tick: objects_update");
 	objects_update();
+	FRAME_STAGE("game_tick: players_update_after_game");
 	players_update_after_game();
+	FRAME_STAGE("game_tick: hud_update");
 	hud_update();
+	FRAME_STAGE("game_tick: player_effect_update");
 	player_effect_update();
 
+	FRAME_STAGE("game_time_update: after a tick");
 	profile_exit(game_update_section);
 	collision_log_end_period();
 	profile_tick_end();

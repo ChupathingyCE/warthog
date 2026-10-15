@@ -402,6 +402,10 @@ symbols in this file:
 #ifdef HALO_XBOX_CONSOLE
 extern char const *volatile xbox_main_stage;
 #define MAIN_STAGE(name) (xbox_main_stage = (name))
+#elif defined(HALO_XBOX360)
+/* (the Xbox 360's profile log: cseries/frame_profile.h) */
+#include "cseries/frame_profile.h"
+#define MAIN_STAGE(name) FRAME_STAGE(name)
 #else
 #define MAIN_STAGE(name) ((void)0)
 #endif
