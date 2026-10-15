@@ -2732,7 +2732,7 @@ struct mip_composite
 
 static struct mip_composite *mip_composites;
 
-#if defined(HALO_ANDROID) || defined(__APPLE__)
+#if defined(HALO_ANDROID) || defined(__APPLE__) || defined(HALO_XBOX360)
 #ifdef HALO_ANDROID
 #define HOST_GL_COPY_IMAGE xgpu_capabilities.copy_image
 #else
@@ -2740,8 +2740,8 @@ static struct mip_composite *mip_composites;
 #endif
 static GLuint framebuffer_get(GLuint color, GLuint depth);
 
-/* glCopyImageSubData for ES 3.0/3.1 contexts without the extension, and
-macOS's OpenGL 4.1 */
+/* glCopyImageSubData for ES 3.0/3.1 contexts without the extension,
+macOS's OpenGL 4.1 and the Xbox 360's GL layer (port/xbox360/src/x360_gl.c) */
 static void copy_level_by_blit(GLuint source, GLuint destination, GLint level, GLsizei width, GLsizei height)
 {
 	static GLuint draw_framebuffer;
@@ -2814,7 +2814,7 @@ static GLuint mip_composite_get(const struct xgpu_texture_description *descripti
 			target->gl_width != width || target->gl_height != height)
 			break;
 		render_target_resolve(target);
-#if defined(HALO_ANDROID) || defined(__APPLE__)
+#if defined(HALO_ANDROID) || defined(__APPLE__) || defined(HALO_XBOX360)
 		/* (OpenGL 4.3: macOS's 4.1 copies levels with a blit instead) */
 		if (!HOST_GL_COPY_IMAGE)
 		{
