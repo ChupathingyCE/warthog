@@ -640,7 +640,7 @@ static long looping_sound_new(
 	long definition_index,
 	long identifier,
 	struct sound_source const *source);
-static void sound_set_definition_end(
+static boolean sound_set_definition_end(
 	long sound_index);
 static long update_potentially_audible_looping_sound(
 	long definition_index,
@@ -1140,6 +1140,10 @@ static real sound_manager_port_volume(
 		read_at = config_changes();
 		music_volume = PIN((real)config_real("audio.music_volume"), 0.f, 1.f);
 		effects_volume = PIN((real)config_real("audio.effects_volume"), 0.f, 1.f);
+#ifdef HALO_XBOX_CONSOLE
+		error(_error_silent, "sound: music volume %.2f, effects volume %.2f",
+			music_volume, effects_volume);
+#endif
 	}
 	return class_index == _sound_class_music ? music_volume : effects_volume;
 }
@@ -1505,7 +1509,7 @@ static long looping_sound_new(
 	return looping_sound_index;
 }
 
-static void sound_set_definition_end(
+static boolean sound_set_definition_end(
 	long sound_index)
 {
 	struct sound_datum *sound = sound_get(sound_index);
@@ -1546,18 +1550,23 @@ static void sound_set_definition_end(
 		}
 		else
 		{
-			return;
+			return TRUE;
 		}
 
 		if (channel_index != NONE)
 		{
-			sound_index = channel_get(channel_index)->sound_index;
+			long victim_sound_index = channel_get(channel_index)->sound_index;
+			sound_stop(victim_sound_index);
+			return victim_sound_index != sound_index;
 		}
 
+		/* Instance limiting may retire this very voice. Its caller must not
+		   queue another permutation through the now-unowned channel. */
 		sound_stop(sound_index);
+		return FALSE;
 	}
 
-	return;
+	return TRUE;
 }
 
 static long update_potentially_audible_looping_sound(
@@ -1611,6 +1620,8 @@ static long update_potentially_audible_looping_sound(
 				sound->track_proc = track_loop_track_sound;
 				sound->fade_stop_time = 0;
 				sound->fade_start_time = 0;
+				sound->fade_interpolation_start = 1.f;
+				sound->fade_interpolation_end = 1.f;
 				sound->next_definition_index = NONE;
 				sound->pitch_range_index =
 					sound_definition_find_pitch_range_by_pitch(
@@ -1634,6 +1645,7 @@ static long update_potentially_audible_looping_sound(
 					TRUE,
 					FALSE);
 				looping_sound->component_sound_count++;
+
 			}
 		}
 	}
@@ -1794,7 +1806,9 @@ static real sound_calculate_fade(
 	long sound_index)
 {
 	struct sound_datum *sound = sound_get(sound_index);
-	real fade = 1.f;
+	/* A completed fade keeps its endpoint. Another query in this frame (or
+	   after a cache delay) must not bring a stopped voice back to full gain. */
+	real fade = sound->fade_interpolation_end;
 
 	if (sound->fade_start_time != sound->fade_stop_time)
 	{
@@ -1866,6 +1880,7 @@ static void sound_start_fade(
 		fade_in_sound_index!=NONE || fade_out_sound_index!=NONE);
 
 	fade_start_time = sound_manager_globals.render_time - 1;
+
 	fade_stop_time = (long)(seconds * 1000.f + fade_start_time);
 	fade_stop_time = MAX(fade_stop_time, sound_manager_globals.render_time);
 
@@ -1902,6 +1917,32 @@ static void sound_start_fade(
 	}
 
 	return;
+}
+
+/* The primary handle changes on restart and crossfade. Cancellation belongs
+   to the loop and track, including voices still waiting for a cache/channel. */
+static void sound_fade_looping_track_components(
+	long looping_sound_index,
+	short track_index,
+	long except_sound_index,
+	real seconds)
+{
+	long sound_index;
+
+	for (sound_index = data_next_index(sound_data, NONE);
+		sound_index != NONE;
+		sound_index = data_next_index(sound_data, sound_index))
+	{
+		struct sound_datum *sound = sound_get(sound_index);
+
+		if (sound_index != except_sound_index &&
+			(sound->type == _sound_start_track || sound->type == _sound_loop_track) &&
+			sound->source_identifier == looping_sound_index &&
+			sound->loop_track_index == track_index)
+		{
+			sound_start_fade(_sound_fade_mode_linear, seconds, NONE, sound_index);
+		}
+	}
 }
 
 static short channel_get_state(
@@ -1972,6 +2013,7 @@ static void sound_stop(
 	struct sound_datum *sound = sound_get(sound_index);
 	struct sound_definition *definition =
 		sound_definition_get(sound->definition_index);
+
 
 	if (sound->playing_channel_index != NONE)
 	{
@@ -2070,7 +2112,7 @@ static real source_distance_squared(
 	short listener_index,
 	struct sound_source *source)
 {
-	real distance_squared;
+	real distance_squared = 0.0f;
 
 	switch (source->spatialization_mode)
 	{
@@ -2095,10 +2137,6 @@ static real source_distance_squared(
 			source->location.position.z * source->location.position.z;
 		break;
 
-	/* distance_squared is left unassigned only by this default arm. Not reached unassigned: the
-	 * arm's assertion failure calls system_exit, which does not return in January
-	 * (0x47c960 jumps to halt_and_catch_fire 0x4f21c0, which loops or calls exit).
-	 * Source-policy approval pending (2026-09-27 audit). */
 	default:
 		match_vassert(
 			"c:\\halo\\SOURCE\\sound\\sound_manager.c",
@@ -2526,6 +2564,8 @@ long sound_new_impulse(
 											NONE);
 									sound->fade_stop_time = 0;
 									sound->fade_start_time = 0;
+									sound->fade_interpolation_start = 1.f;
+									sound->fade_interpolation_end = 1.f;
 									sound->loop_track_index = NONE;
 									_sound_cache_sound_request(
 										sound_permutation_get(
@@ -2672,6 +2712,13 @@ boolean sound_refresh_looping(
 
 					if (refresh_state == _looping_sound_refresh_start)
 					{
+						if (track->start_sound.index != NONE ||
+							TEST_FLAG(track->flags, _fade_in_at_start_bit))
+						{
+							sound_fade_looping_track_components(
+								looping_sound_index, track_index, NONE,
+								track->fade_out_duration);
+						}
 						if (track->start_sound.index != NONE)
 						{
 							*playing_sound_index =
@@ -2767,6 +2814,15 @@ boolean sound_refresh_looping(
 					}
 					else if (loop->state != _looping_sound_refresh_stop)
 					{
+						if (fade_time != 0.f ||
+							TEST_FLAG(track->flags, _fade_out_at_stop_bit) ||
+							(track->stop_sound.index == NONE &&
+								!TEST_FLAG(definition->flags, _looping_sound_fake_impulse_sound_bit)))
+						{
+							sound_fade_looping_track_components(
+								looping_sound_index, track_index, *playing_sound_index,
+								fade_time != 0.f ? fade_time : track->fade_out_duration);
+						}
 						if (fade_time != 0.f)
 						{
 							sound_start_fade(
@@ -2976,7 +3032,10 @@ static void update_channel_for_looping_sound(
 					(!channel->playing_permutation ||
 						channel->playing_permutation->next_permutation_index == NONE))
 				{
-					sound_set_definition_end(channel->sound_index);
+					if (!sound_set_definition_end(channel->sound_index))
+					{
+						return;
+					}
 					definition = sound_definition_get(sound->definition_index);
 					pitch_range = TAG_BLOCK_GET_ELEMENT(
 						&definition->pitch_ranges,
@@ -3079,6 +3138,7 @@ static void process_looping_sounds(
 
 		if (looping_sound->flip_flop != sound_manager_globals.flip_flop)
 		{
+
 			datum_delete(looping_sound_data, looping_sound_index);
 		}
 		else if (looping_sound->state != _looping_sound_refresh_stop)

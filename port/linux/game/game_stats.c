@@ -54,6 +54,9 @@ Called each frame from the main loop (main.c).
 /* game_engine.c's */
 long game_engine_report_lines(struct browser_report_player *players, long maximum);
 struct game_variant *game_engine_get_variant(void);
+/* Delta Stats' recorder (game_events.c) */
+void game_events_update(void);
+void game_events_player_killed(long killing_player_index, long dead_player_index, boolean friendly_fire);
 /* this file's, game_engine.c's too */
 void game_stats_game_extra(boolean host, char *text, long size);
 /* the platform layer's */
@@ -155,12 +158,13 @@ static struct
 	struct stats_player players[MAXIMUM_STATS_PLAYERS];
 	short departed_count;
 	struct stats_player departed[MAXIMUM_DEPARTED_PLAYERS];
-	/* the damage of the kill being counted (damage.c) */
+	/* the damage of the kill being counted (damage.c; NONE: unknown, as for
+	a client's first kill, which damage.c did not see) */
 	long kill_damage;
 	boolean over;
 	unsigned long over_time;
 	boolean client_reported;
-} game_stats = { FALSE, 0, 0 };
+} game_stats = { .recording = FALSE, .kill_damage = NONE };
 
 /* ---------- private code */
 
@@ -422,6 +426,10 @@ static long stats_append_path(
 			text[used++] = '\\';
 		if ((unsigned char)character < 0x20)
 			character = ' ';
+		/* (and ASCII only: a map's tag paths may be any bytes, which would
+		not be the report's UTF-8) */
+		if ((unsigned char)character >= 0x7F)
+			character = '?';
 		text[used++] = character;
 	}
 	text[used] = 0;
@@ -482,7 +490,7 @@ static long stats_departed_json(
 {
 	char name[96];
 
-	browser_json_name(name, sizeof(name), (unsigned short const *)player->name, 12);
+	browser_json_name(name, sizeof(name), (unsigned short const *)player->name, BROWSER_PLAYER_NAME_LENGTH);
 	used = stats_append(text, size, used,
 		"{\"name\": %s, \"team\": %ld, \"color\": %d, \"kills\": %d, \"assists\": %d, \"deaths\": %d, "
 		"\"betrayals\": %d, \"suicides\": %d, \"shots_fired\": %ld, \"shots_hit\": %ld, \"multikills\": %d, "
@@ -531,7 +539,7 @@ static void stats_client_report(
 	count = game_engine_report_lines(players, MAXIMUM_STATS_PLAYERS);
 	if (count <= 0)
 		return;
-	browser_json_name(name, sizeof(name), (unsigned short const *)reporter->name, 12);
+	browser_json_name(name, sizeof(name), (unsigned short const *)reporter->name, BROWSER_PLAYER_NAME_LENGTH);
 	browser_json_name(host, sizeof(host), (unsigned short const *)game->name, 16);
 	used = stats_append(extra, sizeof(extra), used,
 		"\"map\": \"");
@@ -540,7 +548,7 @@ static void stats_client_report(
 		"\", \"engine\": %d, \"score_limit\": %d, \"host\": %s, \"reporter\": %s, \"client_joined\": %ld, "
 		"\"build\": \"ChupathingyCE %s\", \"network_version\": %d, ",
 		(int)variant->game_engine_index, (int)variant->universal_variant.score_to_win, host, name,
-		game_stats.first_tick / TICKS_PER_SECOND, updater_version(), (int)HALO_PORT_NETWORK_VERSION);
+		game_stats.first_tick / TICKS_PER_SECOND, updater_version(), delta_legacy_announce());
 	game_stats_game_extra(FALSE, extra + used, (long)sizeof(extra) - used);
 	browser_client_report(
 		teams,
@@ -576,6 +584,8 @@ void game_stats_player_killed(
 
 	if (!stats_network_game() || !game_engine_can_score())
 		return;
+	/* (Delta Stats' recorder, when this machine hosts: game_events.c) */
+	game_events_player_killed(killing_player_index, dead_player_index, friendly_fire);
 	stats_check_game();
 	stats_track_players();
 	tick = game_time_get();
@@ -633,9 +643,20 @@ void game_stats_game_extra(
 		host ? "host" : "synced");
 	for (index = 0; index < game_stats.departed_count; index++)
 	{
+		long before = used;
+
 		if (index)
 			used = stats_append(text, size, used, ", ");
 		used = stats_departed_json(&game_stats.departed[index], text, size, used);
+		/* (a player who doesn't fit is left out whole, with room kept for
+		the closing bracket: a report cut off mid-player isn't JSON, and the
+		site turns it away) */
+		if (used >= size - 2)
+		{
+			text[before] = 0;
+			used = before;
+			break;
+		}
 	}
 	stats_append(text, size, used, "]");
 }
@@ -644,6 +665,8 @@ void game_stats_update(
 	void)
 {
 	boolean over;
+
+	game_events_update();
 
 	if (!game_engine_running() || !stats_network_game())
 	{

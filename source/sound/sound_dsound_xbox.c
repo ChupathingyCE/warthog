@@ -1293,6 +1293,22 @@ struct sound_platform_definition platform_sound_dsound =
 
 static char dsound_error_string[MAXIMUM_DSOUND_ERROR_STRING_LENGTH+1];
 
+#ifdef HALO_XBOX_CONSOLE
+/* port: the first channels to start, into debug.txt, and whether each then
+went on to stream (its packets are refilled from DirectSound's callback,
+which cannot log, so the count is read from the main loop) */
+enum
+{
+	XBOX_SOUND_LOG_LINES = 24,
+	/* past the first fill: refilled from the callback */
+	XBOX_SOUND_STREAMING_PACKETS = MAXIMUM_SOUND_PACKETS+2,
+};
+
+static long xbox_sound_log_lines;
+static volatile long xbox_channel_packets[MAXIMUM_SOUND_CHANNELS];
+static boolean xbox_channel_watched[MAXIMUM_SOUND_CHANNELS];
+#endif
+
 /* ---------- public code */
 
 unsigned long sound_samples_per_second(
@@ -1437,11 +1453,30 @@ static void dsound_begin_scene(
 
 	if (strlen(dsound_error_string))
 	{
-		dsound_error(interrupt_result, dsound_error_string);
+		/* port: as text, not a format (see interrupt_time_error) */
+		dsound_error(interrupt_result, "%s", dsound_error_string);
 	}
 
 	dsound_error_string[0]= 0;
 	interrupt_result= 0;
+
+#ifdef HALO_XBOX_CONSOLE
+	{
+		short index;
+
+		for (index= 0; index<dsound_globals.actual_channel_count && index<MAXIMUM_SOUND_CHANNELS; index++)
+		{
+			if (xbox_channel_watched[index] && xbox_channel_packets[index]>=XBOX_SOUND_STREAMING_PACKETS)
+			{
+				struct sound_channel *channel= channel_get(index);
+
+				xbox_channel_watched[index]= FALSE;
+				error(_error_silent, "sound: channel %d refilled (%ld packets, gain %.2f)",
+					index, xbox_channel_packets[index], channel->gain);
+			}
+		}
+	}
+#endif
 
 	return;
 }
@@ -2259,13 +2294,14 @@ static void CALLBACK dsound_channel_callback(
 	{
 		struct sound_channel *channel= channel_get(channel_index);
 
+
 		if (status==XMEDIAPACKET_STATUS_SUCCESS || status==XMEDIAPACKET_STATUS_FLUSHED)
 		{
 			sound_cache_sound_hardware_unlock(packet_context);
 
 			channel->packet_count--;
 
-			if (!dsound_globals.paused)
+			if (!dsound_globals.paused && !channel->stopping)
 			{
 				if (channel->packet_count==0)
 				{
@@ -2568,10 +2604,19 @@ static boolean dsound_channel_queue_packet(
 	{
 		if (channel->playing_permutation->cache_base_address)
 		{
+			/* port: the size is the map's: one that is negative, or runs
+			past the cache (the end wrapped), or that the channel has played
+			past, is outside the range too (it reached the decoder as a
+			packet of nearly 4 GB) */
 			if ((byte *)xbox_pointer(channel->playing_permutation->cache_base_address)>=
 					(byte *)physical_memory_get_sound_cache_base_address() &&
-				(byte *)xbox_pointer(channel->playing_permutation->cache_base_address)+channel->playing_permutation->samples.size<=
-					(byte *)physical_memory_get_sound_cache_base_address()+SOUND_CACHE_SIZE)
+				channel->playing_permutation->samples.size>=0 &&
+				channel->playing_permutation->samples.size<=SOUND_CACHE_SIZE &&
+				(unsigned long)((byte *)xbox_pointer(channel->playing_permutation->cache_base_address)-
+					(byte *)physical_memory_get_sound_cache_base_address())<=
+					(unsigned long)(SOUND_CACHE_SIZE-channel->playing_permutation->samples.size) &&
+				channel->sample_offset>=0 &&
+				channel->sample_offset<=channel->playing_permutation->samples.size)
 			{
 				struct sound_permutation *sound= channel->playing_permutation;
 				XMEDIAPACKET packet;
@@ -2610,6 +2655,10 @@ static boolean dsound_channel_queue_packet(
 							(TEST_FLAG(channel->type_flags, _sound_channel_stereo_bit) ? 2 : 1);
 
 						channel->sample_offset= MAX(remaining_size/block_size/2, 1)*block_size;
+						/* port: and no more than the sound has (one smaller than
+						a block, from the map, read past its end and then played
+						on from past it) */
+						channel->sample_offset= MIN(channel->sample_offset, remaining_size);
 
 						packet.dwMaxSize= channel->sample_offset;
 					}
@@ -2634,6 +2683,12 @@ static boolean dsound_channel_queue_packet(
 						sound_cache_sound_hardware_lock(sound);
 
 						queued= TRUE;
+#ifdef HALO_XBOX_CONSOLE
+						if (index<MAXIMUM_SOUND_CHANNELS)
+						{
+							xbox_channel_packets[index]++;
+						}
+#endif
 					}
 					else
 					{
@@ -2645,7 +2700,8 @@ static boolean dsound_channel_queue_packet(
 			{
 				sprintf(
 					temporary,
-					"trying to queue sound %s but it's outside the valid range. (%ld)",
+					/* port: %.32s, the name is the map's 32 characters */
+					"trying to queue sound %.32s but it's outside the valid range. (%ld)",
 					channel->playing_permutation->name,
 					channel->playing_permutation->cache_base_address);
 
@@ -2701,6 +2757,7 @@ static void dsound_channel_queue_sound(
 {
 	struct sound_channel *channel= channel_get(index);
 
+
 	match_assert(
 		"c:\\halo\\SOURCE\\sound\\sound_dsound_xbox.c",
 		1111,
@@ -2720,6 +2777,17 @@ static void dsound_channel_queue_sound(
 			channel->playing_permutation= sound;
 			channel->sample_offset= 0;
 			channel->packet_count= 0;
+
+#ifdef HALO_XBOX_CONSOLE
+			if (index<MAXIMUM_SOUND_CHANNELS && xbox_sound_log_lines<XBOX_SOUND_LOG_LINES)
+			{
+				xbox_sound_log_lines++;
+				xbox_channel_packets[index]= 0;
+				xbox_channel_watched[index]= TRUE;
+				error(_error_silent, "sound: channel %d (type %d) starts %.32s, %ld bytes, gain %.2f",
+					index, channel->type_flags, sound->name, sound->samples.size, channel->gain);
+			}
+#endif
 
 			result= IDirectSound_CommitDeferredSettings(dsound_globals.direct_sound);
 
@@ -2764,7 +2832,8 @@ static void interrupt_time_error(
 
 	if (strlen(dsound_error_string)+strlen(message)<MAXIMUM_DSOUND_ERROR_STRING_LENGTH)
 	{
-		sprintf(dsound_error_string+strlen(dsound_error_string), message);
+		/* port: as text, not a format (it can hold a sound's name, the map's) */
+		sprintf(dsound_error_string+strlen(dsound_error_string), "%s", message);
 	}
 
 	return;
@@ -2919,16 +2988,19 @@ static void channel_stop(
 {
 	struct sound_channel *channel= channel_get(index);
 
-	if (channel->state!=_sound_channel_idle)
-	{
-		DirectSoundStopStream(channel->stream);
 
-		channel->stopping= TRUE;
-		channel->state= _sound_channel_idle;
-	}
-
+	/* The SDL backend completes packets synchronously during StopStream.
+	   Retire the producer before flushing: a SUCCESS callback for an already
+	   mixed packet must not refill the stream we are cancelling. */
 	channel->playing_permutation= NULL;
 	channel->queued_permutation= NULL;
+
+	if (channel->state!=_sound_channel_idle || channel->packet_count!=0)
+	{
+		channel->stopping= TRUE;
+		DirectSoundStopStream(channel->stream);
+		channel->state= _sound_channel_idle;
+	}
 
 	return;
 }

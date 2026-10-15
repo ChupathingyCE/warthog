@@ -258,6 +258,15 @@ boolean coop_scripts_any_player_will_do(
 	return FALSE;
 }
 
+/* (never called: only when coop_scripts_any_player_will_do is) */
+void coop_scripts_gather_in_volume(
+	short trigger_volume_index,
+	long object_list_index)
+{
+	(void)trigger_volume_index;
+	(void)object_list_index;
+}
+
 void coop_scripts_teleport_followers(
 	long unit_index)
 {

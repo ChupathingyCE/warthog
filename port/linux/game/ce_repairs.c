@@ -42,7 +42,12 @@ or reads past a tag's end:
     walks without end, past its arrays of nodes: that link cut; and a
     node's link past the nodes (h2_ascension's has its parents a byte too
     high, 256 for 1): a sibling or child cut, a parent made the one the
-    nodes' tree gives it.
+    nodes' tree gives it;
+  - a bitmap in MCC's high-quality compression (format 18: BC7, which
+    Chimera draws on Halo PC and Halo PC's engine refused): made DXT5's
+    format, whose 4x4 blocks are its size, and marked so that its blocks are
+    decoded as BC7's when it is drawn (ce_bitmap_is_bc7: xbox_texture_cache.c,
+    xbox_textures.c).
 
 The repairs are made before the map is opened, to the image it is checked
 in (ce_map_checks.c, so that its checks see the map as it will play), and
@@ -65,7 +70,6 @@ way (cache_files_windows.c).
 
 enum
 {
-	CE_TAG_INSTANCE_SIZE = 0x20,
 	/* (a tag block's or tag data's count or size: larger ones would not
 	fit in a tag cache in any case) */
 	CE_MAXIMUM_ELEMENTS = 0x10000,
@@ -93,6 +97,17 @@ enum
 	SHADER_TYPE_LAST_MODIFIER = 11,
 	/* (bitmap_group.h: its bitmaps block) */
 	BITMAP_GROUP_BITMAPS_OFFSET = 0x60,
+	/* a bitmap (bitmap_group.h's bitmap_data): its format and flags; MCC's
+	high-quality compression (BC7), DXT5 and the compressed flag
+	(bitmaps.h); the port's mark of a BC7 bitmap made DXT5's format, a flag
+	none of Halo's tools set */
+	BITMAP_DATA_SIZE = 0x30,
+	BITMAP_DATA_FORMAT_OFFSET = 0x0c,
+	BITMAP_DATA_FLAGS_OFFSET = 0x0e,
+	BITMAP_FORMAT_DXT5 = 16,
+	BITMAP_FORMAT_BC7 = 18,
+	BITMAP_COMPRESSED_FLAG = 0x02,
+	BITMAP_PORT_BC7_FLAG = 0x8000,
 
 	/* a model's shaders (model_definitions.h): each a tag reference and
 	a permutation */
@@ -115,18 +130,6 @@ enum
 
 /* ---------- structures */
 
-/* (cache_files.c's) */
-struct ce_tag_instance
-{
-	unsigned long group_tag;
-	unsigned long parent_group_tags[2];
-	unsigned long tag_index;
-	unsigned long name;
-	unsigned long base_address;
-	unsigned long indexed;
-	unsigned long unused;
-};
-
 /* what was repaired, for the log */
 struct ce_repair_counts
 {
@@ -137,6 +140,7 @@ struct ce_repair_counts
 	long model_shaders;
 	long node_links;
 	long parent_groups;
+	long bc7_bitmaps;
 };
 
 /* ---------- globals */
@@ -186,38 +190,6 @@ static struct ce_tag_instance *ce_loaded_instances;
 static long ce_loaded_tag_count;
 
 /* ---------- private code */
-
-static unsigned long ce_read_long(
-	byte const *at)
-{
-	unsigned long value;
-
-	memcpy(&value, at, sizeof(value));
-	return value;
-}
-
-static void ce_write_long(
-	byte *at,
-	unsigned long value)
-{
-	memcpy(at, &value, sizeof(value));
-}
-
-static short ce_read_short(
-	byte const *at)
-{
-	short value;
-
-	memcpy(&value, at, sizeof(value));
-	return value;
-}
-
-static void ce_write_short(
-	byte *at,
-	short value)
-{
-	memcpy(at, &value, sizeof(value));
-}
 
 static struct ce_tag_instance *ce_instance(
 	void *tag_instances,
@@ -342,8 +314,7 @@ static void ce_object_type_repair(
 	if (group_type >= (short)NUMBEROF(ce_object_type_groups) || type == group_type)
 		return;
 	error(_error_silent, "%s map: object %s is typed %d, not its group's %d (made its group's)",
-		ce_map_cache_version == CE_CACHE_VERSION_RETAIL ? "HaloMD" : "Custom Edition",
-		ce_image_tag_name(image, instance), type, group_type);
+		ce_map_family_name(), ce_image_tag_name(image, instance), type, group_type);
 	memcpy(object, &group_type, sizeof(group_type));
 	counts->object_types++;
 }
@@ -398,12 +369,13 @@ static void ce_model_shaders_repair(
 	for (index = 0; index < count; index++)
 	{
 		byte *reference = shaders + index * MODEL_SHADER_SIZE;
-		struct ce_tag_instance *shader = ce_instance_by_index(tag_instances, tag_count, ce_read_long(reference + 0xc));
+		struct ce_tag_instance *shader = ce_instance_by_index(tag_instances, tag_count,
+			ce_read_long(reference + TAG_REFERENCE_INDEX_OFFSET));
 
 		if (shader && ce_is_shader(shader))
 		{
-			if (shader->tag_index != ce_read_long(reference + 0xc))
-				ce_write_long(reference + 0xc, shader->tag_index);
+			if (shader->tag_index != ce_read_long(reference + TAG_REFERENCE_INDEX_OFFSET))
+				ce_write_long(reference + TAG_REFERENCE_INDEX_OFFSET, shader->tag_index);
 			continue;
 		}
 		/* (the model's first shader that is one, else the map's first) */
@@ -414,7 +386,7 @@ static void ce_model_shaders_repair(
 			for (other = 0; other < count && !substitute; other++)
 			{
 				struct ce_tag_instance *candidate = ce_instance_by_index(tag_instances, tag_count,
-					ce_read_long(shaders + other * MODEL_SHADER_SIZE + 0xc));
+					ce_read_long(shaders + other * MODEL_SHADER_SIZE + TAG_REFERENCE_INDEX_OFFSET));
 
 				if (candidate && ce_is_shader(candidate))
 					substitute = candidate;
@@ -428,7 +400,7 @@ static void ce_model_shaders_repair(
 				return;
 		}
 		ce_write_long(reference, substitute->group_tag);
-		ce_write_long(reference + 0xc, substitute->tag_index);
+		ce_write_long(reference + TAG_REFERENCE_INDEX_OFFSET, substitute->tag_index);
 		counts->model_shaders++;
 	}
 }
@@ -532,20 +504,56 @@ static void ce_parent_groups_repair(
 	}
 }
 
+/* a bitmap tag's BC7 bitmaps made DXT5's format and marked; the mark taken
+from any other */
+static void ce_bitmaps_repair(
+	struct ce_image const *image,
+	struct ce_tag_instance const *instance,
+	struct ce_repair_counts *counts)
+{
+	byte *group = ce_image_pointer(image, instance->base_address, BITMAP_GROUP_BITMAPS_OFFSET + 0xc);
+	byte *bitmaps;
+	long count, index;
+
+	if (!group)
+		return;
+	bitmaps = ce_block(image, group + BITMAP_GROUP_BITMAPS_OFFSET, BITMAP_DATA_SIZE, &count);
+	for (index = 0; index < count; index++)
+	{
+		byte *bitmap = bitmaps + index * BITMAP_DATA_SIZE;
+		short format;
+		unsigned short flags;
+
+		memcpy(&format, bitmap + BITMAP_DATA_FORMAT_OFFSET, sizeof(format));
+		memcpy(&flags, bitmap + BITMAP_DATA_FLAGS_OFFSET, sizeof(flags));
+		if (format == BITMAP_FORMAT_BC7)
+		{
+			format = BITMAP_FORMAT_DXT5;
+			flags |= BITMAP_COMPRESSED_FLAG | BITMAP_PORT_BC7_FLAG;
+			counts->bc7_bitmaps++;
+		}
+		else
+			flags &= (unsigned short)~BITMAP_PORT_BC7_FLAG;
+		memcpy(bitmap + BITMAP_DATA_FORMAT_OFFSET, &format, sizeof(format));
+		memcpy(bitmap + BITMAP_DATA_FLAGS_OFFSET, &flags, sizeof(flags));
+	}
+}
+
 static void ce_repairs_log(
 	struct ce_repair_counts const *counts)
 {
 	if (ce_map_checking() || !(counts->predicted_resources_dropped | counts->predicted_resources_salted |
 		counts->object_types | counts->modifier_shaders | counts->model_shaders | counts->node_links |
-		counts->parent_groups))
+		counts->parent_groups | counts->bc7_bitmaps))
 	{
 		return;
 	}
 	error(_error_silent, "%s map: %ld predicted resources dropped and %ld given their tags' salts, %ld object "
 		"types, %ld modifier shaders and %ld model shaders repaired, %ld node links looping back or out of the nodes, "
-		"%ld tags' parent groups", ce_map_cache_version == CE_CACHE_VERSION_RETAIL ? "HaloMD" : "Custom Edition",
+		"%ld tags' parent groups, %ld BC7 bitmaps", ce_map_family_name(),
 		counts->predicted_resources_dropped, counts->predicted_resources_salted, counts->object_types,
-		counts->modifier_shaders, counts->model_shaders, counts->node_links, counts->parent_groups);
+		counts->modifier_shaders, counts->model_shaders, counts->node_links, counts->parent_groups,
+		counts->bc7_bitmaps);
 }
 
 /* ---------- public code */
@@ -608,6 +616,8 @@ void ce_repairs_apply(
 			if (data)
 				ce_node_links_repair(image, data + MODEL_NODES_OFFSET, MODEL_NODE_SIZE, &counts);
 		}
+		else if (instance->group_tag == 'bitm')
+			ce_bitmaps_repair(image, instance, &counts);
 		else if (instance->group_tag == 'antr')
 		{
 			data = ce_image_pointer(image, instance->base_address, ANIMATION_GRAPH_NODES_OFFSET + 0xc);
@@ -617,7 +627,7 @@ void ce_repairs_apply(
 	}
 	{
 		struct ce_tag_instance *scenario = ce_instance_by_index(tag_instances, tag_count, scenario_tag_index);
-		byte *data = scenario && scenario->group_tag == 'scnr' ?
+		byte *data = scenario && scenario->group_tag == SCENARIO_GROUP ?
 			ce_image_pointer(image, scenario->base_address, SCENARIO_PREDICTED_RESOURCES_OFFSET + 0xc) : NULL;
 
 		if (data)
@@ -625,6 +635,20 @@ void ce_repairs_apply(
 				&counts);
 	}
 	ce_repairs_log(&counts);
+}
+
+/* whether a bitmap (bitmap_group.h's bitmap_data, in the loaded map's
+tags) is one of MCC's BC7 bitmaps, made DXT5's format: its blocks are BC7's
+(xbox_texture_cache.c) */
+boolean ce_bitmap_is_bc7(
+	void const *bitmap)
+{
+	unsigned short flags;
+	short format;
+
+	memcpy(&format, (byte const *)bitmap + BITMAP_DATA_FORMAT_OFFSET, sizeof(format));
+	memcpy(&flags, (byte const *)bitmap + BITMAP_DATA_FLAGS_OFFSET, sizeof(flags));
+	return format == BITMAP_FORMAT_DXT5 && (flags & BITMAP_PORT_BC7_FLAG);
 }
 
 /* the map's tags loaded (cache_files.c), its resource maps' tags copied in:

@@ -1,14 +1,15 @@
 #!/usr/bin/env python3
 """Puts function names and source lines on the crash lines of a Windows
-build's debug.txt or halo.log (port/windows/src/win32_crash.c):
+build's debug.txt or halo.log (port/windows/src/win32_crash.c), or on the
+calls of a crash report as the site keeps it (halo.exe+0x1a2b3c, one a
+line: port/linux/src/crash_report.h):
 
     python tools/symbolize_crash.py debug.txt path/to/halo.exe
 
-halo.exe must be the build that crashed, with its halo.pdb beside it (a
-release's halo-windows-<config>-symbols.zip has the PDB; the zip of the
-same name without -symbols has halo.exe). The lines come from
-llvm-symbolizer, which reads the PDB. The crash reports that reach Sentry
-need none of this: Sentry symbolizes them itself.
+halo.exe must be the build that crashed (32- or 64-bit), with its halo.pdb
+beside it (a release's symbols, chupathingyce-<platform>-<config>-symbols,
+have the PDB and the linker's map; the release's zip has halo.exe). The
+lines come from llvm-symbolizer, which reads the PDB.
 """
 
 import argparse
@@ -23,6 +24,9 @@ from pathlib import Path
 BASE = re.compile(r"crash: halo\.exe at (?:0x)?([0-9A-Fa-f]+)")
 EXCEPTION = re.compile(r"crash: exception \w+ at (?:0x)?([0-9A-Fa-f]+)")
 CALLER = re.compile(r"crash: called from (?:0x)?([0-9A-Fa-f]+)")
+# a crash report's call: an offset in halo.exe already
+FRAME = re.compile(r"\bhalo\.exe\+0x([0-9A-Fa-f]+)")
+ANY_FRAME = re.compile(r"[\w.?-]\+0x[0-9A-Fa-f]+")
 
 
 def image_layout(executable: Path) -> tuple:
@@ -30,9 +34,15 @@ def image_layout(executable: Path) -> tuple:
     optional header's ImageBase and SizeOfImage)"""
     data = executable.read_bytes()
     pe = struct.unpack_from("<I", data, 0x3C)[0]
-    if data[pe:pe + 4] != b"PE\0\0" or struct.unpack_from("<H", data, pe + 24)[0] != 0x10B:
-        sys.exit(f"{executable} is not a 32-bit Windows executable")
-    return struct.unpack_from("<I", data, pe + 24 + 28)[0], struct.unpack_from("<I", data, pe + 24 + 56)[0]
+    magic = struct.unpack_from("<H", data, pe + 24)[0] if data[pe:pe + 4] == b"PE\0\0" else 0
+    if magic == 0x10B:
+        base = struct.unpack_from("<I", data, pe + 24 + 28)[0]
+    elif magic == 0x20B:
+        # (PE32+, the 64-bit build: an 8-byte ImageBase)
+        base = struct.unpack_from("<Q", data, pe + 24 + 24)[0]
+    else:
+        sys.exit(f"{executable} is not a Windows executable")
+    return base, struct.unpack_from("<I", data, pe + 24 + 56)[0]
 
 
 def symbolize(symbolizer: str, executable: Path, addresses: list) -> dict:
@@ -66,7 +76,17 @@ def main() -> int:
     # a caller's is its return address, one past the call
     base = linked
     wanted = {}
+    first_frame = True
     for index, line in enumerate(lines):
+        match = FRAME.search(line)
+        if match:
+            # (a report's first call is where it crashed; the rest are return
+            # addresses, one past their calls)
+            wanted[index] = int(match.group(1), 16) - (0 if first_frame else 1)
+            first_frame = False
+            continue
+        # (another module's call continues the report's calls)
+        first_frame = not ANY_FRAME.search(line)
         match = BASE.search(line)
         if match:
             base = int(match.group(1), 16)

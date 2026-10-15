@@ -448,6 +448,32 @@ float fmaxf(float left, float right)
 	return left > right ? left : right;
 }
 
+/* the next float after x toward y (models.c's bounding radius) */
+float nextafterf(float x, float y)
+{
+	union
+	{
+		float value;
+		unsigned int bits;
+	} number;
+
+	if (x != x || y != y)
+		return x + y;
+	if (x == y)
+		return y;
+	if (x == 0.0f)
+	{
+		number.bits = 1;
+		return y > 0.0f ? number.value : -number.value;
+	}
+	number.value = x;
+	if ((x < y) == (x > 0.0f))
+		number.bits++;
+	else
+		number.bits--;
+	return number.value;
+}
+
 double scalbn(double value, int exponent)
 {
 	while (exponent > 0)
@@ -678,6 +704,34 @@ int SDL_strncasecmp(const char *left, const char *right, size_t length)
 const char *SDL_GetBasePath(void)
 {
 	return "game:\\";
+}
+
+/* SDL's SDL_PathInfo: whether a path is there, a file (1) or a folder (2),
+and its size; the times are left 0 */
+struct x360_sdl_path_info
+{
+	int type;
+	unsigned __int64 size;
+	__int64 create_time;
+	__int64 modify_time;
+	__int64 access_time;
+};
+
+_Bool SDL_GetPathInfo(const char *path, struct x360_sdl_path_info *information)
+{
+	char console_path[MAX_PATH];
+	WIN32_FILE_ATTRIBUTE_DATA data;
+
+	x360_path(path, console_path, sizeof(console_path));
+	if (!GetFileAttributesExA(console_path, GetFileExInfoStandard, &data))
+		return 0;
+	if (information)
+	{
+		memset(information, 0, sizeof(*information));
+		information->type = (data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) ? 2 : 1;
+		information->size = ((unsigned __int64)data.nFileSizeHigh << 32) | data.nFileSizeLow;
+	}
+	return 1;
 }
 
 void *SDL_LoadFile(const char *file, size_t *size)

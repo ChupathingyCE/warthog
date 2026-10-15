@@ -5,75 +5,198 @@ name: Build
 # x86, x64 and arm64) and its container, for every pushed commit and pull
 # request, uploaded as artifacts: whether a change builds. tools/ci_build.py does each build; see it for the options.
 #
-# Releases and nightlies are not made here: ChupathingyCE's release
-# workflows build them from the versions they pin, signed, and publish them
-# to this repository's Releases (tools/version.py). These builds are
-# VERSION's -dev, and never look for updates.
+# These builds are VERSION's -dev, and never look for updates. Releases and
+# nightlies are built here too, by hand or by ChupathingyCE's release
+# workflows (ChupathingyCE/command), which run this workflow on main with a
+# commit and its version (tools/version.py): the builds are that commit's,
+# as that version, and a release's look for newer releases. Those workflows
+# then sign the Android app with ChupathingyCE's key (this repository has no
+# key: the debug app has the runner's debug key, the release app is
+# unsigned) and publish the builds to this repository's Releases. Each run
+# also uploads chupathingyce-build-info: the commit and version it built.
 #
 # Kept cheap:
 # - one job per platform builds both configurations, so its set-up (tools,
 #   downloads, caches) is paid once;
 # - compiles go through ccache, whose cache carries over from run to run, so
-#   a commit only recompiles what it changed; downloads (SDL, musl, Gradle)
-#   are cached too;
-# - a newer push to the same branch cancels a run still going;
-# - pushes that only change documentation do not build;
+#   a commit only recompiles what it changed; downloads (SDL, musl, Gradle,
+#   the Linux builds' system roots) are cached too;
+# - pushes build only main, release branches and tags; every other branch
+#   builds through its pull request, so a commit is not built twice;
+# - a newer commit to a pull request or a release branch cancels its run
+#   still going; main's runs are never canceled, so every commit of main
+#   has its Build (ChupathingyCE/command's nightly takes main's newest);
+# - changes that only touch documentation do not build (no check is
+#   required to merge, so a pull request without a Build is not blocked);
+# - the compile caches are saved only on main (each run restores main's
+#   newest), so branches and pull requests do not crowd main's out of the
+#   repository's 10 GB of caches;
 # - Windows, whose minutes cost twice Linux's, builds only Windows;
 # - artifacts are kept for three days.
 on:
   push:
+    branches:
+      - main
+      - "release-*"
+      - "release/**"
+    tags:
+      - "**"
     paths-ignore:
       - "**.md"
+      - "docs/**"
   pull_request:
     paths-ignore:
       - "**.md"
+      - "docs/**"
   workflow_dispatch:
+    inputs:
+      commit:
+        description: The commit to build (a SHA; empty, the branch's)
+        type: string
+        default: ""
+      version:
+        description: The version (0.5.0b, 0.5.0b-nightly.42; empty, VERSION's -dev)
+        type: string
+        default: ""
+      release:
+        description: A release's build (its updater looks for newer releases; the version must be VERSION's)
+        type: boolean
+        default: false
+      request:
+        description: An ID that the caller finds this run by (in its name)
+        type: string
+        default: ""
 
+# (a run started with a version is named for it, so that the release
+# workflows find their run; the others keep GitHub's name)
+run-name: ${{ inputs.version && format('Build {0} at {1} {2}', inputs.version, inputs.commit, inputs.request) || '' }}
+
+# (a run started by hand is never canceled by a push, and cancels none; a
+# push to main or a tag has a group of its own, so none is canceled or left
+# waiting; a pull request's or a release branch's newer run cancels the last)
 concurrency:
-  group: build-${{ github.ref }}
-  cancel-in-progress: true
+  group: ${{ github.event_name == 'workflow_dispatch' && format('build-dispatch-{0}', github.run_id) || ((github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/')) && format('build-{0}-{1}', github.ref, github.sha) || format('build-{0}', github.ref)) }}
+  cancel-in-progress: ${{ github.event_name != 'workflow_dispatch' && github.ref != 'refs/heads/main' && !startsWith(github.ref, 'refs/tags/') }}
 
 permissions:
   contents: read
 
 env:
+  # (empty unless started with a version: VERSION's -dev, tools/version.py)
+  HALO_VERSION: ${{ inputs.version }}
+  HALO_RELEASE_BUILD: ${{ inputs.release && '1' || '0' }}
   CI_COMPILER_LAUNCHER: ccache
   CCACHE_DIR: ${{ github.workspace }}/.ccache
   CCACHE_BASEDIR: ${{ github.workspace }}
   CCACHE_MAXSIZE: 1G
 
 jobs:
-  linux:
-    # Arch Linux has what the build needs as packages: clang 22 (for the
-    # profile-guided optimisation in pgo/) and 32-bit SDL 3.
+  info:
+    # what this run builds: the commit (inputs.commit, else the run's) and
+    # the version, which the release workflows check before they publish
+    # its builds
     runs-on: ubuntu-24.04
-    container: archlinux:latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.commit }}
+
+      - name: Build info
+        env:
+          EVENT: ${{ github.event_name }}
+          REF: ${{ github.ref }}
+          REQUEST: ${{ inputs.request }}
+        run: |
+          mkdir -p dist/chupathingyce-build-info
+          python3 - > dist/chupathingyce-build-info/build-info.json <<'EOF'
+          import json, os, subprocess
+          from tools.version import release_build, version
+          print(json.dumps({
+              "commit": subprocess.run(["git", "rev-parse", "HEAD"], check=True, capture_output=True,
+                                       text=True).stdout.strip(),
+              "version": version(),
+              "release": release_build(),
+              "event": os.environ["EVENT"],
+              "ref": os.environ["REF"],
+              "request": os.environ["REQUEST"],
+          }, indent=2))
+          EOF
+          cat dist/chupathingyce-build-info/build-info.json
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: chupathingyce-build-info
+          path: dist/chupathingyce-build-info
+          retention-days: 3
+
+  linux:
+    # Ubuntu 24.04 with clang 22 from apt.llvm.org (the profile-guided
+    # optimisation in pgo/ needs that major version; its bin directory goes
+    # first on PATH, so that clang, ld.lld and llvm-profdata are clang 22's
+    # rather than the runner's), and CMake, pkg-config and wayland-scanner
+    # for the SDL 3 that the portable build brings. The build links against
+    # Debian 11's 32-bit glibc 2.31 (tools/linux_sysroot.py), not Ubuntu's,
+    # so that it starts on older distributions; Ubuntu's 32-bit glibc
+    # (gcc-multilib) is for the tests.
+    runs-on: ubuntu-24.04
     timeout-minutes: 40
     steps:
       - name: Install the toolchain
         run: |
-          printf '\n[multilib]\nInclude = /etc/pacman.d/mirrorlist\n' >> /etc/pacman.conf
-          pacman -Syu --noconfirm --needed git zstd python python-pytest ninja ccache \
-            clang lld gcc lib32-glibc lib32-gcc-libs lib32-sdl3
+          sudo install -d -m 0755 /etc/apt/keyrings
+          curl -fsSL https://apt.llvm.org/llvm-snapshot.gpg.key | sudo tee /etc/apt/keyrings/apt.llvm.org.asc > /dev/null
+          echo "deb [signed-by=/etc/apt/keyrings/apt.llvm.org.asc] http://apt.llvm.org/noble/ llvm-toolchain-noble-$LLVM_MAJOR main" \
+            | sudo tee /etc/apt/sources.list.d/llvm.list
+          sudo apt-get update -q
+          sudo apt-get install -y -q --no-install-recommends clang-$LLVM_MAJOR lld-$LLVM_MAJOR llvm-$LLVM_MAJOR \
+            libclang-rt-$LLVM_MAJOR-dev gcc gcc-multilib libc6-dev-i386 cmake pkg-config libwayland-bin \
+            ninja-build ccache python3-pytest zstd
+          echo "/usr/lib/llvm-$LLVM_MAJOR/bin" >> "$GITHUB_PATH"
+        env:
+          LLVM_MAJOR: 22
+
+      - name: Toolchain versions
+        run: |
+          clang --version | head -n 1
+          ld.lld --version
+          llvm-profdata --version | head -n 2
+          cmake --version | head -n 1
+          ccache --version | head -n 1
 
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.commit }}
 
-      - uses: actions/cache@v4
+      # (restored on every run, saved only on main: other branches' and pull
+      # requests' runs start from main's and keep nothing of their own)
+      - uses: actions/cache/restore@v4
         with:
           path: .ccache
-          key: ccache-linux-${{ github.sha }}
-          restore-keys: ccache-linux-
+          key: ccache-linux-ubuntu-clang22-${{ github.sha }}
+          restore-keys: ccache-linux-ubuntu-clang22-
+
+      # the system root and SDL's source, which the build downloads
+      - uses: actions/cache@v4
+        with:
+          path: build/linux/third_party
+          key: linux-third-party-${{ hashFiles('tools/linux_sysroot.py') }}
 
       - name: Debug
-        run: python tools/ci_build.py linux debug
+        run: python3 tools/ci_build.py linux debug
 
       - name: Release
-        run: python tools/ci_build.py linux release
+        run: python3 tools/ci_build.py linux release
+
+      # (no executable or library that needs a newer glibc than the system
+      # root's: tools/linux_glibc_check.py)
+      - name: glibc 2.31
+        run: python3 tools/linux_glibc_check.py dist/chupathingyce-linux-debug dist/chupathingyce-linux-release
 
       - name: Test
         run: |
-          python -m pytest -q tools/test_linux_port.py tools/test_touch_menu.py tools/test_server_control.py tools/test_delta.py
-          python tools/test_light_storage.py
+          python3 -m pytest -q tools/test_linux_port.py tools/test_touch_menu.py tools/test_server_control.py tools/test_delta.py tools/test_delta_peer.py
+          python3 tools/test_light_storage.py
 
       - name: Compile cache
         run: ccache --show-stats
@@ -90,30 +213,67 @@ jobs:
           path: dist/chupathingyce-linux-release
           retention-days: 3
 
+      - uses: actions/cache/save@v4
+        if: ${{ success() && github.ref == 'refs/heads/main' }}
+        with:
+          path: .ccache
+          key: ccache-linux-ubuntu-clang22-${{ github.sha }}
+
   linux64:
-    # The native 64-bit Linux build (ninja linux64), on Arch Linux as the
-    # 32-bit one, with 64-bit SDL 3.
+    # The native 64-bit Linux build (ninja linux64), on Ubuntu with clang 22
+    # as the 32-bit one, and portable as it is: against Debian 11's amd64
+    # glibc 2.31, with the SDL 3 it brings (tools/linux_sysroot.py --arch
+    # amd64).
     runs-on: ubuntu-24.04
-    container: archlinux:latest
     timeout-minutes: 40
     steps:
       - name: Install the toolchain
         run: |
-          pacman -Syu --noconfirm --needed git zstd python ninja ccache clang lld gcc sdl3
+          sudo install -d -m 0755 /etc/apt/keyrings
+          curl -fsSL https://apt.llvm.org/llvm-snapshot.gpg.key | sudo tee /etc/apt/keyrings/apt.llvm.org.asc > /dev/null
+          echo "deb [signed-by=/etc/apt/keyrings/apt.llvm.org.asc] http://apt.llvm.org/noble/ llvm-toolchain-noble-$LLVM_MAJOR main" \
+            | sudo tee /etc/apt/sources.list.d/llvm.list
+          sudo apt-get update -q
+          sudo apt-get install -y -q --no-install-recommends clang-$LLVM_MAJOR lld-$LLVM_MAJOR llvm-$LLVM_MAJOR \
+            gcc cmake pkg-config libwayland-bin ninja-build ccache zstd
+          echo "/usr/lib/llvm-$LLVM_MAJOR/bin" >> "$GITHUB_PATH"
+        env:
+          LLVM_MAJOR: 22
+
+      - name: Toolchain versions
+        run: |
+          clang --version | head -n 1
+          ld.lld --version
+          llvm-profdata --version | head -n 2
+          cmake --version | head -n 1
+          ccache --version | head -n 1
 
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.commit }}
 
-      - uses: actions/cache@v4
+      # (restored on every run, saved only on main: other branches' and pull
+      # requests' runs start from main's and keep nothing of their own)
+      - uses: actions/cache/restore@v4
         with:
           path: .ccache
-          key: ccache-linux64-${{ github.sha }}
-          restore-keys: ccache-linux64-
+          key: ccache-linux64-ubuntu-clang22-${{ github.sha }}
+          restore-keys: ccache-linux64-ubuntu-clang22-
+
+      # the system root and SDL's source, which the build downloads
+      - uses: actions/cache@v4
+        with:
+          path: build/linux64/third_party
+          key: linux64-third-party-${{ hashFiles('tools/linux_sysroot.py') }}
 
       - name: Debug
-        run: python tools/ci_build.py linux64 debug
+        run: python3 tools/ci_build.py linux64 debug
 
       - name: Release
-        run: python tools/ci_build.py linux64 release
+        run: python3 tools/ci_build.py linux64 release
+
+      - name: glibc 2.31
+        run: python3 tools/linux_glibc_check.py dist/chupathingyce-linux64-debug dist/chupathingyce-linux64-release
 
       - name: Compile cache
         run: ccache --show-stats
@@ -129,6 +289,12 @@ jobs:
           name: chupathingyce-linux64-release
           path: dist/chupathingyce-linux64-release
           retention-days: 3
+
+      - uses: actions/cache/save@v4
+        if: ${{ success() && github.ref == 'refs/heads/main' }}
+        with:
+          path: .ccache
+          key: ccache-linux64-ubuntu-clang22-${{ github.sha }}
 
   server:
     # The dedicated server (tools/server_build.py): one static program for
@@ -151,8 +317,12 @@ jobs:
     timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.commit }}
 
-      - uses: actions/cache@v4
+      # (restored on every run, saved only on main: other branches' and pull
+      # requests' runs start from main's and keep nothing of their own)
+      - uses: actions/cache/restore@v4
         with:
           path: .ccache
           key: ccache-server-${{ matrix.arch }}-${{ github.sha }}
@@ -166,6 +336,10 @@ jobs:
 
       - name: Release
         run: python3 tools/ci_build.py server-${{ matrix.arch }} release --alpine
+
+      # (static, against musl: no glibc version, and no library, to need)
+      - name: glibc 2.31
+        run: python3 tools/linux_glibc_check.py --static dist/chupathingyce-server-linux-${{ matrix.arch }}
 
       - name: Start it
         run: |
@@ -196,6 +370,12 @@ jobs:
           path: dist/chupathingyce-server-linux-${{ matrix.arch }}
           retention-days: 3
 
+      - uses: actions/cache/save@v4
+        if: ${{ success() && github.ref == 'refs/heads/main' }}
+        with:
+          path: .ccache
+          key: ccache-server-${{ matrix.arch }}-${{ github.sha }}
+
   server-container:
     # The server's container (server/deploy/Dockerfile) for the three
     # architectures at once, from the server job's programs, as buildx makes
@@ -206,6 +386,8 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.commit }}
 
       - uses: actions/download-artifact@v4
         with:
@@ -264,8 +446,12 @@ jobs:
           echo "$RUNNER_TEMP/tools" >> "$GITHUB_PATH"
 
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.commit }}
 
-      - uses: actions/cache@v4
+      # (restored on every run, saved only on main: other branches' and pull
+      # requests' runs start from main's and keep nothing of their own)
+      - uses: actions/cache/restore@v4
         with:
           path: .ccache
           key: ccache-android-${{ github.sha }}
@@ -287,9 +473,11 @@ jobs:
       # No keystore.properties here (pull requests and forks have no
       # secrets): the debug app has the runner's own debug key
       # (chupathingyce-android-debug-testkey.apk), which does not install
-      # over ChupathingyCE's builds, and the release app is unsigned, only
-      # checked to build. The release workflows (ChupathingyCE/command) sign
-      # both with ChupathingyCE's key (port/android/README.md).
+      # over ChupathingyCE's builds, and the release app is unsigned
+      # (chupathingyce-android-release-unsigned.apk). The release workflows
+      # (ChupathingyCE/command) take both from a run of this workflow and
+      # sign them again with ChupathingyCE's key, zipalign and apksigner
+      # (port/android/README.md).
       - name: Debug
         run: python3 tools/ci_build.py android debug
 
@@ -310,6 +498,12 @@ jobs:
           name: chupathingyce-android-release-unsigned
           path: dist/chupathingyce-android-release
           retention-days: 3
+
+      - uses: actions/cache/save@v4
+        if: ${{ success() && github.ref == 'refs/heads/main' }}
+        with:
+          path: .ccache
+          key: ccache-android-${{ github.sha }}
 
   windows:
     # The runner image has LLVM, Python and Visual Studio's x86 libraries and
@@ -335,8 +529,12 @@ jobs:
           "$env:RUNNER_TEMP\tools" | Out-File -Append -Encoding utf8 $env:GITHUB_PATH
 
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.commit }}
 
-      - uses: actions/cache@v4
+      # (restored on every run, saved only on main: other branches' and pull
+      # requests' runs start from main's and keep nothing of their own)
+      - uses: actions/cache/restore@v4
         with:
           path: .ccache
           key: ccache-windows-${{ github.sha }}
@@ -372,6 +570,26 @@ jobs:
           path: dist/chupathingyce-windows-release
           retention-days: 3
 
+      # (halo.exe's symbols and map, which ChupathingyCE's release keeps
+      # privately for the crash reports; not published)
+      - uses: actions/upload-artifact@v4
+        with:
+          name: symbols-windows-debug
+          path: dist/chupathingyce-windows-debug-symbols
+          retention-days: 3
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: symbols-windows-release
+          path: dist/chupathingyce-windows-release-symbols
+          retention-days: 3
+
+      - uses: actions/cache/save@v4
+        if: ${{ success() && github.ref == 'refs/heads/main' }}
+        with:
+          path: .ccache
+          key: ccache-windows-${{ github.sha }}
+
   windows64:
     # The native 64-bit Windows build (ninja windows64), on the same runner
     # image as the 32-bit one, with Visual Studio's x64 libraries.
@@ -396,8 +614,12 @@ jobs:
           "$env:RUNNER_TEMP\tools" | Out-File -Append -Encoding utf8 $env:GITHUB_PATH
 
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.commit }}
 
-      - uses: actions/cache@v4
+      # (restored on every run, saved only on main: other branches' and pull
+      # requests' runs start from main's and keep nothing of their own)
+      - uses: actions/cache/restore@v4
         with:
           path: .ccache
           key: ccache-windows64-${{ github.sha }}
@@ -431,6 +653,26 @@ jobs:
           path: dist/chupathingyce-windows64-release
           retention-days: 3
 
+      # (halo.exe's symbols and map, which ChupathingyCE's release keeps
+      # privately for the crash reports; not published)
+      - uses: actions/upload-artifact@v4
+        with:
+          name: symbols-windows64-debug
+          path: dist/chupathingyce-windows64-debug-symbols
+          retention-days: 3
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: symbols-windows64-release
+          path: dist/chupathingyce-windows64-release-symbols
+          retention-days: 3
+
+      - uses: actions/cache/save@v4
+        if: ${{ success() && github.ref == 'refs/heads/main' }}
+        with:
+          path: .ccache
+          key: ccache-windows64-${{ github.sha }}
+
   macos:
     # Apple silicon, with Xcode's clang: the universal application (Apple
     # silicon and Intel, self-contained: tools/macos_build.py, --portable),
@@ -444,8 +686,12 @@ jobs:
         run: brew install ninja ccache
 
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.commit }}
 
-      - uses: actions/cache@v4
+      # (restored on every run, saved only on main: other branches' and pull
+      # requests' runs start from main's and keep nothing of their own)
+      - uses: actions/cache/restore@v4
         with:
           path: .ccache
           key: ccache-macos-${{ github.sha }}
@@ -478,3 +724,9 @@ jobs:
           name: chupathingyce-macos-release
           path: chupathingyce-macos-release.tar
           retention-days: 3
+
+      - uses: actions/cache/save@v4
+        if: ${{ success() && github.ref == 'refs/heads/main' }}
+        with:
+          path: .ccache
+          key: ccache-macos-${{ github.sha }}

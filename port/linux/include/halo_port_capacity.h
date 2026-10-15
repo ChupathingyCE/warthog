@@ -59,6 +59,9 @@ objects, noncollideable objects, lights) */
 /* script object lists, and the object references they all share */
 #define HALO_PORT_MAXIMUM_OBJECT_LISTS_PER_MAP 48
 #define HALO_PORT_MAXIMUM_LISTED_OBJECTS_PER_MAP 128
+/* widgets (light volumes, antennas, flags, glows, lightning) */
+#define HALO_PORT_MAXIMUM_WIDGETS 64
+#define HALO_PORT_MAXIMUM_LIGHT_VOLUMES 256
 
 /* ---------- effects, particles, lights and sounds */
 
@@ -94,6 +97,8 @@ indices are the console's */
 #define HALO_PORT_MAXIMUM_AREA_OF_EFFECT_OBJECTS 64
 #define HALO_PORT_MAXIMUM_OBJECT_LISTS_PER_MAP 48
 #define HALO_PORT_MAXIMUM_LISTED_OBJECTS_PER_MAP 128
+#define HALO_PORT_MAXIMUM_WIDGETS 64
+#define HALO_PORT_MAXIMUM_LIGHT_VOLUMES 256
 #define HALO_PORT_MAXIMUM_EFFECTS 256
 #define HALO_PORT_MAXIMUM_EFFECT_LOCATIONS 512
 #define HALO_PORT_MAXIMUM_PARTICLES 1024
@@ -138,6 +143,12 @@ map whose scripts test (players) in many places a tick took more than the
 Xbox's 48 (coldsnap's), and its game halted */
 #define HALO_PORT_MAXIMUM_OBJECT_LISTS_PER_MAP 1024 /* (48) */
 #define HALO_PORT_MAXIMUM_LISTED_OBJECTS_PER_MAP 8192 /* (128) */
+/* widgets (light volumes, antennas, flags, glows, lightning), each made with
+its object and kept for its life: an assault rifle's flashlight beam, held or
+dropped, and a plasma bolt's light volume; a full pool draws the object
+without its widget */
+#define HALO_PORT_MAXIMUM_WIDGETS 2048 /* (64) */
+#define HALO_PORT_MAXIMUM_LIGHT_VOLUMES 2048 /* (256) */
 
 /* ---------- effects, particles, lights and sounds */
 
@@ -167,16 +178,27 @@ frames draw 23 MB, Foundation's 66 MB.
 
 The desktop builds (Linux, macOS and Windows, 32-bit and 64-bit) are not
 held to the Xbox's memory: their window is 512 MB (port/linux/src/platform.h) and
-their cache 128 MB, about twice Foundation's busiest frame; with it the
-window still has about 300 MB free. Nothing of the cache's size reaches
-the network or the game state. Android's window stays the development
-kit's 128 MB (its guest image is linked above it) and it plays no Halo PC
-maps yet, so its cache stays the Xbox's, as the consoles' do
-(HALO_XBOX_CONSOLE, the Xbox builds; HALO_XBOX360, whose window is
-128 MB of the console's 512). */
+their cache 256 MB, about four times Foundation's busiest frame and more
+than bigass_v3's (over 64 MB, DamnationCE's measurement, as OpenCE's
+build-145 has it); with it the window still has about 170 MB free. A block's
+pages are taken only as the game writes them (xbox_memory.c), so a map
+that fills a fraction of the cache takes no more. Nothing of the cache's
+size reaches the network or the game state.
 
-#if !defined(HALO_ANDROID) && !defined(HALO_XBOX_CONSOLE) && !defined(HALO_XBOX360)
-#define HALO_PORT_TEXTURE_CACHE_SIZE 0x8000000 /* (0x1600000) */
+Android's window stays the development kit's 128 MB (its guest image is
+linked just above it), 82 MB of it above the game state. Besides the
+texture cache, Portent and Foundation take about 23 MB of that in a game
+(the sound cache and Direct3D's resources), so Android's cache is twice
+the Xbox's, 44 MB, and leaves about 15 MB free: Portent's busiest frames
+fit, Foundation's (66 MB) do not, and some of its surfaces can show the
+wrong pixels there. The Xbox builds (HALO_XBOX_CONSOLE) keep the Xbox's
+cache, as does the Xbox 360 (HALO_XBOX360), whose window is 128 MB of the
+console's 512. */
+
+#if defined(HALO_ANDROID)
+#define HALO_PORT_TEXTURE_CACHE_SIZE 0x2C00000 /* (0x1600000) */
+#elif !defined(HALO_XBOX_CONSOLE) && !defined(HALO_XBOX360)
+#define HALO_PORT_TEXTURE_CACHE_SIZE 0x10000000 /* (0x1600000) */
 #else
 #define HALO_PORT_TEXTURE_CACHE_SIZE 0x1600000 /* (0x1600000) */
 #endif

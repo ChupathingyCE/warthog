@@ -16,6 +16,7 @@ from tools.linux_build import generate_linux_build, linux_configure_inputs
 from tools.linux64_build import generate_linux64_build, linux64_configure_inputs
 from tools.macos_build import generate_macos_build, macos_configure_inputs
 from tools.server_build import generate_server_build, server_configure_inputs
+from tools.version import commit_inputs
 from tools.windows_build import generate_windows_build, windows_configure_inputs
 from tools.xbox_build import generate_xbox_build, xbox_configure_inputs
 from tools.xbox360_build import generate_xbox360_build, xbox360_configure_inputs
@@ -45,7 +46,7 @@ parser.add_argument(
     "--game-browser",
     action=argparse.BooleanOptionalAction,
     default=True,
-    help="native ports (Linux, macOS): the game list and server browser of halo.milenko.org "
+    help="every build (Linux, Windows, macOS, Android; always the server's): the game list and server browser of halo.milenko.org "
     "(HALO_GAME_BROWSER; port/linux/src/browser.c); on unless --no-game-browser",
 )
 parser.add_argument(
@@ -66,7 +67,11 @@ parser.add_argument(
     "--portable",
     action="store_true",
     help="x86 builds (Linux, Windows): code for any x86-64 processor (SSE2) rather than for this "
-    "machine's (-march=native, the default); use it for builds that run on other computers",
+    "machine's (-march=native, the default); use it for builds that run on other computers. On Linux (32- and "
+    "64-bit) it also builds against Debian 11's glibc 2.31 rather than this machine's, and brings its own SDL 3 "
+    "(libSDL3.so.0, beside the executable), so that it starts on SteamOS and older distributions: the first build "
+    "downloads the Debian packages and SDL's source (build/linux*/third_party, tools/linux_sysroot.py), and needs "
+    "CMake, pkgconf and wayland-scanner, not the system's SDL 3",
 )
 parser.add_argument(
     "--pgo",
@@ -231,6 +236,8 @@ n.build(
         *xbox360_configure_inputs(),
         *wiiu_configure_inputs(),
         *switch_configure_inputs(),
+        # (the commit the builds record: tools/version.py)
+        *commit_inputs(),
     ],
 )
 n.newline()

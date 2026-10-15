@@ -304,6 +304,25 @@ def test_menu_settings_exist():
     assert controls == set(re.findall(r'\{ "(controls\.[a-z_]+)", L"', functions))
 
 
+def test_report_joined_games_stops_claims():
+    """network.report_joined_games = false stops both what a copy sends the
+    game list about a game it joined: its own report of the game
+    (browser_client_report) and the claim of its players' lines in the
+    host's report (browser_claim_game, /v1/claim). A game it hosts is
+    claimed either way."""
+    root = MENUS.parent.parent.parent
+    browser = (root / "port/linux/src/browser.c").read_text()
+    for function in ("browser_client_report", "browser_claim_game"):
+        body = re.search(r"^void " + function + r"\(.*?^\}", browser, re.M | re.S).group(0)
+        gate = re.search(r'!config_boolean\("network\.report_joined_games"\)\s*\|\|\s*'
+                         r'!p2p_joined_invite\(', body)
+        assert gate, function
+        assert body.index("return;") > gate.start(), function
+    readme = (root / "port/linux/README.md").read_text()
+    row = next(line for line in readme.splitlines() if line.startswith("| `network.report_joined_games`"))
+    assert "/v1/claim" in row
+
+
 def test_default_brokers_are_brokers_txt():
     """The brokers a game uses with no brokers.txt beside its config.toml
     (p2p_signal.c's DEFAULT_BROKERS) are port/assets/network/brokers.txt's."""
@@ -350,3 +369,37 @@ def test_p2p_signatures_and_listings(tmp_path):
     result = subprocess.run([str(program)], capture_output=True, text=True, timeout=60)
     assert result.returncode == 0, result.stdout
     assert "PASS" in result.stdout
+
+
+# ---------- the tag validator (port/linux/game/tag_validate.c)
+
+RETAIL_MAPS = Path("assets/maps")
+MAP_VALIDATE = Path("build/linux/map_validate")
+
+
+def _retail_maps():
+    maps = sorted(RETAIL_MAPS.glob("*.map"))
+    if not maps or not MAP_VALIDATE.is_file():
+        pytest.skip("needs the retail maps in assets/maps and ninja linux's build/linux/map_validate")
+    return maps
+
+
+def test_retail_maps_need_no_corrections():
+    """every retail map in assets/maps passes the tag validator, each of its
+    structure bsps too, with no correction: the schemas (tag_schema_*.c)
+    say what the game's own maps hold"""
+    maps = _retail_maps()
+    result = subprocess.run([str(MAP_VALIDATE), "--strict", *map(str, maps)], capture_output=True, text=True,
+                            timeout=1800)
+    assert result.returncode == 0, result.stdout[-6000:]
+
+
+def test_tag_validator_survives_damaged_maps():
+    """retail maps with a few of their tags' words changed at random: the
+    validator never crashes or hangs, and a map it lets through is clean
+    when checked again"""
+    maps = _retail_maps()
+    chosen = [path for path in maps if path.stem in ("bloodgulch", "a10", "ui")] or maps[:1]
+    result = subprocess.run([str(MAP_VALIDATE), "--fuzz", "300", "--seed", "1", *map(str, chosen)],
+                            capture_output=True, text=True, timeout=1800)
+    assert result.returncode == 0, (result.stdout + result.stderr)[-6000:]

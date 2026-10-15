@@ -8,8 +8,8 @@ calls them from PC_MENU_FUNCTION_BASE on):
 - "port quit game" (and the PC version's "main menu quit game") quits, as
   closing the window does;
 - the PC version's "profile set edit begin" begins editing the first player
-  profile, as its settings screens need, and fails with none (its handlers
-  then open the screens that make one);
+  profile, as its settings screens need, making one (New001) if there is
+  none;
 - "gamespy screen init" hides the server browser's error and filter panels,
   and the title of the mode "mp type set mode" did not choose (Internet or
   LAN);
@@ -76,6 +76,7 @@ their handlers open opens.
 #include "main/main.h"
 #include "networking/network_game_manager.h"
 #include "saved games/player_profile.h"
+#include "saved games/saved_game_files.h"
 #include "tag_files/tag_groups.h"
 #include "text/text_group.h"
 #include "text/unicode.h"
@@ -98,6 +99,10 @@ their handlers open opens.
 void platform_log(char const *format, ...);
 void platform_request_quit(void);
 char const *pc_menu_function_name(long function_index);
+#ifdef HALO_GAME_BROWSER
+/* (delta_peer_game.c's) */
+int delta_peer_host_coop(void);
+#endif
 char const *pc_menu_game_data_input_name(long function_index);
 void event_manager_post_button(short controller_index, short button_index);
 int config_text(char const *name, char *text, size_t size);
@@ -109,6 +114,7 @@ void platform_display_apply(void);
 void platform_binding_capture_begin(void);
 int platform_binding_capture_poll(int *input);
 void halo_input_name(int input, char *name, size_t size);
+void halo_input_shown_name(char const *binding, char *shown, size_t size);
 short pc_menu_string_index(long definition_index);
 #ifdef HALO_64BIT
 /* (declared for the 64-bit build, which takes no implicit declarations; the
@@ -519,14 +525,31 @@ static void server_browser_initialize(struct widget_instance *screen)
 	}
 }
 
-/* begins editing player 1's profile (as the campaign has it); FALSE if
-there is none */
+/* begins editing player 1's profile (as the campaign has it). With none (a
+new install), it makes one with the first unused untitled name ("New001"),
+as a new campaign's does when its name is left as offered; Settings' Name
+renames it. (The PC menus' Settings then opened nothing: its screens that
+make a profile take the name a new campaign asks for, which Settings never
+asks for.) FALSE if none can be made */
 boolean pc_menu_profile_edit_begin(void)
 {
 	struct player_profile profile;
 
 	if (!campaign_profile(0, &profile))
-		return FALSE;
+	{
+		wchar_t name[128];
+		long profile_index;
+
+		saved_game_file_get_useable_untitled_profile_name(name);
+		name[11] = L'\0';
+		profile_index = player_profile_new(0, name);
+		if (profile_index == NONE || !campaign_profile(0, &profile))
+		{
+			platform_log("menus: no player profile, and one could not be made");
+			return FALSE;
+		}
+		platform_log("menus: made a player profile for Settings");
+	}
 	player_ui_begin_editing_profile(player_ui_get_active_player_profile_index(0));
 	return TRUE;
 }
@@ -835,6 +858,7 @@ static void profile_name_show(struct widget_instance *description)
 	static struct player_profile profile;
 	static long read_index = NONE;
 	static unsigned long read_time;
+	static boolean read_good;
 	long index = player_ui_get_active_player_profile_index(0);
 
 	if (!description)
@@ -846,13 +870,17 @@ static void profile_name_show(struct widget_instance *description)
 	}
 	else if ((index = player_ui_get_player1_last_used_profile_index()) == NONE)
 		return;
-	else if (index != read_index || system_milliseconds() - read_time > 1000)
+	else
 	{
-		read_index = NONE;
-		if (!player_profile_get(index, &profile))
+		/* (one that cannot be read too: tried again a second later) */
+		if (index != read_index || system_milliseconds() - read_time > 1000)
+		{
+			read_index = index;
+			read_good = player_profile_get(index, &profile);
+			read_time = system_milliseconds();
+		}
+		if (!read_good)
 			return;
-		read_index = index;
-		read_time = system_milliseconds();
 	}
 	text_set(named(description, "current_profile_name", 0), profile.player_name);
 }
@@ -1980,15 +2008,21 @@ static void controls_update(struct widget_instance *list)
 		{
 			char const *binding = controls_screen.bindings[control][slot];
 			wchar_t text[ROW_TEXT_LENGTH];
+			char name[CONTROL_NAME_LENGTH];
 			char shown[64];
 			short index;
 
+			/* (the key as the keyboard's layout labels it: xinput_sdl.c) */
+			if (*binding)
+				halo_input_shown_name(binding, name, sizeof(name));
+			else
+				snprintf(name, sizeof(name), "%s", "-");
 			if (controls_screen.capturing_control == control && controls_screen.capturing_slot == slot)
 				snprintf(shown, sizeof(shown), "%s", "PRESS A KEY");
 			else if (row == focused_row && controls_screen.slot == slot)
-				snprintf(shown, sizeof(shown), "> %s <", *binding ? binding : "-");
+				snprintf(shown, sizeof(shown), "> %s <", name);
 			else
-				snprintf(shown, sizeof(shown), "%s", *binding ? binding : "-");
+				snprintf(shown, sizeof(shown), "%s", name);
 			for (index = 0; shown[index] && index < ROW_TEXT_LENGTH - 1; index++)
 				text[index] = (wchar_t)(unsigned char)shown[index];
 			text[index] = 0;
@@ -2154,7 +2188,7 @@ static struct
 	/* Server Setup's PASSWORD (a public internet game's; empty: none), kept
 	while the game runs, never written down */
 	char game_password[PASSWORD_LENGTH + 1];
-} multiplayer = { 0, 0, 0, { 0 }, 0, { 0 }, 0, 0, 0, 0, { 0 }, NUMBEROF(maximum_players) - 1 };
+} multiplayer = { .maximum_players_index = NUMBEROF(maximum_players) - 1 };
 
 /* ---- a text field (Direct Link's link, the game's name): the keyboard
 types into it (Ctrl+V pastes), its row's A (enter) is done, B (escape)
@@ -2431,6 +2465,15 @@ static boolean map_list_choose(struct widget_instance *list, boolean *widget_del
 		return campaign_fail();
 	if (map_list.step == MAP_STEP_DIFFICULTIES)
 	{
+#ifdef HALO_GAME_BROWSER
+		/* (no co-op while a machine that does not play it, the original
+		Xbox, is in the game: Delta's platform policy) */
+		if (!delta_peer_host_coop())
+		{
+			platform_log("Delta Peer: co-op is not offered while a machine that does not play it is in the game");
+			return campaign_fail();
+		}
+#endif
 		/* the co-op game set up, then Server Setup in the gametypes' place */
 		if (!ui_widget_port_cooperative_level_choose(main_get_solo_level_name(map_list.level), chosen))
 			return campaign_fail();
@@ -3129,8 +3172,8 @@ scenario's path or name */
 static void map_display_name(char const *map_name, wchar_t *text)
 {
 	char const *const *names;
-	short last, index;
-	short count = ui_widget_port_multiplayer_maps(&names, &last);
+	short index;
+	short count = ui_widget_port_multiplayer_maps(&names, NULL);
 
 	for (index = 0; index < count; index++)
 	{
@@ -3489,7 +3532,7 @@ static short lobby_browser_rows_place(struct widget_instance *list)
 /* ---- the server browser's second source (configure.py --game-browser):
 the games of a game list, network.browser_url (port/linux/src/browser.c;
 halo.milenko.org by default), merged into the listings' as listings of
-their own. A game both list is shown once, as its listing (the same invite
+their own. A game both lists have is shown once, as its listing (the same invite
 token). One on a Halo PC map, which its host lists as <map>@ce (Custom
 Edition) or <map>@md (HaloMD), is marked PC or MD, and joined only where it
 can be played (with the map in its family's folders: server_browser.c), as
@@ -3643,6 +3686,40 @@ static short lobby_browser_score_limit(struct p2p_listing const *game)
 
 	return listed ? listed->score_limit : 0;
 }
+
+/* the Rules line's host, when the list has it (docs/delta.md, Delta List):
+" (MAC HOST, DELTA)", " (DEDICATED, LINUX, DELTA)", " (OPENCE)"; "" if not */
+static void lobby_browser_host_text(struct p2p_listing const *game, wchar_t *text, short size)
+{
+	static wchar_t const *const platforms[] = {
+		L"", L"WINDOWS", L"MAC", L"LINUX", L"ANDROID", L"STEAM DECK", L"XBOX", L"XBOX 360", L"WII U", L"SWITCH",
+	};
+	struct browser_game const *listed = lobby_browser_listed_game(game);
+	boolean dedicated;
+	wchar_t const *platform;
+
+	text[0] = 0;
+	if (!listed)
+		return;
+	dedicated = listed->hosting == BROWSER_HOSTING_DEDICATED || listed->hosting == BROWSER_HOSTING_OFFICIAL;
+	platform = listed->has_platform && listed->host_platform < NUMBEROF(platforms) ? platforms[listed->host_platform] : L"";
+	usnprintf(text, size - 1, L"%s%s%s%s%s%s%s",
+		dedicated ? (listed->hosting == BROWSER_HOSTING_OFFICIAL ? L"OFFICIAL SERVER" : L"DEDICATED") : L"",
+		dedicated && platform[0] ? L", " : L"", platform, !dedicated && platform[0] ? L" HOST" : L"",
+		(dedicated || platform[0]) && listed->protocol ? L", " : L"",
+		listed->protocol == BROWSER_PROTOCOL_DELTA ? L"DELTA" : L"",
+		listed->protocol == BROWSER_PROTOCOL_OPENCE ? L"OPENCE" : L"");
+	text[size - 1] = 0;
+	if (text[0])
+	{
+		wchar_t inner[64];
+
+		ustrncpy(inner, text, NUMBEROF(inner) - 1);
+		inner[NUMBEROF(inner) - 1] = 0;
+		usnprintf(text, size - 1, L" (%s)", inner);
+		text[size - 1] = 0;
+	}
+}
 #else
 static void lobby_browser_add_listed(void)
 {
@@ -3659,6 +3736,13 @@ static short lobby_browser_score_limit(struct p2p_listing const *game)
 {
 	(void)game;
 	return 0;
+}
+
+static void lobby_browser_host_text(struct p2p_listing const *game, wchar_t *text, short size)
+{
+	(void)game;
+	(void)size;
+	text[0] = 0;
 }
 #endif
 
@@ -3688,6 +3772,7 @@ static void lobby_browser_rules_text(struct p2p_listing const *game, wchar_t *te
 	wchar_t gametype[P2P_LISTING_GAMETYPE_SIZE + 1];
 	wchar_t map[ROW_TEXT_LENGTH];
 	wchar_t score[16];
+	wchar_t host[64];
 	short score_limit = lobby_browser_score_limit(game);
 	short family;
 
@@ -3696,8 +3781,12 @@ static void lobby_browser_rules_text(struct p2p_listing const *game, wchar_t *te
 	score[0] = 0;
 	if (score_limit > 0)
 		usnprintf(score, NUMBEROF(score) - 1, L" to %d", score_limit);
-	usnprintf(text, size - 1, L"%s%s on %s%s%s%s", gametype[0] ? gametype : engine_names[PIN(game->engine_type, 0, 5)],
+	/* (a dedicated server's game says so: its listing's flag, p2p_lobby.c;
+	a game list's game, its host as the list says) */
+	lobby_browser_host_text(game, host, NUMBEROF(host));
+	usnprintf(text, size - 1, L"%s%s on %s%s%s%s%s%s", gametype[0] ? gametype : engine_names[PIN(game->engine_type, 0, 5)],
 		score, map, family == _map_family_halomd ? L" (HALOMD)" : family != _map_family_xbox ? L" (HALO PC)" : L"",
+		game->dedicated && !host[0] ? L" (DEDICATED)" : L"", host,
 		!game->open ? L": full or starting" : game->in_progress ? L": under way" : L"",
 		game->locked ? L", password" : L"");
 	text[size - 1] = 0;
@@ -4263,8 +4352,28 @@ static boolean profile_save_changes(struct widget_instance *widget, boolean *wid
 {
 	if (player_ui_edit_profile_is_dirty())
 	{
+		/* (Settings edits the profile in use, pc_menu_profile_edit_begin: the
+		players playing it get the saved one. They kept the old controls until
+		it was chosen again, and the campaign's next save of the level played
+		wrote the old copy back over the changes) */
+		long profile_index = player_ui_get_active_player_profile_index(0);
+
 		if (player_ui_save_profile())
+		{
+			struct player_profile profile;
+			short local_player_index;
+
+			for (local_player_index = 0; local_player_index < MAXIMUM_NUMBER_OF_LOCAL_PLAYERS; local_player_index++)
+			{
+				if (profile_index != NONE &&
+					player_ui_get_active_player_profile_index(local_player_index) == profile_index &&
+					player_profile_get(profile_index, &profile))
+				{
+					player_ui_set_active_player_profile(local_player_index, profile_index, &profile);
+				}
+			}
 			return TRUE;
+		}
 		platform_log("menus: could not save the profile's changes");
 		return campaign_fail();
 	}
@@ -4611,7 +4720,7 @@ static void lobby_rows_color(struct widget_instance *list, struct network_game c
 static void lobby_map_show(struct widget_instance *description, char const *map_name)
 {
 	char const *const *names;
-	short last, count = ui_widget_port_multiplayer_maps(&names, &last), map = 19, index;
+	short count = ui_widget_port_multiplayer_maps(&names, NULL), map = 19, index;
 	short level = campaign_level_of(map_name);
 	struct widget_instance *widget;
 
@@ -5144,8 +5253,9 @@ static char const *const vehicle_spinners[NUMBER_OF_VARIANT_VEHICLES] =
 {
 	"warthog_spinner", "ghost_spinner", "scorpion_spinner", "rwarthog_spinner", "banshee_spinner", "cgturret_spinner"
 };
-/* (the presets' spinner: the vehicle sets 0 to 7, then CUSTOM) */
-#define VEHICLE_PRESET_CUSTOM 8
+/* (the presets' spinner: the vehicle sets 0 to 7, then PC and CUSTOM) */
+#define VEHICLE_PRESET_PC 8
+#define VEHICLE_PRESET_CUSTOM 9
 
 static struct widget_instance *vehicle_spinner(struct widget_instance *list, char const *name)
 {
@@ -5173,7 +5283,8 @@ static void vehicles_show(struct widget_instance *list)
 		spinner->parameters.list.selected_index = side;
 	if ((spinner = vehicle_spinner(list, "vehicle_presets_spinner")) != NULL)
 		spinner->parameters.list.selected_index = options->vehicle_set[side] == VARIANT_VEHICLE_SET_CUSTOM ?
-			VEHICLE_PRESET_CUSTOM : (short)MIN(options->vehicle_set[side], VEHICLE_PRESET_CUSTOM - 1);
+			VEHICLE_PRESET_CUSTOM : options->vehicle_set[side] == VARIANT_VEHICLE_SET_PC ?
+			VEHICLE_PRESET_PC : (short)MIN(options->vehicle_set[side], VEHICLE_PRESET_PC - 1);
 	for (index = 0; index < NUMBER_OF_VARIANT_VEHICLES; index++)
 	{
 		if ((spinner = vehicle_spinner(list, vehicle_spinners[index])) != NULL)
@@ -5195,7 +5306,8 @@ static void vehicles_keep(struct widget_instance *list)
 		return;
 	if ((spinner = vehicle_spinner(list, "vehicle_presets_spinner")) != NULL)
 		options->vehicle_set[side] = spinner->parameters.list.selected_index >= VEHICLE_PRESET_CUSTOM ?
-			VARIANT_VEHICLE_SET_CUSTOM : (byte)spinner->parameters.list.selected_index;
+			VARIANT_VEHICLE_SET_CUSTOM : spinner->parameters.list.selected_index == VEHICLE_PRESET_PC ?
+			VARIANT_VEHICLE_SET_PC : (byte)spinner->parameters.list.selected_index;
 	for (index = 0; index < NUMBER_OF_VARIANT_VEHICLES; index++)
 	{
 		if ((spinner = vehicle_spinner(list, vehicle_spinners[index])) != NULL)
@@ -5353,7 +5465,7 @@ static void gametype_edit_list_update(struct widget_instance *list)
 		gametype_edit_read();
 	focused = list_scroll(list, &gametype_edit.first, gametype_edit.count, GAMETYPE_EDIT_ROWS);
 	if (focused != NONE)
-		gametype_edit.chosen = (short)MIN(focused, gametype_edit.count - 1);
+		gametype_edit.chosen = (short)MAX(0, MIN(focused, gametype_edit.count - 1));
 	rows_update(list, (short)MIN(gametype_edit.count, GAMETYPE_EDIT_ROWS), gametype_edit_row_text);
 	visible_set(named(description, "gametype_right_item", 0), gametype_edit.count > 0);
 	if (gametype_edit.chosen < gametype_edit.count)

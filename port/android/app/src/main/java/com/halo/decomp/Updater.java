@@ -50,7 +50,9 @@ import java.util.zip.ZipInputStream;
  */
 final class Updater {
     private static final String REPOSITORY = "ChupathingyCE/chupathingyce";
-    private static final String USER_AGENT = "chupathingyce-updater";
+    private static final String USER_AGENT = "ChupathingyCE/" + BuildConfig.HALO_VERSION + " (Android arm64)";
+    /** the logcat tag, the native side's (port/android/host/host.h) */
+    private static final String LOG_TAG = "chupathingyce";
     private static final int TIMEOUT_MILLISECONDS = 20000;
     /** the most a download (a release's zip, about 25 MB) or the app in it may be */
     private static final long MAXIMUM_UPDATE_SIZE = 256L * 1024 * 1024;
@@ -181,9 +183,8 @@ final class Updater {
 
     /**
      * Whether version is newer than current: [v]<major>.<minor>.<patch> and a
-     * pre-release suffix (0.5.0b, 1.0.0rc1) or none, by the numbers, then a
-     * version without a suffix after the ones with, and suffixes in order (as
-     * updater.c's updater_newer).
+     * hotfix letter (0.7.5a) or none, by the numbers, then the letter, a
+     * version without one first (as updater.c's updater_newer).
      */
     static boolean newer(String version, String current) {
         java.util.regex.Pattern pattern = java.util.regex.Pattern.compile("v?(\\d+)\\.(\\d+)\\.(\\d+)(.*)");
@@ -197,11 +198,7 @@ final class Updater {
             if (a != b)
                 return a > b;
         }
-        String latestSuffix = latest.group(4), currentSuffix = now.group(4);
-
-        if (latestSuffix.isEmpty() || currentSuffix.isEmpty())
-            return latestSuffix.isEmpty() && !currentSuffix.isEmpty();
-        return latestSuffix.compareTo(currentSuffix) > 0;
+        return latest.group(4).compareTo(now.group(4)) > 0;
     }
 
     /** GitHub's latest release's version (its tag, without the v), null if there is none */
@@ -219,7 +216,7 @@ final class Updater {
                 connection.disconnect();
             }
         } catch (Exception e) {
-            android.util.Log.i("halo", "update: could not check for a new version: " + e);
+            android.util.Log.i(LOG_TAG, "update: could not check for a new version: " + e);
             return null;
         }
     }
@@ -299,7 +296,7 @@ final class Updater {
                     install(activity);
                 });
             } catch (Exception e) {
-                android.util.Log.i("halo", "update: failed: " + e);
+                android.util.Log.i(LOG_TAG, "update: failed: " + e);
                 activity.runOnUiThread(() -> {
                     progress.dismiss();
                     new AlertDialog.Builder(activity)

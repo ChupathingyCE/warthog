@@ -87,6 +87,12 @@ enum
 	desktop builds' screen waits 15 seconds; the console's DNS and the
 	brokers' first answers can take longer) */
 	CONNECT_TIMEOUT = 45000,
+	/* a held direction: the first repeat waits this long, then it repeats
+	this often; a gap longer than the last is a new press (the desktop
+	builds' screen's pace) */
+	STEP_FIRST_REPEAT_DELAY = 350,
+	STEP_REPEAT_INTERVAL = 110,
+	STEP_RELEASE_GAP = 150,
 
 	/* the 640x480 layout */
 	SCREEN_LEFT = 48,
@@ -341,6 +347,38 @@ void browser_screen_open(
 	event_manager_flush();
 }
 
+/* a step held down: the event manager sends the d-pad's and the stick's
+direction every frame while it's held, so the list moved a row a frame.
+The first press moves at once; held, it waits, then repeats at a steady
+pace, as the menus do. The move to make now, or 0 */
+static short held_move(
+	short move)
+{
+	static unsigned long last_event_time, last_step_time;
+	static short last_move;
+	static boolean repeating;
+	unsigned long now = system_milliseconds();
+	short result = 0;
+
+	if (!move)
+		return 0;
+	if (move != last_move || now - last_event_time > STEP_RELEASE_GAP)
+	{
+		result = move;
+		last_step_time = now;
+		repeating = FALSE;
+	}
+	else if (now - last_step_time >= (unsigned long)(repeating ? STEP_REPEAT_INTERVAL : STEP_FIRST_REPEAT_DELAY))
+	{
+		result = move;
+		last_step_time = now;
+		repeating = TRUE;
+	}
+	last_move = move;
+	last_event_time = now;
+	return result;
+}
+
 void browser_screen_process(
 	void)
 {
@@ -413,6 +451,7 @@ void browser_screen_process(
 			default: break;
 			}
 		}
+		move = held_move(move);
 		if (move)
 		{
 			short selected = (short)PIN(browser_screen.selected + move, 0, MAX(0, browser_screen.count - 1));
@@ -696,6 +735,33 @@ void browser_screen_render(
 			browser_screen.connecting ? L"Connecting...   %b-button Stop" :
 				L"%a-button Join   %x-button Refresh   %y-button join.txt   %b-button Back", FALSE);
 	}
+}
+
+/* ---------- moderation
+
+The desktop builds' moderation screen (port/linux/game/moderation_screen.c)
+is Delta Peer's, which the console doesn't speak yet: never up. */
+
+boolean moderation_screen_active(
+	void)
+{
+	return FALSE;
+}
+
+void moderation_screen_update(
+	boolean menu_open)
+{
+	(void)menu_open;
+}
+
+void moderation_screen_process(
+	void)
+{
+}
+
+void moderation_screen_render(
+	void)
+{
 }
 
 #endif

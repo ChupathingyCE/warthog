@@ -376,6 +376,25 @@ int posix_socket_sendto(int descriptor, const void *buffer, int length, int flag
 	}
 	result = sendto(to_socket(descriptor), (const char *)buffer, length, flags, (const struct sockaddr *)address,
 		address_length);
+	/* (XNet refuses a socket another thread is using, its select's
+	included: a datagram lost so, which p2p.c's P2P_SEND_FROM_THREAD keeps
+	from happening, is told) */
+	if (result == SOCKET_ERROR && WSAGetLastError() == WSAEINPROGRESS)
+	{
+		static unsigned long told_time;
+		static long since;
+		unsigned long now = GetTickCount();
+
+		since++;
+		if (!told_time || now - told_time >= 10000)
+		{
+			platform_log("tunnel: %ld datagram(s) not sent: another thread was using the socket", since);
+			told_time = now ? now : 1;
+			since = 0;
+		}
+		WSASetLastError(WSAEINPROGRESS);
+		return -1;
+	}
 
 	return result == SOCKET_ERROR ? socket_failed("sendto") : result;
 }

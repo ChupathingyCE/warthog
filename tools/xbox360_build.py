@@ -183,6 +183,8 @@ REPLACED_PLATFORM_SOURCES = {
     "posix_ui_font.c",
     # page protection and the fault handler (x360_memory.c)
     "memory_watch.c",
+    # the desktop crash reports: the console's faults go to its debug channel
+    "posix_crash.c",
     # the self-updater: a console is updated with its files
     "updater.c",
     "update_signature.c",

@@ -1,5 +1,6 @@
 """Ninja rules shared by the native 64-bit builds (``ninja macos``,
-``ninja linux64``).
+``ninja linux64``) and the 64-bit dedicated servers (``ninja server-x64``,
+``ninja server-arm64``).
 
 The game and most of the platform layer are the Linux build's
 (tools/linux_build.py, port/linux); the 64-bit builds compile them as native
@@ -19,7 +20,6 @@ See port/macos/README.md.
 """
 
 import json
-import os
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Sequence, Set
@@ -44,6 +44,7 @@ from .linux_build import (
     ZLIB_DEFINES,
     ZLIB_DIR,
     ZLIB_SOURCES,
+    _quote,
     compile_launcher,
     game_sources,
     game_browser_defines,
@@ -52,6 +53,7 @@ from .linux_build import (
     updater_defines,
 )
 from .ninja_syntax import Writer
+from .version import VERSION_SOURCES
 
 LINUX_PORT_DIR = Path("port/linux")
 LINUX_PORT_CONFIG = LINUX_PORT_DIR / "port.json"
@@ -151,11 +153,6 @@ class Lp64Unit:
     # a unit with the host's ABI (and a 32-bit wchar_t): never optimised
     # together with the others at link time
     native: bool = False
-
-
-def _quote(path: Any) -> str:
-    text = str(path).replace(os.sep, "/")
-    return f'"{text}"' if " " in text else text
 
 
 def load_json(path: Path) -> Dict[str, Any]:
@@ -318,7 +315,7 @@ class Lp64Build:
                 add(source, f"{posix_cflags} -I{STB_DIR}", native=True)
             elif source.name.startswith("posix_"):
                 add(source, posix_cflags, native=True)
-            elif source.name == "updater.c":
+            elif source.name in VERSION_SOURCES:
                 add(lp64(source), f"{platform_cflags} {updater_defines(getattr(sln, 'port_release', False))}")
             elif source.name == "text_hires.c":
                 # (it includes stb_truetype by a path from its own folder: the
@@ -339,19 +336,17 @@ class Lp64Build:
         for source in host.host_sources:
             if source.as_posix() not in excluded:
                 add(source, posix_cflags, native=True)
+        native_third_party = [*host.target_flags, "-std=gnu11", OPTIMISATION, "-g", "-w", *host.third_party_flags]
         for source in sorted((MBEDTLS_DIR / "library").glob("*.c")):
-            add(source, " ".join([*host.target_flags, "-std=gnu11", OPTIMISATION, "-g", "-w",
-                                  *host.third_party_flags, mbedtls_include, f"-I{MBEDTLS_DIR / 'library'}"]),
+            add(source, " ".join([*native_third_party, mbedtls_include, f"-I{MBEDTLS_DIR / 'library'}"]),
                 native=True)
         for source in miniupnpc_sources():
-            add(source, " ".join([*host.target_flags, "-std=gnu11", OPTIMISATION, "-g", "-w",
-                                  *host.third_party_flags, *MINIUPNPC_DEFINES,
+            add(source, " ".join([*native_third_party, *MINIUPNPC_DEFINES,
                                   f"-I{MINIUPNPC_DIR / 'include'}", f"-I{MINIUPNPC_DIR / 'src'}"]),
                 native=True)
         # the menus' XML parser (port/third_party/expat; menu_files.c), with the
         # host's ABI: it holds nothing of the Xbox's, and its API is its own
         # types (expat.h, which menu_files.c includes unrewritten)
-        native_third_party = [*host.target_flags, "-std=gnu11", OPTIMISATION, "-g", "-w", *host.third_party_flags]
         for name in EXPAT_SOURCES:
             add(EXPAT_DIR / name, " ".join([*native_third_party, f"-I{EXPAT_DIR}"]), native=True)
         # Link Profile's QR encoder (port/third_party/qrcodegen; browser.c),
@@ -374,9 +369,10 @@ class Lp64Build:
         return units
 
     def objects(self, host: Lp64Host, generated_sources: List[Path], obj_dir: Path,
-                extra_cflags: List[str] = []) -> List[Path]:
+                extra_cflags: List[str] = [], implicit_inputs: Sequence[Path] = ()) -> List[Path]:
         """the objects of every unit, compiled into obj_dir; extra_cflags go
-        to the units with the Xbox's ABI (link-time optimisation)"""
+        to the units with the Xbox's ABI (link-time optimisation), and every
+        unit waits for implicit_inputs (a portable build's system root)"""
         objects = []
         extra = " ".join(extra_cflags)
         for unit in self.units(host, generated_sources):
@@ -385,7 +381,7 @@ class Lp64Build:
             obj = obj_dir / relative.with_suffix(".o")
             objects.append(obj)
             self.n.build(outputs=obj, rule=f"{self.name}_cc", inputs=unit.source,
-                         implicit=[self.semantics_header, self.platform_semantics_header],
+                         implicit=[self.semantics_header, self.platform_semantics_header, *implicit_inputs],
                          order_only=[self.build_dir / "lp64.stamp"],
                          variables={"cflags": unit.cflags if unit.native or not extra
                                     else f"{unit.cflags} {extra}"})

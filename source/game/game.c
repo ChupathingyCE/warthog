@@ -161,6 +161,7 @@ struct game_options;
 #include "memory/data.h"
 #include "networking/network_messages.h"
 #include "networking/telnet_console.h"
+#include "objects/object_lights.h"
 #include "objects/objects.h"
 #include "objects/widgets/antenna.h"
 #include "objects/widgets/widgets.h"
@@ -322,6 +323,13 @@ void game_tick(
 		0x28D,
 		game_globals->active);
 
+	/* port: a data array gone out of order reported, and the lights made
+	again if it was theirs (game_state.c, object_lights.c), before anything
+	of the tick: a loaded game state's first tick, its scripts placing
+	actors, made the first light from it (Sentry NATIVE-7) */
+	game_state_check_data_arrays();
+	lights_port_recover();
+
 	/* port: a client of another's game, the host's rules (its own cheats and
 	game speed, set before it joined too, put back) */
 	cheats_network_client_enforce();
@@ -380,6 +388,9 @@ void game_tick(
 	hud_update();
 	FRAME_STAGE("game_tick: player_effect_update");
 	player_effect_update();
+	/* port: and at its end, before the frame draws the lights */
+	game_state_check_data_arrays();
+	lights_port_recover();
 
 	FRAME_STAGE("game_time_update: after a tick");
 	profile_exit(game_update_section);

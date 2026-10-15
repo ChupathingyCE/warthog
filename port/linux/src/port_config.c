@@ -24,6 +24,9 @@ edits and comments stay.
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#ifndef _WIN32
+#include <unistd.h>
+#endif
 
 /* ---------- the settings */
 
@@ -41,9 +44,9 @@ enum config_environment
 	/* the variable's text is the value ("0", "false", "no" and "off" are
 	false for a boolean) */
 	_environment_value,
-	/* the variable being set at all makes it true */
+	/* the variable being set makes it true */
 	_environment_set_is_true,
-	/* the variable being set at all makes it false */
+	/* the variable being set makes it false */
 	_environment_set_is_false,
 };
 
@@ -138,15 +141,18 @@ static const struct config_setting config_settings[] =
 	{ "display.high_res_text", _config_boolean, "true", "HALO_HIGH_RES_TEXT", _environment_value, _platform_all,
 		"Draw the menus' and HUD's text with the fonts in port/assets/fonts\n"
 		"(Overpass) at the resolution the game draws at, and the menus' titles\n"
-		"from port/assets/titles; false draws the maps' bitmap fonts and titles." },
+		"from port/assets/titles; false draws the maps' bitmap fonts and titles.\n"
+		"The Server Browser and moderation overlays use the system's fonts." },
 	{ "display.shadow_resolution", _config_integer, "128", "HALO_SHADOW_RESOLUTION", _environment_value,
 		_platform_all,
 		"The size the objects' shadows are drawn at, in pixels each way: 128 as\n"
 		"on the Xbox, or 256, 512 or 1024 for smoother edges, as soft." },
 	{ "display.menus", _config_string, "\"xbox\"", "HALO_MENUS", _environment_value, _platform_all,
 		"The menus: \"xbox\" for the Xbox's (with Online Games), \"pc\" for the\n"
-		"PC version's main menu (port/assets/menus, and a menus folder here for\n"
-		"your own; not all of it is wired yet)." },
+		"PC version's screens and Server Browser, rebuilt from port/assets/menus\n"
+		"(a menus folder here for your own) with this port's fonts and redrawn\n"
+		"pictures, not Halo PC's files. Read when the game starts: restart it\n"
+		"after a change. Not all of the PC screens are wired yet." },
 	{ "display.player_names", _config_string, "\"all\"", "HALO_PLAYER_NAMES", _environment_value, _platform_all,
 		"In multiplayer, whose names are drawn above their heads: \"all\",\n"
 		"\"allies\", \"enemies\" or \"none\". An enemy's shows only within the\n"
@@ -198,6 +204,12 @@ static const struct config_setting config_settings[] =
 		"Reverberate the world's sounds as the place the player is in does (the\n"
 		"maps' sound environments, as the Xbox's I3DL2 reverb did); false keeps\n"
 		"them dry." },
+	{ "audio.resampling", _config_string, "\"sinc\"", "HALO_AUDIO_RESAMPLING", _environment_value, _platform_all,
+		"How sounds recorded at another rate (most are 22 kHz) are played at the\n"
+		"output's 48 kHz: \"sinc\" keeps their band and nothing above it;\n"
+		"\"linear\" interpolates between their samples, as the game did before\n"
+		"OpenCE's build 130: their top octave duller, and images of their band\n"
+		"above it (a brighter, grainier sound)." },
 
 	{ "input.touch_controls", _config_string, "\"on\"", "HALO_TOUCH_CONTROLS", _environment_value, _platform_android,
 		"The on-screen touch controls in a game: \"on\" shows them on a\n"
@@ -222,9 +234,11 @@ static const struct config_setting config_settings[] =
 	{ "controls.move_forward", _config_string, "\"W\"", "HALO_KEY_MOVE_FORWARD", _environment_value, _platform_all,
 		"The keyboard and mouse's controls, which Settings > Controls Setup\n"
 		"changes: up to two keys or buttons each, separated by a comma. Keys by\n"
-		"their names (\"W\", \"Space\", \"Left Ctrl\", \"F1\"), and \"Mouse Left\",\n"
-		"\"Mouse Right\", \"Mouse Middle\", \"Mouse 4\", \"Mouse 5\", \"Wheel\" (either\n"
-		"way), \"Wheel Up\" and \"Wheel Down\"; empty for none. Moving forward:" },
+		"their names on a US keyboard (\"W\", \"Space\", \"Left Ctrl\", \"F1\"): a key\n"
+		"is the one in that place on any keyboard, which the menus show by its\n"
+		"own label. Buttons: \"Mouse Left\", \"Mouse Right\", \"Mouse Middle\",\n"
+		"\"Mouse 4\", \"Mouse 5\", \"Wheel\" (either way), \"Wheel Up\" and \"Wheel\n"
+		"Down\"; empty for none. Moving forward:" },
 	{ "controls.move_backward", _config_string, "\"S\"", "HALO_KEY_MOVE_BACKWARD", _environment_value, _platform_all,
 		"Moving backward." },
 	{ "controls.strafe_left", _config_string, "\"A\"", "HALO_KEY_STRAFE_LEFT", _environment_value, _platform_all,
@@ -273,6 +287,23 @@ static const struct config_setting config_settings[] =
 		"The language the game asks the Xbox for: \"ja\", \"de\", \"fr\", \"es\" or \"it\";\n"
 		"empty for English. The game data decides what is translated." },
 
+	{ "game.downloaded_maps", _config_string, "\"\"", "HALO_DOWNLOADED_MAPS", _environment_value, _platform_all,
+		"Maps played as downloaded ones (until the game downloads maps itself):\n"
+		"their names, as the game names them (bloodgulch, hugeass@ce), separated\n"
+		"by commas, or \"*\" for every map. A downloaded map's scripts may not\n"
+		"change the player's settings or other players' games (debug.txt names\n"
+		"what they were refused)." },
+
+	{ "game.move_old_map_folders", _config_string, "\"ask\"", "HALO_MOVE_OLD_MAP_FOLDERS", _environment_value,
+		_platform_all,
+		"Halo PC maps have folders of their own beside maps: maps_ce (Custom\n"
+		"Edition, with its bitmaps.map, sounds.map and loc.map), maps_md (HaloMD)\n"
+		"and maps_pc (Halo PC). The older maps/ce and md_maps are still played\n"
+		"from. \"ask\": the game offers once to move them into the new folders\n"
+		"(each folder moved whole, never copied; one that cannot be moved stays\n"
+		"where it is); \"yes\": moved without asking; \"no\": left where they are.\n"
+		"Android moves them unless this is \"no\"." },
+
 	{ "paths.data", _config_string, "\"\"", "HALO_DATA_ROOT", _environment_value, _platform_desktop,
 		"The folder holding the game data's maps folder; empty looks in the\n"
 		"working directory and its assets folder. Windows paths are easiest in\n"
@@ -305,6 +336,29 @@ static const struct config_setting config_settings[] =
 		"networks whose NAT stops connections: when a player joins this\n"
 		"machine's game, and when joining a game takes too long. False never\n"
 		"asks." },
+	{ "network.protocol", _config_string, "\"auto\"", "HALO_NET_PROTOCOL", _environment_value, _platform_all,
+		"The protocol between ChupathingyCE machines beside OpenCE's game\n"
+		"protocol (Delta Peer, docs/delta.md): \"auto\" speaks Delta with the\n"
+		"machines that do and plain OpenCE with the rest (each connection\n"
+		"falls back on its own, and nobody waits for it); \"opence\" turns\n"
+		"Delta off (OpenCE's protocol alone, as an OpenCE build). \"delta\"\n"
+		"plays as auto for now: Delta-only games come later." },
+	{ "network.share_profile", _config_boolean, "false", "HALO_NET_SHARE_PROFILE", _environment_value,
+		_platform_all,
+		"Show the other ChupathingyCE players of a game this copy's player ID\n"
+		"(the game list's, which links to its profile), over Delta. Off by\n"
+		"default: the ID is the same in every game." },
+	{ "network.platform_limits", _config_string, "\"on\"", "HALO_NET_PLATFORM_LIMITS", _environment_value,
+		_platform_all,
+		"Delta's platform limits for this machine: \"on\" has hosts keep a\n"
+		"game to the players this platform takes (an original Xbox: 16);\n"
+		"\"off\" joins games of any size the host runs (you can roast your\n"
+		"Xbox with 128 players if you want). Only with Delta hosts." },
+	{ "network.host_platform_limits", _config_boolean, "true", "HALO_NET_HOST_PLATFORM_LIMITS", _environment_value,
+		_platform_all,
+		"Whether a game this machine hosts keeps to the players its Delta\n"
+		"machines' platforms take (their platform limits); false ignores\n"
+		"them, for testing." },
 	{ "network.public_lobby", _config_boolean, "true", "HALO_NET_PUBLIC_LOBBY", _environment_value, _platform_all,
 		"The server browser: public games are listed through the signalling\n"
 		"brokers, and Join Game > Server Browser shows them. False lists no\n"
@@ -357,6 +411,13 @@ static const struct config_setting config_settings[] =
 		"HALO_NET_STUN", _environment_value, _platform_all,
 		"Public STUN servers that tell this machine its internet address;\n"
 		"comma-separated host:port." },
+	{ "network.legacy_table", _config_string, "\"\"", "HALO_LEGACY_TABLE", _environment_value, _platform_all,
+		"For testing, and for admins who know better: a legacy table file\n"
+		"(docs/delta.md, \"The legacy table as config\"), beside this file unless a\n"
+		"full path, whose row for this build's wire sets the OpenCE network\n"
+		"versions it announces and joins. It is not signed: it replaces the\n"
+		"signed tables, which are then neither fetched nor passed on, and the\n"
+		"log says so at start. Empty for none." },
 #ifdef HALO_GAME_BROWSER
 	{ "network.browser_url", _config_string, "\"https://halo.milenko.org\"", "HALO_NET_BROWSER", _environment_value,
 		_platform_all,
@@ -370,8 +431,33 @@ static const struct config_setting config_settings[] =
 		_platform_all,
 		"When an internet game this machine joined ends, send network.browser_url\n"
 		"its scores as this machine saw them, with this copy's player ID, so that\n"
-		"games whose host does not report them are recorded too. False sends\n"
-		"nothing." },
+		"games whose host does not report them are recorded too, and confirm\n"
+		"this machine's players' lines in the host's report of it (/v1/claim),\n"
+		"which puts the game on their profile. False sends neither." },
+	{ "network.report_events", _config_boolean, "true", "HALO_NET_REPORT_EVENTS", _environment_value, _platform_all,
+		"Delta Stats: record the games this machine hosts (kills with weapons and\n"
+		"positions, accuracy, medals, objectives, vehicles, pickups, positions a\n"
+		"few seconds apart) and send them to network.browser_url when each ends,\n"
+		"for the site's match pages, heatmaps and leaderboards. Players' names\n"
+		"and a hash of their hardware ID; never an address. False turns it off." },
+	{ "network.events_token", _config_string, "\"\"", "HALO_EVENTS_TOKEN", _environment_value, _platform_all,
+		"A dedicated server's Delta Stats token, from the game list's operator:\n"
+		"its games count as a trusted server's. Empty: the game must be listed\n"
+		"there, from this machine, for its events to be taken." },
+	{ "network.events_positions", _config_integer, "2", "HALO_EVENTS_POSITIONS", _environment_value, _platform_all,
+		"Delta Stats: seconds between the samples of each player's position\n"
+		"(1 to 60; 0 none). Fewer make smaller batches and coarser heatmaps." },
+	{ "network.events_limit", _config_integer, "40000", "HALO_EVENTS_LIMIT", _environment_value, _platform_all,
+		"Delta Stats: the most events a game keeps (64 to 200000, about 60\n"
+		"bytes each); past it the position samples thin out first." },
+	{ "network.events_part_minutes", _config_integer, "30", "HALO_EVENTS_PART_MINUTES", _environment_value,
+		_platform_all,
+		"Delta Stats: a long game is sent as it stands every this many minutes\n"
+		"too (the end replaces it); 0 only at its end." },
+	{ "network.events_folder", _config_string, "\"\"", "HALO_EVENTS_FOLDER", _environment_value, _platform_all,
+		"Delta Stats: a folder to keep a copy of each batch sent, a JSON file each\n"
+		"(a full path is best: a relative one is from the working folder); empty\n"
+		"for none." },
 #endif
 	{ "discord.application_id", _config_string, "\"1553978809840050229\"", "HALO_DISCORD_APPLICATION",
 		_environment_value, _platform_desktop,
@@ -381,10 +467,12 @@ static const struct config_setting config_settings[] =
 	{ "update.auto", _config_boolean, "true", "HALO_UPDATE_AUTO", _environment_value, _platform_all,
 		"Look for a new version when the game starts, and offer to update to it;\n"
 		"false never looks (the game's \"Do not ask again\" writes false here)." },
-	{ "crash_reports.upload", _config_string, "\"ask\"", "HALO_CRASH_REPORTS", _environment_value, _platform_windows,
-		"Send a report of each crash (a minidump and halo.log) to the developers'\n"
-		"Sentry project (port/windows/src/win32_crash.c): \"yes\" sends them, \"no\"\n"
-		"never does, \"ask\" asks at the next crash and writes the answer here." },
+	{ "crash_reports.upload", _config_string, "\"ask\"", "HALO_CRASH_REPORTS", _environment_value, _platform_desktop,
+		"Send a report of each crash to the developers, through network.browser_url\n"
+		"(port/linux/src/crash_report.h: the build, where it crashed, the end of the\n"
+		"log without IP addresses, and on Windows a minidump): \"yes\" sends them,\n"
+		"\"no\" never does, \"ask\" asks after the next crash and writes the answer\n"
+		"here." },
 
 	{ "debug.network_test", _config_string, "\"\"", "HALO_NETWORK_TEST", _environment_value, _platform_all,
 		"Automated system link sessions for testing (port/linux/game/network_test.c):\n"
@@ -439,6 +527,18 @@ static const struct config_setting config_settings[] =
 		"machines of twice it), to test the netcode as over the internet; 0 none." },
 	{ "debug.network_loss", _config_real, "0.0", "HALO_NETWORK_LOSS", _environment_value, _platform_all,
 		"Percent of datagrams received that are dropped, for the same; 0 none." },
+	{ "debug.network_corrupt", _config_real, "0.0", "HALO_NETWORK_CORRUPT", _environment_value, _platform_all,
+		"Percent of the datagrams received that are damaged at random, to test\n"
+		"that nothing a machine sends can crash the game; 0 none." },
+	{ "debug.network_corrupt_stream", _config_real, "0.0", "HALO_NETWORK_CORRUPT_STREAM", _environment_value,
+		_platform_all,
+		"Percent of the reads of streams that are damaged at random, for the\n"
+		"same (a damaged stream is closed, so a little goes a long way); 0 none." },
+	{ "debug.network_corrupt_after", _config_real, "0.0", "HALO_NETWORK_CORRUPT_AFTER", _environment_value,
+		_platform_all,
+		"Seconds after the start before anything is damaged, so that a game can\n"
+		"be set up and started first (a host's messages to its own client are\n"
+		"damaged too)." },
 	{ "debug.test_input", _config_string, "\"\"", "HALO_TEST_INPUT", _environment_value, _platform_all,
 		"\"bot:<seed>\" plays controller 1 with a scripted pattern (automated\n"
 		"network tests); \"look:<seed>\" stands still, only turning and looking\n"
@@ -510,6 +610,8 @@ struct config_value
 };
 
 static struct config_value config_values[NUMBER_OF_CONFIG_SETTINGS];
+/* whether the file or the environment gives the setting a value */
+static int config_given[NUMBER_OF_CONFIG_SETTINGS];
 static int config_loaded = 0;
 static pthread_mutex_t config_lock = PTHREAD_MUTEX_INITIALIZER;
 
@@ -537,7 +639,15 @@ static void config_path(char *path, size_t size)
 {
 #ifdef __APPLE__
 	char folder[1024];
+	const char *save_root = getenv("HALO_SAVE_ROOT");
 
+	/* (a copy given a save root of its own, a test's, keeps its settings
+	there too, not in the player's) */
+	if (save_root && *save_root)
+	{
+		snprintf(path, size, "%s/config.toml", save_root);
+		return;
+	}
 	/* (the application's folder: not the application, which is signed) */
 	if (platform_app_folder(folder, sizeof(folder)))
 	{
@@ -757,7 +867,9 @@ static char *config_default_text(void)
 		"# The game writes this file with the defaults when it is missing. A\n"
 		"# setting at its default is commented out (\"# key = value\") and follows\n"
 		"# the default of the version that runs: take out the \"# \" and change the\n"
-		"# value to choose another. Delete the file to go back to the defaults.\n"
+		"# value to choose another. A line starting with # does nothing. The game\n"
+		"# reads this file when it starts: restart it after an edit. Delete the\n"
+		"# file to go back to the defaults.\n"
 		CONFIG_VERSION_TEXT);
 #else
 	config_append(&text,
@@ -766,7 +878,9 @@ static char *config_default_text(void)
 		"# The game writes this file with the defaults when it is missing. A\n"
 		"# setting at its default is commented out (\"# key = value\") and follows\n"
 		"# the default of the version that runs: take out the \"# \" and change the\n"
-		"# value to choose another. Delete the file to go back to the defaults.\n"
+		"# value to choose another. A line starting with # does nothing. The game\n"
+		"# reads this file when it starts: restart it after an edit. Delete the\n"
+		"# file to go back to the defaults.\n"
 		"# Each setting can also be set for one run with the environment variable\n"
 		"# named with it, which wins over this file.\n"
 		CONFIG_VERSION_TEXT);
@@ -909,6 +1023,13 @@ static int config_text_is_false(const char *text)
 	return !strcmp(lower, "0") || !strcmp(lower, "false") || !strcmp(lower, "no") || !strcmp(lower, "off");
 }
 
+/* whether an environment variable that only has to be set (a
+_environment_set_is_*) is: one empty or false is not */
+static int config_environment_set(const char *text)
+{
+	return text[0] && !config_text_is_false(text);
+}
+
 static void config_set_from_text(struct config_value *value, enum config_type type, const char *text)
 {
 	switch (type)
@@ -998,6 +1119,37 @@ static long config_setting_index(const char *name)
 	return -1;
 }
 
+/* a key in the file that is no setting, likely misspelt or in the wrong
+section: said in the log, with the section of a setting of that name */
+static void config_report_unknown_key(int line, const char *name)
+{
+	const char *key = strrchr(name, '.');
+	const char *found = NULL;
+	size_t index, count = 0;
+
+	key = key ? key + 1 : name;
+	for (index = 0; index < NUMBER_OF_CONFIG_SETTINGS; index++)
+	{
+		const char *dot = strchr(config_settings[index].name, '.');
+
+		if (dot && !strcmp(dot + 1, key))
+		{
+			found = config_settings[index].name;
+			count++;
+		}
+	}
+	/* (only a name one setting has: the section is then sure) */
+	if (count == 1)
+	{
+		platform_log("config.toml line %d: unknown setting %s, ignored (%s goes under [%.*s])", line, name, key,
+			(int)(strchr(found, '.') - found), found);
+	}
+	else
+	{
+		platform_log("config.toml line %d: unknown setting %s, ignored", line, name);
+	}
+}
+
 /* keys in the file that are no setting, likely misspelt */
 static void config_report_unknown_keys(toml_datum_t table)
 {
@@ -1012,7 +1164,7 @@ static void config_report_unknown_keys(toml_datum_t table)
 			continue;
 		if (section.type != TOML_TABLE)
 		{
-			platform_log("config.toml line %d: unknown setting %s", section.lineno, table.u.tab.key[section_index]);
+			config_report_unknown_key(section.lineno, table.u.tab.key[section_index]);
 			continue;
 		}
 		for (key_index = 0; key_index < section.u.tab.size; key_index++)
@@ -1021,7 +1173,7 @@ static void config_report_unknown_keys(toml_datum_t table)
 
 			snprintf(name, sizeof(name), "%s.%s", table.u.tab.key[section_index], section.u.tab.key[key_index]);
 			if (config_setting_index(name) < 0)
-				platform_log("config.toml line %d: unknown setting %s", section.u.tab.value[key_index].lineno, name);
+				config_report_unknown_key(section.u.tab.value[key_index].lineno, name);
 		}
 	}
 }
@@ -1068,35 +1220,85 @@ static int config_datum_is(toml_datum_t datum, enum config_type type, const char
 	return 0;
 }
 
+/* a setting's line the player changed but left commented out, "# key =
+value" with a value other than the default written there: it does nothing,
+which the log says (the file as the game writes it, every line at its
+default, says nothing). A setting given a value elsewhere in the file is
+left alone */
+static void config_report_commented(const char *text, toml_datum_t table)
+{
+	char section[64] = "";
+	const char *line;
+	int line_number = 1;
+
+	for (line = text; *line; line_number++)
+	{
+		const char *end = line + strcspn(line, "\n");
+		const char *next = *end ? end + 1 : end;
+		size_t index;
+
+		for (index = 0; !config_line_section(line, end, section, sizeof(section)) &&
+			index < NUMBER_OF_CONFIG_SETTINGS; index++)
+		{
+			const struct config_setting *setting = &config_settings[index];
+			const char *dot = strchr(setting->name, '.');
+			const char *value;
+			char *probe;
+			size_t probe_size;
+			toml_result_t parsed;
+			int same;
+
+			if (!(setting->platforms & CONFIG_PLATFORM) || !dot ||
+				strncmp(section, setting->name, (size_t)(dot - setting->name)) ||
+				section[dot - setting->name] != 0 || !config_line_commented_key(line, end, dot + 1))
+			{
+				continue;
+			}
+			if (toml_seek(table, setting->name).type != TOML_UNKNOWN)
+				break;
+			/* (the value read as TOML: 1.0 is 1.00) */
+			value = (const char *)memchr(line, '=', (size_t)(end - line)) + 1;
+			probe_size = (size_t)(end - value) + 8;
+			probe = malloc(probe_size);
+			if (!probe)
+				break;
+			snprintf(probe, probe_size, "v = %.*s\n", (int)(end - value), value);
+			parsed = toml_parse(probe, (int)strlen(probe));
+			same = parsed.ok && config_datum_is(toml_seek(parsed.toptab, "v"), setting->type, setting->default_value);
+			toml_free(parsed);
+			free(probe);
+			if (!same)
+			{
+				platform_log("config.toml line %d: %s is commented out, so it does nothing; remove the '# ' to use it",
+					line_number, setting->name);
+			}
+			break;
+		}
+		line = next;
+	}
+}
+
 /* a file from before config_version (text, parsed as table) wrote every
 setting at the default of the version that wrote it, so that a default
-changed since never reached it: its lines holding this version's default or
-an older one are commented out at this version's default, as a new file has
-them, and config_version written. Values that are no default stay, being
-the player's. Returns the new text, or NULL if the file has its version */
+changed since never reached it: its lines holding this version's default
+are commented out at it, as a new file has them, and config_version
+written. Any other value stays, being the player's, even an older
+version's default (the player may have chosen it: display.menus = "pc"),
+which the log says. Returns the new text, or NULL if the file has its
+version */
 static char *config_update_layout(const char *text, toml_datum_t table)
 {
 	toml_datum_t version = toml_seek(table, "config_version");
 	int lines[NUMBER_OF_CONFIG_SETTINGS];
 	struct config_text out = { NULL, 0, 0 };
-	struct config_text changed = { NULL, 0, 0 };
-	int line_number = 1, defaults = 0, version_written, written_by_game;
+	int line_number = 1, defaults = 0, version_written;
 	const char *line;
-	size_t index, present = 0;
+	size_t index;
 
 	if (version.type == TOML_INT64 && version.u.int64 >= CONFIG_VERSION)
 		return NULL;
 	/* (an older version's line is changed where it is) */
 	version_written = version.type != TOML_UNKNOWN;
-	/* (the builds before config_version wrote every setting as a value: a
-	file holding fewer than half of them was written by a person, whose
-	values, an older default's included, are theirs) */
-	for (index = 0; index < NUMBER_OF_CONFIG_SETTINGS; index++)
-	{
-		if (toml_seek(table, config_settings[index].name).type != TOML_UNKNOWN)
-			present++;
-	}
-	written_by_game = present * 2 >= NUMBER_OF_CONFIG_SETTINGS;
 	for (index = 0; index < NUMBER_OF_CONFIG_SETTINGS; index++)
 	{
 		const struct config_setting *setting = &config_settings[index];
@@ -1111,17 +1313,14 @@ static char *config_update_layout(const char *text, toml_datum_t table)
 			lines[index] = datum.lineno;
 			continue;
 		}
-		for (old = 0; written_by_game && old < NUMBER_OF_CONFIG_OLD_DEFAULTS; old++)
+		for (old = 0; old < NUMBER_OF_CONFIG_OLD_DEFAULTS; old++)
 		{
 			if (!strcmp(config_old_defaults[old].name, setting->name) &&
 				config_datum_is(datum, setting->type, config_old_defaults[old].default_value))
 			{
-				char buffer[256];
-
-				lines[index] = datum.lineno;
-				snprintf(buffer, sizeof(buffer), "%s%s (%s, now %s)", changed.length ? ", " : "", setting->name,
+				platform_log("settings: %s = %s is kept (an older version's default; this version's is %s, which "
+					"commenting the line out follows)", setting->name,
 					config_old_defaults[old].default_value, setting->default_value);
-				config_append(&changed, buffer);
 			}
 		}
 	}
@@ -1180,12 +1379,222 @@ static char *config_update_layout(const char *text, toml_datum_t table)
 			config_append(&out, "\n");
 		config_append(&out, CONFIG_VERSION_TEXT);
 	}
-	platform_log("settings: config.toml updated (config_version %d): %d lines at a default commented out, to follow "
-		"this version's%s%s", CONFIG_VERSION, defaults, changed.length ? "; changed defaults: " : "",
-		changed.length ? changed.buffer : "");
-	free(changed.buffer);
+	platform_log("settings: config.toml updated (config_version %d): %d lines at this version's default commented "
+		"out, to follow it; every other value is kept", CONFIG_VERSION, defaults);
 	return out.buffer;
 }
+
+/* ---------- words */
+
+/* the settings that take one of a few words: one in any case is taken (as
+written here), and another is said once in the log */
+static const struct
+{
+	const char *name;
+	/* NULL ended; "" where empty is one */
+	const char *words[8];
+	/* what the game does with another, for the log (NULL: what reads the
+	setting says it) */
+	const char *otherwise;
+} config_words[] =
+{
+	{ "display.mode", { "", "fullscreen", "borderless", "windowed", NULL }, "display.fullscreen's" },
+	{ "display.resolution_scaling", { "native", "original", NULL }, "\"native\"" },
+	{ "display.anti_aliasing", { "off", "fxaa", "smaa", "ssaa2x", "msaa2x", "msaa4x", "msaa8x", NULL }, NULL },
+	{ "display.menus", { "xbox", "pc", NULL }, NULL },
+	{ "display.player_names", { "all", "allies", "allys", "enemies", "none", NULL }, "\"all\"" },
+	{ "display.scoreboard_team_layout", { "teams", "score", NULL }, "\"teams\"" },
+	{ "audio.resampling", { "sinc", "linear", NULL }, "\"sinc\"" },
+	{ "input.touch_controls", { "on", "auto", "off", NULL }, "\"on\"" },
+	{ "game.console_log", { "important", "all", "none", NULL }, "\"important\"" },
+	{ "game.move_old_map_folders", { "ask", "yes", "no", NULL }, "\"ask\"" },
+	{ "network.protocol", { "auto", "opence", "delta", NULL }, NULL },
+	{ "network.platform_limits", { "on", "off", NULL }, "\"on\"" },
+	{ "network.coop_friendly_fire", { "off", "on", "shields_only", "explosives_only", NULL }, NULL },
+	{ "network.coop_enemies_mode", { "none", "per_player", "multiplier", NULL }, "\"none\"" },
+	{ "crash_reports.upload", { "ask", "yes", "no", NULL }, "\"ask\"" },
+};
+
+#define NUMBER_OF_CONFIG_WORDS (sizeof(config_words) / sizeof(config_words[0]))
+
+/* the word settings' values as their readers compare them (lowercase:
+"Borderless" is "borderless"), and the log told of one that is none of
+its words */
+static void config_check_words(void)
+{
+	size_t word_index;
+
+	for (word_index = 0; word_index < NUMBER_OF_CONFIG_WORDS; word_index++)
+	{
+		long index = config_setting_index(config_words[word_index].name);
+		const char *const *words = config_words[word_index].words;
+		struct config_value *value;
+		char list[160] = "";
+		size_t word;
+
+		if (index < 0 || !(config_settings[index].platforms & CONFIG_PLATFORM))
+			continue;
+		value = &config_values[index];
+		for (word = 0; words[word] && SDL_strncasecmp(value->string, words[word], strlen(words[word]) + 1); word++)
+		{
+		}
+		if (words[word])
+		{
+			if (strcmp(value->string, words[word]))
+			{
+				free(value->string);
+				value->string = strdup(words[word]);
+			}
+			continue;
+		}
+		if (!config_words[word_index].otherwise)
+			continue;
+		/* ("a", "b" or "c", and "or empty" for "") */
+		for (word = 0; words[word]; word++)
+		{
+			size_t length = strlen(list);
+
+			if (!words[word][0])
+				continue;
+			snprintf(list + length, sizeof(list) - length, "%s\"%s\"",
+				!length ? "" : !words[word + 1] && words[0][0] ? " or " : ", ", words[word]);
+		}
+		if (!words[0][0])
+			snprintf(list + strlen(list), sizeof(list) - strlen(list), " or empty");
+		platform_log("settings: %s = \"%s\" is not %s; using %s", config_words[word_index].name, value->string, list,
+			config_words[word_index].otherwise);
+	}
+}
+
+/* the most lines of a file that cannot be read that are skipped to read
+the rest */
+#define CONFIG_MAXIMUM_SKIPPED_LINES 16
+
+/* the line a parse error is on ("(line 12) ..."), or 0 */
+static int config_error_line(const char *message)
+{
+	const char *at = strstr(message, "(line ");
+	int line = 0;
+
+	if (!at || sscanf(at, "(line %d)", &line) != 1)
+		return 0;
+	return line;
+}
+
+/* the line of text that cannot be read, said in the log with what likely
+makes it so, and emptied (its number kept for the lines after it): returns
+whether it was there */
+static int config_skip_line(char *text, int line_number, const char *message)
+{
+	char *line = text, *end, *value, *value_end;
+	const char *reason = strchr(message, ')');
+	char key[64] = "";
+	char hint[160] = "";
+	int number;
+
+	for (number = 1; number < line_number && *line; number++)
+		line += strcspn(line, "\n") + (line[strcspn(line, "\n")] ? 1 : 0);
+	if (number != line_number || !*line)
+		return 0;
+	end = line + strcspn(line, "\n");
+	reason = reason ? reason + 1 : message;
+	while (*reason == ' ')
+		reason++;
+	/* "key = value": the value as written, to the end of the line or a
+	comment */
+	value = memchr(line, '=', (size_t)(end - line));
+	if (value)
+	{
+		char *key_start = line, *key_end = value;
+
+		while (key_start < key_end && (*key_start == ' ' || *key_start == '\t'))
+			key_start++;
+		while (key_end > key_start && (key_end[-1] == ' ' || key_end[-1] == '\t'))
+			key_end--;
+		snprintf(key, sizeof(key), "%.*s", (int)(key_end - key_start), key_start);
+		value++;
+		while (value < end && (*value == ' ' || *value == '\t'))
+			value++;
+		value_end = value + strcspn(value, "#\n");
+		if (value_end > end)
+			value_end = end;
+		while (value_end > value && (value_end[-1] == ' ' || value_end[-1] == '\t' || value_end[-1] == '\r'))
+			value_end--;
+		if ((value_end - value == 4 && !SDL_strncasecmp(value, "true", 4)) ||
+			(value_end - value == 5 && !SDL_strncasecmp(value, "false", 5)))
+		{
+			snprintf(hint, sizeof(hint), ": true and false are lowercase, %s = %.*s", key, (int)(value_end - value),
+				value_end - value == 4 ? "true" : "false");
+		}
+		else if (value < value_end && isalpha((unsigned char)*value))
+		{
+			snprintf(hint, sizeof(hint), ": text needs quotes, %s = \"%.*s\"", key, (int)(value_end - value), value);
+		}
+	}
+	platform_log("config.toml line %d cannot be read (%s), so it is skipped%s", line_number, reason, hint);
+	memset(line, ' ', (size_t)(end - line));
+	return 1;
+}
+
+#ifndef HALO_ANDROID
+/* a config.toml the game never reads, likely edited in its place: said in
+the log, with the one it reads (path) */
+static void config_report_unread(const char *path)
+{
+	char other[1100];
+#ifdef __APPLE__
+	/* beside the application, or in it (the game's is in Application
+	Support) */
+	const char *base = SDL_GetBasePath();
+	const char *bundle = base ? strstr(base, ".app/Contents/") : NULL;
+
+	if (bundle)
+	{
+		const char *folder_end = bundle;
+
+		while (folder_end > base && folder_end[-1] != '/')
+			folder_end--;
+		snprintf(other, sizeof(other), "%sconfig.toml", base);
+		if (SDL_GetPathInfo(other, NULL))
+			platform_log("settings: %s is not read; the game's settings are %s", other, path);
+		snprintf(other, sizeof(other), "%.*sconfig.toml", (int)(folder_end - base), base);
+		if (SDL_GetPathInfo(other, NULL))
+			platform_log("settings: %s is not read; the game's settings are %s", other, path);
+	}
+#elif !defined(_WIN32)
+	/* in the folder the game was started from, when that is not the
+	executable's (the game's is beside the executable) */
+	char folder[1024];
+
+	if (getcwd(folder, sizeof(folder)))
+	{
+		snprintf(other, sizeof(other), "%s/config.toml", folder);
+		if (strcmp(other, path) && SDL_GetPathInfo(other, NULL))
+		{
+			SDL_PathInfo mine, theirs;
+
+			/* (the same file by another name is the one read) */
+			if (!SDL_GetPathInfo(path, &mine) || !SDL_GetPathInfo(other, &theirs) ||
+				mine.size != theirs.size || mine.modify_time != theirs.modify_time)
+			{
+				platform_log("settings: %s is not read; the game's settings are %s", other, path);
+			}
+		}
+	}
+#endif
+	/* the file saved with .txt after it, by an editor that adds it (and
+	Windows Explorer hides it) */
+	snprintf(other, sizeof(other), "%s.txt", path);
+	if (SDL_GetPathInfo(other, NULL))
+	{
+#ifdef _WIN32
+		platform_log("settings: %s is not read: Windows saved it as config.toml.txt; rename it to config.toml", other);
+#else
+		platform_log("settings: %s is not read; rename it to config.toml", other);
+#endif
+	}
+}
+#endif
 
 static void config_load(void)
 {
@@ -1212,11 +1621,24 @@ static void config_load(void)
 	}
 
 	config_path(path, sizeof(path));
+#ifndef HALO_ANDROID
+	config_report_unread(path);
+#endif
 	text = config_read_file(path, &size);
 	if (text)
 	{
 		toml_result_t result = toml_parse(text, (int)size);
+		int skipped = 0;
 
+		/* (a line that cannot be read is skipped, in memory, so that the
+		rest is) */
+		while (!result.ok && skipped < CONFIG_MAXIMUM_SKIPPED_LINES &&
+			config_skip_line(text, config_error_line(result.errmsg), result.errmsg))
+		{
+			toml_free(result);
+			result = toml_parse(text, (int)strlen(text));
+			skipped++;
+		}
 		if (result.ok)
 		{
 			char *updated = config_update_layout(text, result.toptab);
@@ -1242,17 +1664,31 @@ static void config_load(void)
 				}
 			}
 			for (index = 0; index < NUMBER_OF_CONFIG_SETTINGS; index++)
+			{
 				config_set_from_file(&config_values[index], &config_settings[index], result.toptab);
+				config_given[index] = toml_seek(result.toptab, config_settings[index].name).type != TOML_UNKNOWN;
+			}
 			config_report_unknown_keys(result.toptab);
 			platform_log("settings: %s", path);
-			completed = config_add_missing(text, result.toptab);
-			if ((completed || updated) && !config_write_file(path, completed ? completed : text))
+			completed = skipped ? NULL : config_add_missing(text, result.toptab);
+			config_report_commented(completed ? completed : text, result.toptab);
+			/* (a file with lines skipped is left as the player wrote it, to
+			be fixed) */
+			if (skipped)
+			{
+				platform_log("settings: %d line%s of config.toml skipped; every other setting in it is used", skipped,
+					skipped == 1 ? "" : "s");
+			}
+			else if ((completed || updated) && !config_write_file(path, completed ? completed : text))
+			{
 				platform_log("settings: cannot write %s", path);
+			}
 			free(completed);
 		}
 		else
 		{
-			platform_log("config.toml: %s; using the defaults", result.errmsg);
+			platform_log("config.toml cannot be read (%s): every setting is at its default until that is fixed",
+				result.errmsg);
 		}
 		toml_free(result);
 		free(text);
@@ -1273,8 +1709,11 @@ static void config_load(void)
 		const struct config_setting *setting = &config_settings[index];
 		const char *environment = getenv(setting->environment);
 
-		if (!environment)
+		/* (one set to "", "0", "false", "no" or "off" is as if it were not:
+		HALO_LOG_ADDRESSES=0 never turns a setting on) */
+		if (!environment || (setting->environment_style != _environment_value && !config_environment_set(environment)))
 			continue;
+		config_given[index] = 1;
 		switch (setting->environment_style)
 		{
 		case _environment_value:
@@ -1288,6 +1727,23 @@ static void config_load(void)
 			break;
 		}
 	}
+	config_check_words();
+#ifndef HALO_ANDROID
+	{
+		long mode = config_setting_index("display.mode");
+		long fullscreen = config_setting_index("display.fullscreen");
+
+		/* (said once: which of the two the window follows) */
+		const char *value = config_values[mode].string;
+
+		if ((!strcmp(value, "fullscreen") || !strcmp(value, "borderless") || !strcmp(value, "windowed")) &&
+			config_given[fullscreen])
+		{
+			platform_log("settings: display.mode = \"%s\" is used; display.fullscreen is ignored",
+				config_values[mode].string);
+		}
+	}
+#endif
 }
 
 static const struct config_value *config_value(const char *name, enum config_type type)

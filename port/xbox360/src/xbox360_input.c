@@ -77,6 +77,13 @@ void halo_input_name(int input, char *name, size_t size)
 		name[0] = 0;
 }
 
+/* a binding's name as the menus show it: no keyboard layouts to ask */
+void halo_input_shown_name(const char *binding, char *shown, size_t size)
+{
+	if (size)
+		snprintf(shown, size, "%s", binding);
+}
+
 unsigned long halo_keyboard_actions(short controller_index)
 {
 	(void)controller_index;

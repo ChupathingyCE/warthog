@@ -69,6 +69,39 @@ float rintf(float x)
 	return (float)rint(x);
 }
 
+double sqrt(double x);
+
+float sqrtf(float x)
+{
+	return (float)sqrt(x);
+}
+
+/* the next float after x toward y */
+float nextafterf(float x, float y)
+{
+	union
+	{
+		float value;
+		unsigned long bits;
+	} number;
+
+	if (x != x || y != y)
+		return x + y;
+	if (x == y)
+		return y;
+	if (x == 0.0f)
+	{
+		number.bits = 1;
+		return y > 0.0f ? number.value : -number.value;
+	}
+	number.value = x;
+	if ((x < y) == (x > 0.0f))
+		number.bits++;
+	else
+		number.bits--;
+	return number.value;
+}
+
 /* ---------- the log: the debug monitor at once, and debug.txt from the
 main thread (error() is the game's, not for other threads: internet play's
 thread's lines wait for the main loop, xbox_log_flush) */
@@ -244,6 +277,10 @@ static const struct
 	{ "debug.exit_after", "0.0" },
 	{ "debug.null_renderer", "false" },
 	{ "debug.log_addresses", "false" },
+	/* the desktop builds' Settings volumes (sound_manager.c), at their
+	defaults: without them both read as 0 and every sound played silent */
+	{ "audio.music_volume", "1.0" },
+	{ "audio.effects_volume", "1.0" },
 };
 
 int xbox_p2p_online(void);
@@ -257,7 +294,19 @@ static const char *setting(const char *name)
 		if (!strcmp(settings[index].name, name))
 			return settings[index].value;
 	}
-	DbgPrint("halo: no setting %s on the console\n", name);
+	/* (into debug.txt too, the first few: a setting the shared code reads
+	that the console lacks reads as empty, 0 or false) */
+	{
+		static int reported;
+
+		if (reported < 16)
+		{
+			reported++;
+			platform_log("no setting %s on the console", name);
+		}
+		else
+			DbgPrint("halo: no setting %s on the console\n", name);
+	}
 	return "";
 }
 
@@ -360,6 +409,16 @@ const char *hud_hires_asset_tag(long asset)
 {
 	(void)asset;
 	return "";
+}
+
+void hud_hires_map_loaded(const long *assets, long count)
+{
+	(void)assets;
+	(void)count;
+}
+
+void hud_hires_map_unloaded(void)
+{
 }
 
 struct text_hires_glyph;

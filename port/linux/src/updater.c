@@ -2,7 +2,8 @@
 UPDATER.C
 
 The desktop ports' self-updater (Linux and Windows; the Android app updates
-itself in Java, port/android).
+itself in Java, port/android). On macOS a release's build looks for a new
+version the same way, and Yes opens the release's download page instead.
 
 A release's build (HALO_RELEASE_BUILD: built from the release's tag,
 v<version>, by ChupathingyCE's release workflow; tools/version.py) knows its
@@ -51,10 +52,14 @@ macos_build.py; the Android app's version is its own, build.gradle) */
 #define HALO_RELEASE_BUILD 0
 #endif
 #ifdef __APPLE__
-/* (the macOS application does not update itself yet) */
-#undef HALO_RELEASE_BUILD
-#define HALO_RELEASE_BUILD 0
+/* (the macOS application does not replace itself yet: a release's build
+looks for a new version and offers its download page) */
+#define UPDATER_DOWNLOAD_PAGE_ONLY 1
+#else
+#define UPDATER_DOWNLOAD_PAGE_ONLY 0
 #endif
+/* the latest release's page, where the macOS application is downloaded */
+#define UPDATE_RELEASE_PAGE "https://github.com/" UPDATE_REPOSITORY "/releases/latest"
 #ifndef HALO_BUILD_FLAVOR
 #define HALO_BUILD_FLAVOR "release"
 #endif
@@ -361,8 +366,8 @@ done:
 
 /* ---------- checking */
 
-/* a version's numbers and pre-release suffix: [v]<major>.<minor>.<patch>
-followed by a suffix (0.5.0b, 1.0.0rc1) or nothing; 0 if it is not one */
+/* a version's numbers and hotfix letter: [v]<major>.<minor>.<patch>
+followed by a letter (0.7.5a) or nothing; 0 if it is not one */
 static int updater_parse_version(const char *text, long numbers[3], const char **suffix)
 {
 	int part;
@@ -384,9 +389,8 @@ static int updater_parse_version(const char *text, long numbers[3], const char *
 	return 1;
 }
 
-/* whether version is newer than this build's: by its numbers, then a
-version without a suffix comes after the ones with (0.5.0b, then 0.5.0),
-and suffixes in order (a, b, rc1) */
+/* whether version is newer than this build's: by its numbers, then its
+hotfix letter, a version without one first (0.7.5, then 0.7.5a, 0.7.5b) */
 static int updater_newer(const char *version)
 {
 	long latest[3], current[3];
@@ -403,8 +407,6 @@ static int updater_newer(const char *version)
 		if (latest[part] != current[part])
 			return latest[part] > current[part];
 	}
-	if (!*latest_suffix || !*current_suffix)
-		return !*latest_suffix && *current_suffix;
 	return strcmp(latest_suffix, current_suffix) > 0;
 }
 
@@ -640,13 +642,72 @@ done:
 	return succeeded;
 }
 
+/* the first count of the new files, already in place, taken back out (to
+the update folder) and the old ones (<name>.old) put back, the last first:
+the install as it was before the update. A new file that had no old one is
+deleted */
+static void updater_put_back(char names[][256], int count)
+{
+	int index, failures = 0;
+
+	for (index = count - 1; index >= 0; index--)
+	{
+		char path[1200], new_path[1200], old_path[1300];
+
+		updater_path(path, sizeof(path), names[index]);
+		updater_partial_path(new_path, sizeof(new_path), names[index]);
+		snprintf(old_path, sizeof(old_path), "%s.old", path);
+		if (SDL_GetPathInfo(old_path, NULL))
+		{
+			if (!update_replace_file(path, old_path, new_path))
+			{
+				platform_log("update: could not put back %s", names[index]);
+				failures++;
+			}
+		}
+		else
+		{
+			update_delete_file(path);
+		}
+	}
+	if (failures)
+		platform_log("update: %d of %d replaced files could not be put back", failures, count);
+	else
+		platform_log("update: the %d replaced files put back: the install is as it was", count);
+}
+
+/* the new files in place of the old ones, each old one kept as <name>.old;
+if one cannot be, the ones before it put back as they were, and 0 */
+static int updater_replace_files(char names[][256], int name_count, char *error, size_t error_size)
+{
+	int index;
+
+	for (index = 0; index < name_count; index++)
+	{
+		char path[1200], new_path[1200], old_path[1300];
+
+		updater_path(path, sizeof(path), names[index]);
+		updater_partial_path(new_path, sizeof(new_path), names[index]);
+		snprintf(old_path, sizeof(old_path), "%s.old", path);
+		if (!update_replace_file(path, new_path, old_path))
+		{
+			/* (that one is as it was: update_replace_file) */
+			snprintf(error, error_size, "could not replace %s", path);
+			if (index > 0)
+				updater_put_back(names, index);
+			return 0;
+		}
+	}
+	return 1;
+}
+
 /* downloads, unpacks and puts in place the new build, and starts it; returns
 only if something failed */
 static void updater_update(void)
 {
 	char names[MAXIMUM_UPDATE_FILES][256];
 	char zip_path[1200], partial[1200], error[512] = "";
-	int name_count = 0, index;
+	int name_count = 0;
 
 	updater_path(partial, sizeof(partial), UPDATE_DIRECTORY);
 	updater_partial_path(zip_path, sizeof(zip_path), UPDATE_ASSET);
@@ -658,21 +719,7 @@ static void updater_update(void)
 	else if (updater_download_zip(zip_path, error, sizeof(error)) &&
 		updater_unpack(zip_path, names, &name_count, error, sizeof(error)))
 	{
-		/* the new files in place of the old ones */
-		for (index = 0; index < name_count; index++)
-		{
-			char path[1200], new_path[1200], old_path[1300];
-
-			updater_path(path, sizeof(path), names[index]);
-			updater_partial_path(new_path, sizeof(new_path), names[index]);
-			snprintf(old_path, sizeof(old_path), "%s.old", path);
-			if (!update_replace_file(path, new_path, old_path))
-			{
-				snprintf(error, sizeof(error), "could not replace %s", path);
-				break;
-			}
-		}
-		if (index == name_count)
+		if (updater_replace_files(names, name_count, error, sizeof(error)))
 		{
 			update_delete_file(partial);
 			platform_log("update: starting version %s", updater_latest_version);
@@ -695,7 +742,8 @@ static void updater_clean_up(void)
 {
 	static const char *const names[] =
 	{
-		"halo.old", "halo.exe.old", "SDL3.dll.old", "extract-xiso-LICENSE.txt.old", "mbedtls-LICENSE.txt.old",
+		"halo.old", "halo.exe.old", "SDL3.dll.old", "libSDL3.so.0.old", "SDL3-LICENSE.txt.old",
+		"extract-xiso-LICENSE.txt.old", "mbedtls-LICENSE.txt.old",
 	};
 	char path[1200];
 	size_t index;
@@ -720,14 +768,24 @@ void updater_start(void)
 {
 	char *slash;
 
-	if (!update_executable_path(updater_executable, sizeof(updater_executable)))
-		return;
-	snprintf(updater_directory, sizeof(updater_directory), "%s", updater_executable);
-	slash = strrchr(updater_directory, PATH_SEPARATOR[0]);
-	if (!slash)
-		return;
-	*slash = 0;
-	updater_clean_up();
+	/* (the macOS application only offers the download page: no files of its
+	own to find or clean up) */
+	if (UPDATER_DOWNLOAD_PAGE_ONLY)
+	{
+		/* (the check's answer is kept in the save root while it is read) */
+		snprintf(updater_directory, sizeof(updater_directory), "%s", platform_save_root());
+	}
+	else
+	{
+		if (!update_executable_path(updater_executable, sizeof(updater_executable)))
+			return;
+		snprintf(updater_directory, sizeof(updater_directory), "%s", updater_executable);
+		slash = strrchr(updater_directory, PATH_SEPARATOR[0]);
+		if (!slash)
+			return;
+		*slash = 0;
+		updater_clean_up();
+	}
 	/* (not for builds other than a release's, the player's no, or runs nobody
 	is watching, but for a test with its answer) */
 	if (!HALO_RELEASE_BUILD || !config_boolean("update.auto") ||
@@ -745,6 +803,22 @@ void updater_start(void)
 		else
 			SDL_SetAtomicInt(&updater_state, _updater_handled);
 	}
+}
+
+/* whether the game runs under gamescope (the Steam Deck's Game Mode), where
+a system dialog such as SDL's message box crashes the game. gamescope sets
+GAMESCOPE_WAYLAND_DISPLAY for the programs it runs and Game Mode's session
+XDG_CURRENT_DESKTOP; Steam sets SteamDeck and SteamGamepadUI there. Wine
+passes them on to the Windows build under Proton. */
+static int updater_gamescope(void)
+{
+	const char *wayland_display = getenv("GAMESCOPE_WAYLAND_DISPLAY");
+	const char *desktop = getenv("XDG_CURRENT_DESKTOP");
+	const char *steam_deck = getenv("SteamDeck");
+	const char *gamepad_ui = getenv("SteamGamepadUI");
+
+	return (wayland_display && wayland_display[0]) || (desktop && strstr(desktop, "gamescope")) ||
+		(steam_deck && !strcmp(steam_deck, "1") && gamepad_ui && !strcmp(gamepad_ui, "1"));
 }
 
 /* every frame, on the game's thread (sdl_platform.c): asks the player once a
@@ -774,20 +848,40 @@ void updater_poll(SDL_Window *window)
 	if (test_answer[0])
 	{
 		platform_log("update: answering %s (debug.update_answer)", test_answer);
-		if (!strcmp(test_answer, "yes"))
+		if (!strcmp(test_answer, "yes") && UPDATER_DOWNLOAD_PAGE_ONLY)
+			platform_log("update: would open " UPDATE_RELEASE_PAGE);
+		else if (!strcmp(test_answer, "yes"))
 			updater_update();
 		else if (!strcmp(test_answer, "never"))
 			config_write_boolean("update.auto", 0);
+		return;
+	}
+	/* (no question under gamescope: the player updates from the desktop, or
+	with debug.update_answer) */
+	if (updater_gamescope())
+	{
+		platform_log("update: %s is out (this is %s); not asking under gamescope (Steam Deck Game Mode)",
+			updater_latest_version, HALO_VERSION);
 		return;
 	}
 	/* (a dialog cannot show above a fullscreen game) */
 	fullscreen = window && (SDL_GetWindowFlags(window) & SDL_WINDOW_FULLSCREEN);
 	if (fullscreen)
 		SDL_SetWindowFullscreen(window, false);
-	snprintf(message, sizeof(message),
-		"A new version of ChupathingyCE is out (%s; this is %s).\n\n"
-		"Do you want to update? The game will close and start the new version.",
-		updater_latest_version, HALO_VERSION);
+	if (UPDATER_DOWNLOAD_PAGE_ONLY)
+	{
+		snprintf(message, sizeof(message),
+			"A new version of ChupathingyCE is out (%s; this is %s).\n\n"
+			"Do you want to open its download page? Your saves and settings stay as they are.",
+			updater_latest_version, HALO_VERSION);
+	}
+	else
+	{
+		snprintf(message, sizeof(message),
+			"A new version of ChupathingyCE is out (%s; this is %s).\n\n"
+			"Do you want to update? The game will close and start the new version.",
+			updater_latest_version, HALO_VERSION);
+	}
 	{
 		SDL_MessageBoxData question = { SDL_MESSAGEBOX_INFORMATION, window, "ChupathingyCE: new version", message,
 			3, question_buttons, NULL };
@@ -810,6 +904,12 @@ void updater_poll(SDL_Window *window)
 			else
 				platform_log("update: could not write update.auto to config.toml");
 		}
+	}
+	else if (answer == 1 && UPDATER_DOWNLOAD_PAGE_ONLY)
+	{
+		platform_log("update: opening " UPDATE_RELEASE_PAGE);
+		if (!SDL_OpenURL(UPDATE_RELEASE_PAGE))
+			platform_log("update: could not open the download page: %s", SDL_GetError());
 	}
 	else if (answer == 1)
 	{

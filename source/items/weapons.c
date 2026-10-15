@@ -1265,6 +1265,11 @@ void weapon_build_weapon_interface_state(
 	struct weapon_definition *weapon_definition = weapon_definition_get(weapon->definition_index);
 	short magazine_index;
 
+	/* port: cleared first, as every caller's is on its stack, unset: a
+	weapon's magazines past its own count read as empty rather than as
+	whatever was there (the HUD's secondary warnings went off for a weapon
+	of one magazine) */
+	csmemset(state, 0, sizeof(*state));
 	state->heat = weapon->weapon.heat;
 	state->age = weapon->weapon.age;
 	state->overheated = TEST_FLAG(weapon->weapon.flags, 0);
@@ -2617,6 +2622,15 @@ static void trigger_create_projectiles(
 					}
 				}
 			}
+#ifdef HALO_GAME_BROWSER
+			{
+				/* port: Delta Stats' recorder, on the host (port/linux/game/
+				game_events.c): the shots its owner fired, for their accuracy */
+				void game_events_shots(long owner_object_index, long weapon_definition_index, short count);
+
+				game_events_shots(owner_object_index, weapon->definition_index, projectile_count);
+			}
+#endif
 		}
 	}
 

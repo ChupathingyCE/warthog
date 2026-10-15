@@ -225,6 +225,27 @@ int posix_set_read_only(const char *path, int read_only)
 	return SetFileAttributesA(console_path, attributes) ? 0 : -1;
 }
 
+/* (the console's file system has no links) */
+int posix_is_link(const char *path)
+{
+	(void)path;
+	return 0;
+}
+
+int posix_rename_directory(const char *from, const char *to)
+{
+	char console_from[MAX_PATH], console_to[MAX_PATH];
+
+	x360_path(from, console_from, sizeof(console_from));
+	x360_path(to, console_to, sizeof(console_to));
+	if (!MoveFileA(console_from, console_to))
+	{
+		errno = x360_errno_from_error(GetLastError());
+		return -1;
+	}
+	return 0;
+}
+
 int posix_make_directory(const char *path)
 {
 	char console_path[MAX_PATH];

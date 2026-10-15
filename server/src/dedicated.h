@@ -42,10 +42,15 @@ struct dedicated_status
 	long entry;
 	long entry_count;
 	char playlist[DEDICATED_MAP_SIZE];
+	/* a playlist to follow the game in progress (sv_playlist_use, or the
+	playlist saved again; empty if none) */
+	char next_playlist[DEDICATED_MAP_SIZE];
 	long minimum_players;
 	long maximum_players;
 	long idle_limit;
 	boolean public_game;
+	/* blocked names kicked (sv_name_filter) */
+	boolean name_filter;
 	char name[16];
 	unsigned long uptime_seconds;
 };
@@ -68,6 +73,18 @@ is */
 boolean dedicated_server_end_game(void);
 
 void dedicated_server_set_maximum_players(long maximum_players);
+void dedicated_server_set_minimum_players(long minimum_players);
+void dedicated_server_set_idle_limit(long idle_limit);
 void dedicated_server_set_name(char const *name);
+void dedicated_server_set_name_filter(boolean name_filter);
+
+/* a playlist (a path in the data folder, "admin/playlists/x.txt") played
+from the next game, or at once in the lobby; from its first entry, or
+where the one played was (keep_place: the same playlist saved again). FALSE,
+with why in problem, if it cannot be read or has no games */
+boolean dedicated_server_use_playlist(char const *path, boolean keep_place, char *problem, long problem_size);
+/* a game type's file changed: which of the playlist's games are in teams
+read again */
+void dedicated_server_gametypes_changed(void);
 
 #endif

@@ -195,6 +195,7 @@ symbols in this file:
 #include "cutscene/cinematics.h"
 #include "input/input.h"
 #include "input/input_abstraction.h"
+#include "interface/ui_widget.h"
 #include "interface/player_ui.h"
 #include "items/weapons.h"
 #include "main/main.h"
@@ -240,7 +241,6 @@ enum mouse_button
 
 real const MOUSE_YAW_SCALE = 0.0031415927f;
 real const MOUSE_PITCH_SCALE = 0.0031415927f;
-static real const ANALOG_BUTTON_SCALE = 1.f / 255.f;
 
 enum
 {
@@ -603,6 +603,23 @@ static void player_action_clear(
 	return;
 }
 
+/* port: whether a menu of the player's own is up (a network game's pause
+menu, which pauses nothing): its controller drives the menu, not the player,
+whose D-pad and sticks would otherwise move them as they move about it. The
+buttons still held as it closes are let go of first (ui_widget_delete). */
+static boolean player_control_port_menu_has_controller(
+	short local_player_index)
+{
+	long player_index = local_player_get_player_index(local_player_index);
+	short gamepad_index;
+
+	if (player_index == NONE)
+		return FALSE;
+	gamepad_index = player_get(player_index)->local_player_index;
+	return gamepad_index >= 0 && gamepad_index < MAXIMUM_NUMBER_OF_LOCAL_PLAYERS &&
+		ui_widgets_active_for_local_player(gamepad_index);
+}
+
 static void handle_one_player_input(
 	short local_player_index,
 	real time_delta_sec)
@@ -635,7 +652,8 @@ static void handle_one_player_input(
 			player->desired_angles.yaw);
 	}
 
-	if (director_inhibited_input(local_player_index))
+	if (director_inhibited_input(local_player_index) ||
+		player_control_port_menu_has_controller(local_player_index))
 	{
 		csmemset(&input, 0, sizeof(input));
 	}
@@ -1354,10 +1372,14 @@ static void get_local_player_input_blob(
 				{
 					struct biped_datum *biped = biped_try_and_get(player->unit_index);
 
+					/* (crouching takes a stick short of all the way; port: the
+					keyboard always moves all the way, so its crouch key
+					crouches at any speed, as Halo PC's does) */
 					if (biped &&
 						(controls_enable_crouch ||
 						TEST_FLAG(biped->biped.flags, _biped_airborne_bit) ||
-						magnitude_squared2d(&input->throttle) < 0.98f * 0.98f))
+						magnitude_squared2d(&input->throttle) < 0.98f * 0.98f ||
+						input_abstraction_port_crouch(gamepad_index)))
 					{
 						SET_FLAG(
 							input->unit_control_flags,
@@ -1366,8 +1388,10 @@ static void get_local_player_input_blob(
 					}
 				}
 
-				input->primary_trigger =
-					(real)input_state->buttons[_button_fire] * ANALOG_BUTTON_SCALE;
+				/* port: the fire control's pull, not how long it is held
+				(input_abstraction_port_primary_trigger) */
+				input->primary_trigger = effective_buttons[_button_fire] ?
+					input_abstraction_port_primary_trigger(gamepad_index) : 0.f;
 				SET_FLAG(
 					input->unit_control_flags,
 					_unit_control_weapon_primary_trigger_bit,

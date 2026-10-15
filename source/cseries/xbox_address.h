@@ -64,6 +64,10 @@ static __inline__ __attribute__((always_inline)) unsigned int xbox_address(void 
 
 #elif defined(HALO_64BIT)
 
+/* (a build may place it elsewhere: AddressSanitizer's shadow memory lies
+where these are, so the sanitized builds put it above it, at 48 TB:
+tools/test_map_fuzz.py) */
+#ifndef XBOX_ADDRESS_SPACE_BASE
 #if defined(__linux__) && defined(__aarch64__)
 /* 256 GB: below the top of the smallest address space a 64-bit ARM Linux
 kernel gives a program (512 GB, with 39-bit addresses: Raspberry Pi OS's
@@ -71,6 +75,7 @@ kernels, Android's) */
 #define XBOX_ADDRESS_SPACE_BASE 0x4000000000ULL /* 256 GB */
 #else
 #define XBOX_ADDRESS_SPACE_BASE 0x10000000000ULL /* 1 TB */
+#endif
 #endif
 #define XBOX_ADDRESS_SPACE_SIZE 0x100000000ULL /* 4 GB */
 
