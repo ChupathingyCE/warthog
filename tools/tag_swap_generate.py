@@ -19,7 +19,13 @@ the code that reads them. So:
   (TAG_BLOCK_GET_ELEMENT(&x->field, i, struct T), and an element pointer
   made from the block's address), so the blocks the game reads are swapped,
   element by element; one it never reads keeps its count, address and
-  definition swapped and its elements as they are.
+  definition swapped and its elements as they are;
+- the tag validator's schemas (port/linux/game/tag_schema_*.c) read more:
+  each group's root structure and each block's element structure they
+  declare are views too, so what the validator checks is in the console's
+  byte order before it checks it. Where a schema's field and the game's
+  overlap with different sizes, the game's is swapped (the schemas'
+  structures are the port's own reading of the tags).
 
 Run on a checkout configured for the Xbox 360 (`ninja xbox360` builds): it
 compiles each game unit once more with the same flags (clang's
@@ -94,6 +100,10 @@ OVERRIDES = {
     **{("struct scenario", palette): "struct scenario_object_palette_entry" for palette in (
         "scenery_palette", "biped_palette", "vehicle_palette", "equipment_palette", "weapon_palette",
         "machine_palette", "control_palette", "light_fixtures_palette", "sound_scenery_palette")},
+    # (a region permutation's markers: the tags' own (name, node index,
+    # rotation, translation; tag_schema_models.c), not the game's runtime
+    # object_marker the code's calls would otherwise give them)
+    ("struct model_region_permutation", "markers"): "struct model_region_permutation_marker",
     # (particle_systems.c reads the types' as these; the system's and the
     # states' are the same blocks of constants)
     **{(owner, "physics_constants"): "struct particle_system_physics_constant" for owner in (
@@ -472,18 +482,30 @@ def combine(old, new) -> tuple:
 
 PLACEHOLDER = re.compile(r"^_?(unused|pad|padding|reserved|garbage|unknown)", re.I)
 
+# a field's rank where views overlap (the lowest wins): the game's named
+# fields, the validator's schemas' (only the port reads them), placeholders
+RANK_GAME, RANK_SCHEMA, RANK_PLACEHOLDER = 0, 1, 2
 
-def resolve(candidates) -> Dict[int, Tuple[int, bool]]:
-    """the fields to swap from candidates, (offset, width, placeholder):
-    where they overlap, a named field wins over a placeholder (unused[],
-    pad), then the wider"""
-    chosen: Dict[int, Tuple[int, bool]] = {}
-    spans: List[Tuple[int, int]] = []
-    for at, width, placeholder in sorted(set(candidates), key=lambda c: (c[2], c[0], -c[1])):
-        if any(start < at + width and at < end for start, end in spans):
+# where a schema's field lost to the game's of another size: (record,
+# offset, the schema's width, the game's width)
+SCHEMA_CONFLICTS: Set[Tuple[str, int, int, int]] = set()
+
+
+def resolve(candidates, record: str = "") -> Dict[int, Tuple[int, int]]:
+    """the fields to swap from candidates, (offset, width, rank): where they
+    overlap, the lower rank wins (a named field over a placeholder, the
+    game's over a schema's), then the wider"""
+    chosen: Dict[int, Tuple[int, int]] = {}
+    spans: List[Tuple[int, int, int]] = []
+    for at, width, rank in sorted(set(candidates), key=lambda c: (c[2], c[0], -c[1])):
+        overlap = [span for span in spans if span[0] < at + width and at < span[1]]
+        if overlap:
+            if rank == RANK_SCHEMA and any(span[2] == RANK_GAME and span[1] - span[0] != width
+                                           for span in overlap):
+                SCHEMA_CONFLICTS.add((record, at, width, overlap[0][1] - overlap[0][0]))
             continue
-        spans.append((at, at + width))
-        chosen[at] = (width, placeholder)
+        spans.append((at, at + width, rank))
+        chosen[at] = (width, rank)
     return chosen
 
 
@@ -491,8 +513,16 @@ class Layouts:
     """record layouts as (size, {offset: (width, placeholder)},
     {offset: block names})"""
 
-    def __init__(self, records: Dict[str, List[Tuple[int, Node]]], elements: Dict[Tuple[str, str], Set[str]]):
+    def __init__(self, records: Dict[str, List[Tuple[int, Node]]], elements: Dict[Tuple[str, str], Set[str]],
+                 ranks: Optional[Dict[str, List[int]]] = None,
+                 overlays: Optional[Dict[Tuple[str, str], Set[str]]] = None):
         self.records = records
+        # members a schema reads as another structure than their own
+        # (TAG_SCHEMA_STRUCT): (owner record, field) -> the structures
+        self.overlays = overlays or {}
+        # each declaration's rank: RANK_SCHEMA when only the schemas declare
+        # it so
+        self.ranks = ranks or {}
         self.elements = elements
         self.memo: Dict[str, tuple] = {}
         self.unknown_types: Set[str] = set()
@@ -523,7 +553,7 @@ class Layouts:
             return self.memo[type_]
         if type_ in SCALARS:
             width = SCALARS[type_]
-            self.memo[type_] = (width, {0: (width, False)} if width > 1 else {}, {})
+            self.memo[type_] = (width, {0: (width, RANK_GAME)} if width > 1 else {}, {})
             return self.memo[type_]
         if " | " in type_:
             self.memo[type_] = self.merged(type_.split(" | "))
@@ -534,12 +564,12 @@ class Layouts:
             blocks: Dict[int, tuple] = {}
             for at, part in parts:
                 _, part_scalars, part_blocks = self.layout(part)
-                for offset, (width, placeholder) in part_scalars.items():
+                for offset, (width, rank) in part_scalars.items():
                     if at + offset < size:
-                        candidates.append((at + offset, width, placeholder))
+                        candidates.append((at + offset, width, rank))
                 for offset, key in part_blocks.items():
                     blocks[at + offset] = combine(blocks.get(at + offset), key)
-            self.memo[type_] = (size, resolve(candidates), blocks)
+            self.memo[type_] = (size, resolve(candidates, type_), blocks)
             return self.memo[type_]
         # every unit's declaration of the record: all of their fields
         self.memo[type_] = (self.record_size(type_), {}, {})
@@ -548,9 +578,10 @@ class Layouts:
             self.size_conflicts.add(f"{type_} {sorted(sizes)}")
         candidates = []
         blocks: Dict[int, tuple] = {}
-        for _, tree in self.records[type_]:
-            self._walk(tree, type_, candidates, blocks)
-        self.memo[type_] = (self.record_size(type_), resolve(candidates), blocks)
+        ranks = self.ranks.get(type_, [])
+        for index, (_, tree) in enumerate(self.records[type_]):
+            self._walk(tree, type_, candidates, blocks, ranks[index] if index < len(ranks) else RANK_GAME)
+        self.memo[type_] = (self.record_size(type_), resolve(candidates, type_), blocks)
         return self.memo[type_]
 
     def merged(self, views: List[str]):
@@ -562,14 +593,16 @@ class Layouts:
                 continue
             view_size, view_scalars, view_blocks = self.layout(view)
             size = max(size, view_size)
-            candidates += [(at, width, placeholder) for at, (width, placeholder) in view_scalars.items()]
+            candidates += [(at, width, rank) for at, (width, rank) in view_scalars.items()]
             for at, key in view_blocks.items():
                 blocks[at] = combine(blocks.get(at), key)
-        return size, resolve(candidates), blocks
+        return size, resolve(candidates, " | ".join(views)), blocks
 
-    def _add_type(self, type_: str, offset: int, owner: str, field: str, candidates, blocks) -> None:
+    def _add_type(self, type_: str, offset: int, owner: str, field: str, candidates, blocks,
+                  rank: int = RANK_GAME) -> None:
         type_ = type_.strip()
-        placeholder = bool(PLACEHOLDER.match(field or ""))
+        if PLACEHOLDER.match(field or ""):
+            rank = RANK_PLACEHOLDER
         array = re.match(r"^(.*)\[(\d+)\]$", type_)
         if array:
             element = array.group(1).strip()
@@ -578,30 +611,30 @@ class Layouts:
                 self.unknown_types.add(element)
                 return
             for index in range(int(array.group(2))):
-                self._add_type(element, offset + index * element_size, owner, field, candidates, blocks)
+                self._add_type(element, offset + index * element_size, owner, field, candidates, blocks, rank)
             return
         if type_ == "struct tag_block":
             blocks[offset] = combine(blocks.get(offset), (owner, field))
             for word in range(3):
-                candidates.append((offset + word * 4, 4, False))
+                candidates.append((offset + word * 4, 4, rank))
             return
         if type_ in SCALARS:
             if SCALARS[type_] > 1:
-                candidates.append((offset, SCALARS[type_], placeholder))
+                candidates.append((offset, SCALARS[type_], rank))
             return
         if type_.endswith("*") or type_.startswith("enum "):
-            candidates.append((offset, 4, placeholder))
+            candidates.append((offset, 4, rank))
             return
         if type_ in self.records:
             _, element_scalars, element_blocks = self.layout(type_)
-            for at, (width, element_placeholder) in element_scalars.items():
-                candidates.append((offset + at, width, placeholder or element_placeholder))
+            for at, (width, element_rank) in element_scalars.items():
+                candidates.append((offset + at, width, max(rank, element_rank)))
             for at, key in element_blocks.items():
                 blocks[offset + at] = combine(blocks.get(offset + at), key)
             return
         self.unknown_types.add(type_)
 
-    def _walk(self, node: Node, owner: str, candidates, blocks) -> None:
+    def _walk(self, node: Node, owner: str, candidates, blocks, rank: int = RANK_GAME) -> None:
         """a record's fields (a union's alternatives all go in: resolve
         keeps the widest named one where they overlap)"""
         for child in node.children:
@@ -609,12 +642,16 @@ class Layouts:
                 self.bitfields.add(f"{owner}.{child.name}")
                 continue
             if child.type == "struct tag_block":
-                self._add_type(child.type, child.offset, owner, child.name, candidates, blocks)
+                self._add_type(child.type, child.offset, owner, child.name, candidates, blocks, rank)
             elif child.children and not re.search(r"\[\d+\]$", child.type):
                 inner_owner = child.type if not child.type.startswith(("struct (", "union (")) else owner
-                self._walk(child, inner_owner, candidates, blocks)
+                self._walk(child, inner_owner, candidates, blocks, rank)
             else:
-                self._add_type(child.type, child.offset, owner, child.name, candidates, blocks)
+                self._add_type(child.type, child.offset, owner, child.name, candidates, blocks, rank)
+            for overlay in sorted(self.overlays.get((owner, child.name), ())):
+                array = re.search(r"(\[\d+\])+$", child.type)
+                self._add_type(overlay + (array.group(0) if array else ""), child.offset, owner, child.name,
+                               candidates, blocks, RANK_SCHEMA)
 
     def element_of(self, key) -> Optional[str]:
         for single in keys_of(key):
@@ -679,16 +716,24 @@ def main() -> int:
     if not units:
         sys.exit("no game units: configure the Xbox 360 build first (python3 configure.py --xdk360 ...)")
     records: Dict[str, List[Tuple[int, Node]]] = {}
+    ranks: Dict[str, List[int]] = {}
     found: Dict[tuple, Set[str]] = {}
     roots: Dict[int, Set[str]] = {}
     calls: Dict[tuple, Set[tuple]] = {}
     with ProcessPoolExecutor(max_workers=args.jobs) as pool:
         for source, data in pool.map(analyze, units):
+            rank = RANK_SCHEMA if is_schema_unit(source) else RANK_GAME
             for name, value in data["records"].items():
                 variants = records.setdefault(name, [])
+                variant_ranks = ranks.setdefault(name, [])
                 signature = node_signature(value[1])
-                if all(node_signature(tree) != signature for _, tree in variants):
+                for index, (_, tree) in enumerate(variants):
+                    if node_signature(tree) == signature:
+                        variant_ranks[index] = min(variant_ranks[index], rank)
+                        break
+                else:
                     variants.append(value)
+                    variant_ranks.append(rank)
             for key, value in data["elements"].items():
                 found.setdefault(key, set()).update(value)
             for key, value in data["roots"].items():
@@ -700,10 +745,16 @@ def main() -> int:
     for key, value in commented_elements().items():
         if not any(t in records or t in SCALARS for t in elements.get(key, ())):
             elements[key] = value
+    # (and what the validator's schemas read)
+    schema_elements, schema_roots, schema_overlays = schema_views(records)
+    for key, value in schema_elements.items():
+        elements.setdefault(key, set()).update(value)
+    for key, value in schema_roots.items():
+        roots.setdefault(key, set()).update(value)
     print(f"{len(units)} units, {len(records)} records, {len(elements)} blocks with element types, "
           f"{len(roots)} groups with root records", file=sys.stderr)
 
-    layouts = Layouts(records, elements)
+    layouts = Layouts(records, elements, ranks, schema_overlays)
     hierarchy: Dict[int, Tuple[int, int]] = {}
     if args.maps:
         for map_path in sorted(args.maps.glob("*.map")):
@@ -718,9 +769,87 @@ def main() -> int:
         check(args.maps, layouts, roots, hierarchy)
     for name in sorted(layouts.size_conflicts):
         print("note: declared with different sizes (the largest is used):", name, file=sys.stderr)
+    for record, at, schema_width, game_width in sorted(SCHEMA_CONFLICTS):
+        print(f"note: {record}: a schema's field of {schema_width} bytes at +0x{at:x} overlaps the game's of "
+              f"{game_width} (the game's is swapped)", file=sys.stderr)
     for name in sorted(layouts.bitfields):
         print("note: bitfield (its bits are not the Xbox's on a big-endian target):", name, file=sys.stderr)
     return 0
+
+
+SCHEMA_UNITS = "port/linux/game/tag_schema"
+# (TAG_SCHEMA_DEFINITION(name, type, fields), or one written out that ends
+# before the type does: { "name", offsetof(type, field), fields })
+SCHEMA_DEFINITION = re.compile(
+    r"struct\s+tag_schema_definition\s+const\s+(\w+)\s*=\s*(?:TAG_SCHEMA_DEFINITION\(\s*\w+\s*,|"
+    r"\{\s*\"\w+\"\s*,\s*offsetof\()\s*((?:struct|union)\s+\w+)\s*,")
+SCHEMA_BLOCK = re.compile(
+    r"TAG_SCHEMA_(?:TOOL_)?BLOCK\(\s*((?:struct|union)\s+\w+)\s*,\s*([\w.]+)\s*,\s*(\w+)\s*,")
+SCHEMA_STRUCT = re.compile(
+    r"TAG_SCHEMA_STRUCT(?:_ARRAY)?\(\s*((?:struct|union)\s+\w+)\s*,\s*([\w.]+)\s*,\s*(\w+)\s*\)")
+SCHEMA_GROUP = re.compile(r"\{\s*'(.{4})'\s*,\s*\{[^}]*\}\s*,\s*&(\w+)\s*\}")
+
+
+def is_schema_unit(source: str) -> bool:
+    return source.startswith(SCHEMA_UNITS)
+
+
+def member_owner(records: Dict[str, List[Tuple[int, Node]]], record: str, path: str) -> Optional[Tuple[str, str]]:
+    """a schema's field path (`transparent.maps`) as the (owner record,
+    field) the layouts name its block by"""
+    owner = record
+    names = path.split(".")
+    for name in names[:-1]:
+        child_type = None
+        for _, tree in records.get(owner, []):
+            for child in tree.children:
+                if child.name == name:
+                    child_type = child.type
+                    break
+            if child_type:
+                break
+        if not child_type:
+            return None
+        if not child_type.startswith(("struct (", "union (")):
+            owner = child_type
+    return owner, names[-1]
+
+
+def schema_views(records: Dict[str, List[Tuple[int, Node]]]) -> Tuple[Dict[Tuple[str, str], Set[str]],
+                                                                         Dict[int, Set[str]],
+                                                                         Dict[Tuple[str, str], Set[str]]]:
+    """the tag validator's schemas' block elements, group roots and members
+    read as other structures: the structures each schema definition names"""
+    texts = [path.read_text(encoding="utf-8", errors="replace")
+             for path in sorted((ROOT / "port" / "linux" / "game").glob("tag_schema_*.c"))]
+    # (static: each file's names are its own; another file's are its
+    # extern ones)
+    every_file: Dict[str, str] = {}
+    each_file: List[Dict[str, str]] = []
+    for text in texts:
+        own = {name: re.sub(r"\s+", " ", type_) for name, type_ in SCHEMA_DEFINITION.findall(text)}
+        each_file.append(own)
+        for name, type_ in own.items():
+            every_file.setdefault(name, type_)
+    elements: Dict[Tuple[str, str], Set[str]] = {}
+    roots: Dict[int, Set[str]] = {}
+    overlays: Dict[Tuple[str, str], Set[str]] = {}
+    for text, own in zip(texts, each_file):
+        definitions = {**every_file, **own}
+        for owner, path, definition in SCHEMA_BLOCK.findall(text):
+            element = definitions.get(definition)
+            key = member_owner(records, re.sub(r"\s+", " ", owner), path)
+            if element and key:
+                elements.setdefault(key, set()).add(element)
+        for owner, path, definition in SCHEMA_STRUCT.findall(text):
+            structure = definitions.get(definition)
+            key = member_owner(records, re.sub(r"\s+", " ", owner), path)
+            if structure and key:
+                overlays.setdefault(key, set()).add(structure)
+        for group, definition in SCHEMA_GROUP.findall(text):
+            if definition in definitions:
+                roots.setdefault(group_value(group), set()).add(definitions[definition])
+    return elements, roots, overlays
 
 
 COMMENTED_BLOCK = re.compile(r"^\s*struct tag_block\s+(\w+)\s*;\s*//\s*(\w+)\s*$")
