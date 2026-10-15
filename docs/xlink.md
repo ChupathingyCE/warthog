@@ -26,7 +26,7 @@ Only the rule and a check (the "small hooks"):
 - At the start, `transport_initialize` (in
   `source/bungie_net/network/transport_endpoint_set_winsock.c`) writes one
   line to `debug.txt`: whether the console's address is Kai's for its MAC,
-  yes or no. What Kai's would be is in the line only with `D:\trace.txt`,
+  yes or no. What Kai's would be is in the line only with `console.trace`,
   since it carries the MAC's last two bytes. The MAC itself is never
   logged.
 
@@ -39,9 +39,9 @@ log gives the address to set).
 
 A setting, off by default, that has the game take Kai's address itself:
 
-1. **The setting.** The console has no config file yet, so it would follow
-   the other console switches: an empty `D:\xlink.txt` beside `default.xbe`
-   (later, the settings screen planned outside the game).
+1. **The setting.** A `[console]` setting in `D:\config.toml` beside the
+   others, `console.xlink` (later, the settings screen planned outside the
+   game).
 2. **Assigning the address.** The title cannot hand XNet an address through
    `XNetStartupParams`; the dashboard does it with XNet's configuration
    calls (`XNetLoadConfigParams`, `XNetConfig`, `XNetSaveConfigParams`).
@@ -58,13 +58,13 @@ A setting, off by default, that has the game take Kai's address itself:
 4. **Coexisting with DHCP and internet play.** Kai's address has no gateway
    or DNS that reach the internet unless the player's network routes
    `10.252.0.0/16`, so XLink mode and internet play (the game list, the
-   tunnel, `D:\bypass_security.txt`) are either/or: with `D:\xlink.txt`,
+   tunnel, `console.bypass_security`) are either/or: with XLink mode on,
    the game list and ONLINE GAMES' joins say "XLink mode: system link
    only". Without it, DHCP or the dashboard's settings stay in charge, as
    now.
 5. **Secure system link.** Kai carries the console's own traffic, so XLink
    mode is for console-to-console system link and should run with XNet's
-   security on (no `bypass_security.txt`), as retail system link did.
+   security on (`console.bypass_security` off), as retail system link did.
    Playing PCs stays the tunnel's job.
 
 ## What it would enable, and what to check

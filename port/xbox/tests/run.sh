@@ -4,9 +4,10 @@
 #
 #   port/xbox/tests/run.sh               the parsers', the screen's words', the
 #                                        settings record and game type state
-#                                        layouts', D:\join.txt's and the memory
+#                                        layouts', console.join's and the memory
 #                                        class's, XLink's and the log tags' tests,
-#                                        and 200,000 mutations
+#                                        the console's config.toml, and 200,000
+#                                        mutations
 #   port/xbox/tests/run.sh --fuzz 300    and libFuzzer for 300 seconds (LLVM's clang)
 #   port/xbox/tests/run.sh --fetch       and the fetch of the real list, over the
 #                                        host's sockets (warthog.milenko.org)
@@ -43,6 +44,18 @@ $CC -std=c89 -pedantic -Wall -Wextra -Werror $SAN port/xbox/tests/log_tag_test.c
 	-o "$OUT/log_tag_test"
 "$OUT/log_tag_test"
 "$OUT/xlink_test"
+# D:\config.toml: port_config.c as the console builds it, beside a stand-in
+# for its platform.h, run in a folder where "d:\config.toml" is a name
+rm -rf "$OUT/config"
+mkdir -p "$OUT/config/run"
+cp port/linux/src/port_config.c "$OUT/config/port_config.c"
+cp port/xbox/tests/config_platform.h "$OUT/config/platform.h"
+# (the parser itself without the sanitizers: its offsetof by a null pointer
+# is undefined behavior they report, which every compiler takes as meant)
+$CC -std=gnu11 -O1 -w -c port/third_party/tomlc17/tomlc17.c -o "$OUT/config/tomlc17.o"
+$CC -std=gnu11 -Wall -Wextra -Werror $SAN -DHALO_XBOX_CONSOLE -Iport/linux/src -Iport/third_party/tomlc17 \
+	port/xbox/tests/config_test.c "$OUT/config/port_config.c" "$OUT/config/tomlc17.o" -o "$OUT/config/config_test"
+(cd "$OUT/config/run" && ../config_test new && ../config_test given)
 while [ $# -gt 0 ]; do
 	case "$1" in
 	--fuzz)

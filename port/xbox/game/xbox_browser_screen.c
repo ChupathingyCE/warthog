@@ -16,8 +16,9 @@ joins it as the desktop builds' screen does: through its invite (the list's
 first field), internet play's tunnel to its host (port/xbox/src/
 xbox_p2p.c, the desktop builds' p2p.c) is made, and once the host's game
 is advertised through it, the game is joined and its lobby opens. Y joins
-the invite in D:\join.txt the same way (port/xbox/src/xbox_direct_join.c),
-for testing. Internet play needs D:\bypass_security.txt.
+the invite in console.join (D:\config.toml) the same way (port/xbox/src/
+xbox_direct_join.c), for testing. Internet play needs
+console.bypass_security.
 
 Memory: the screen's own state is the list's order and a few numbers; the
 list itself is the fetch's one copy (xbox_game_list_get).
@@ -250,8 +251,9 @@ static void join_invite(
 
 	if (!xbox_p2p_online())
 	{
-		set_status("Online play needs D:\\bypass_security.txt.");
-		error(_error_log, "online games: no internet play without D:\\bypass_security.txt");
+		set_status("Online play needs console.bypass_security.");
+		error(_error_log, "online games: no internet play without console.bypass_security (or with network.online "
+			"off) in D:\\config.toml");
 		return;
 	}
 	if (!global_network_game_client_get())
@@ -427,9 +429,9 @@ void browser_screen_process(
 
 					ui_play_audio_feedback_sound(_browser_sound_forward);
 					if (xbox_direct_join_invite(invite))
-						join_invite(invite, "the game in D:\\join.txt");
+						join_invite(invite, "the game in console.join");
 					else
-						set_status("D:\\join.txt holds no invite.");
+						set_status("console.join holds no invite.");
 				}
 				break;
 			case _gamepad_analog_button_x:
@@ -733,7 +735,7 @@ void browser_screen_render(
 		draw_string_set_draw_mode(font, NONE, _justify_center, 0, &text_color);
 		draw_string_and_hack_in_icons(&bounds, &bounds, NULL, 0,
 			browser_screen.connecting ? L"Connecting...   %b-button Stop" :
-				L"%a-button Join   %x-button Refresh   %y-button join.txt   %b-button Back", FALSE);
+				L"%a-button Join   %x-button Refresh   %y-button console.join   %b-button Back", FALSE);
 	}
 }
 

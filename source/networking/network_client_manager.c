@@ -2745,7 +2745,7 @@ static void network_game_client_update_precache_status(
 }
 
 #ifdef HALO_XBOX_CONSOLE
-/* port: the console joins the host in D:\join.txt directly (port/xbox/src/
+/* port: the console joins the host in console.join directly (port/xbox/src/
 xbox_direct_join.c): once each time System Link searches, without the
 host's advertisement, which a host broadcasts only on its own network */
 int xbox_direct_join_address(unsigned long *address);
@@ -2769,7 +2769,7 @@ static boolean network_game_client_direct_join(
 	transport_get_nonce(direct_game.nonce, sizeof(direct_game.nonce));
 	csmemset(&join_parameters, 0, sizeof(join_parameters));
 	network_game_generate_join_game_token(join_parameters.join_token);
-	network_event("cross-play: joining the host in D:\\join.txt directly");
+	network_event("cross-play: joining the host in console.join directly");
 	return network_game_client_initiate_join_game(client, &direct_game, &join_parameters, &server_address);
 }
 #endif
@@ -3382,7 +3382,7 @@ long network_game_client_join_invite_host(
 	long game_index;
 
 #ifdef HALO_XBOX_CONSOLE
-	/* port: with D:\trace.txt (port/xbox/src/xbox_port.c), why the
+	/* port: with console.trace (port/xbox/src/xbox_port.c), why the
 	console's join is not under way yet, every 5 seconds */
 	{
 		extern void platform_log(char const *format, ...);
@@ -3410,7 +3410,7 @@ long network_game_client_join_invite_host(
 	if (!network_game_client_invite_identifier(invite, identifier))
 		return -1;
 #ifdef HALO_XBOX_CONSOLE
-	/* port: with D:\trace.txt, what is looked for, and what has been
+	/* port: with console.trace, what is looked for, and what has been
 	advertised, every 5 seconds while the console waits (its internet
 	play's last hop) */
 	{

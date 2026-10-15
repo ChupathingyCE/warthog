@@ -18,15 +18,15 @@ toolchain ever lacks both calls.
 What follows from the class: the texture cache (the one cache whose size
 the console now sets at run time). It stays the Xbox's 22 MB everywhere by
 default: the Xbox's maps fit it. A 128 MB console takes 44 MB, a 256 MB one
-64 MB, with an empty D:\large_caches.txt beside default.xbe, kept in the
-low 128 MB, which the GPU reaches. On a 64 MB console that file brings a
+64 MB, with console.large_caches in D:\config.toml (xbox_config.h), kept in
+the low 128 MB, which the GPU reaches. On a 64 MB console that setting brings a
 message and the Xbox's cache, never a crash. A 64 MB console whose free
 memory cannot hold the Xbox's caches and still leave Direct3D and the heap
 theirs gets a smaller texture cache (down to 19 MB) rather than a failed
 start.
 
-An empty D:\memory_64.txt makes a devkit or upgraded console act as a stock
-one (simulate_stock_memory), to test the 64 MB path on a 128 MB devkit.
+console.simulate_64mb makes a devkit or upgraded console act as a stock one
+(simulate_stock_memory), to test the 64 MB path on a 128 MB devkit.
 
 From the first line of main (xbox_memory_startup), each step of the start
 is written to D:\debug.txt at once ("boot:" lines: the memory, each cache
@@ -73,6 +73,9 @@ int xbox_memory_delta_class_of(int memory_class)
 #include <stdarg.h>
 #include <stdio.h>
 #include <string.h>
+
+#include "../include/xbox_config.h"
+#include "../../linux/src/port_config.h"
 
 unsigned long __cdecl DbgPrint(const char *format, ...);
 void platform_log(const char *format, ...);
@@ -122,7 +125,7 @@ enum
 	buffer), and the game's and the system's own allocations */
 	_free_after_caches = 0x800000,
 
-	/* a stock console's memory, which D:\memory_64.txt makes a bigger one
+	/* a stock console's memory, which console.simulate_64mb makes a bigger one
 	keep to */
 	_stock_memory = 64UL << 20,
 	_simulation_chunk = 0x100000,
@@ -151,16 +154,6 @@ static struct
 	unsigned long lowest_free;
 	long update_count;
 } memory;
-
-static int file_exists(const char *path)
-{
-	FILE *file = fopen(path, "r");
-
-	if (!file)
-		return 0;
-	fclose(file);
-	return 1;
-}
 
 void xbox_boot_log(const char *format, ...)
 {
@@ -217,7 +210,7 @@ unsigned long xbox_memory_free(void)
 	return available;
 }
 
-/* D:\memory_64.txt: a console with more than 64 MB acts as a stock one. All
+/* console.simulate_64mb: a console with more than 64 MB acts as a stock one. All
 of its memory above the first 64 MB (physical addresses from 0x4000000) is
 taken and kept for the whole run, so that every later allocation (the
 caches, Direct3D's, the heap's) has only what a stock console has. A
@@ -242,7 +235,7 @@ static void simulate_stock_memory(void)
 			break;
 		chunk >>= 1;
 	}
-	xbox_boot_log("memory: D:\\memory_64.txt: acting as a 64 MB console, %lu KB above 64 MB held (of %lu KB)",
+	xbox_boot_log("memory: console.simulate_64mb: acting as a 64 MB console, %lu KB above 64 MB held (of %lu KB)",
 		memory.simulation_held >> 10, wanted >> 10);
 }
 
@@ -252,7 +245,7 @@ static void memory_read(void)
 		return;
 	memory.known = 1;
 	status_read(&memory.total, &memory.available, &memory.source);
-	if (file_exists("d:\\memory_64.txt"))
+	if (config_boolean("console.simulate_64mb"))
 	{
 		simulate_stock_memory();
 		status_read(&memory.total, &memory.available, &memory.source);
@@ -261,7 +254,7 @@ static void memory_read(void)
 	else
 		memory.memory_class = xbox_memory_class_of(memory.total);
 	memory.lowest_free = memory.available;
-	memory.large_caches = file_exists("d:\\large_caches.txt");
+	memory.large_caches = config_boolean("console.large_caches");
 
 	memory.texture_cache_size = _texture_cache_stock;
 	if (memory.large_caches && memory.memory_class == _xbox_memory_class_128mb)
@@ -273,7 +266,7 @@ static void memory_read(void)
 		if (memory.large_caches)
 		{
 			xbox_memory_require(_xbox_memory_class_128mb,
-				L"Larger caches (D:\\large_caches.txt) need\r\na console with 128 MB of memory.\r\n"
+				L"Larger caches (console.large_caches) need\r\na console with 128 MB of memory.\r\n"
 				L"This one has 64 MB, so the game\r\nkeeps the Xbox's own.");
 		}
 		/* a stock console (or one that cannot say): the Xbox's cache if
@@ -298,14 +291,16 @@ static void memory_read(void)
 		*(unsigned long const *)0x0001010CUL >> 10, memory.memory_class);
 	xbox_boot_log("memory: texture cache %lu KB%s", memory.texture_cache_size >> 10,
 		memory.texture_cache_reduced ? " (less than the Xbox's 22 MB: what this console has free)" :
-		memory.texture_cache_size != _texture_cache_stock ? " (raised: D:\\large_caches.txt)" :
-		memory.memory_class > _xbox_memory_class_64mb ? " (the Xbox's; D:\\large_caches.txt raises it)" :
+		memory.texture_cache_size != _texture_cache_stock ? " (raised: console.large_caches)" :
+		memory.memory_class > _xbox_memory_class_64mb ? " (the Xbox's; console.large_caches raises it)" :
 		" (the Xbox's)");
 }
 
 void xbox_memory_startup(void)
 {
 	xbox_boot_log("start (built %s %s)", __DATE__, __TIME__);
+	/* (the settings first: the memory's are among them) */
+	xbox_config_startup();
 	memory_read();
 }
 

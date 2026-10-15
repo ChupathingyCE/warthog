@@ -104,8 +104,8 @@ the console has no TLS) and the game logs it, to the debug monitor as
 waits on it. Multiplayer's ONLINE GAMES shows it (`game/xbox_browser_screen.c`).
 
 - `src/xbox_game_list_fetch.c`: HTTP/1.0 over XNet's Winsock. The host is
-  looked up with `XNetDnsLookup`; if it does not resolve, `D:\game_list.txt`
-  names another, one line: a host or an IPv4 address, `:port` optional
+  looked up with `XNetDnsLookup`; if it does not resolve,
+  `console.game_list_server` names another: a host or an IPv4 address, `:port` optional
   (the request still says `Host: warthog.milenko.org` for an address).
   The response is read to the server's close or its Content-Length, at
   most 64 KB, each wait bounded (15 seconds in all); three tries.
@@ -120,21 +120,46 @@ waits on it. Multiplayer's ONLINE GAMES shows it (`game/xbox_browser_screen.c`).
   the host's sockets.
 
 XNet speaks only to other consoles unless it starts insecure, so the list,
-like play with the PCs, needs an empty `D:\bypass_security.txt`.
+like play with the PCs, needs `console.bypass_security = true`.
 
-## Files beside default.xbe
+## config.toml
 
-The console has no config file yet; these switches are empty files (or one
-line) in the game's folder (`D:\`):
+The console's settings are in `D:\config.toml`, beside `default.xbe`: the
+desktop builds' file (`port/linux/src/port_config.c`, its TOML parser and
+its table of settings), with the settings marked for the console
+(`_platform_xbox`) and no environment variables. On the first start
+without it the game writes it with every console setting commented out at
+its default, each with its help; a setting is chosen by taking out its
+`# ` and changing the value. The file is read when the game starts.
+`src/xbox_config.c` is the console's side (`xbox_config.h`), and
+`tools/xbox_package.py` writes the file with `console.bypass_security`
+(and `console.game_list_server` with `--game-list-server`).
 
-| File | What it does |
-|---|---|
-| `bypass_security.txt` | XNet starts insecure: the internet, the game list and play with PCs need it (`tools/xbox_package.py` writes it) |
-| `game_list.txt` | the list's server (host or address, `:port` optional) when `warthog.milenko.org` does not resolve |
-| `join.txt` | a host's LAN address (System Link joins it directly) or an invite (ONLINE GAMES' Y joins it) |
-| `trace.txt` | the bring-up traces: the main loop each second, every hop of an internet join, the advertisements seen, other hosts only as `enet#` tags (salted per run), never their Ethernet addresses; and XLink Kai's address for the console |
-| `large_caches.txt` | on a 128 MB console, a 44 MB texture cache (64 MB on a 256 MB one); on a 64 MB console, a message and the Xbox's 22 MB |
-| `memory_64.txt` | a 128 MB console (a devkit) acts as a stock 64 MB one: its memory above 64 MB is taken at the start and kept, and it is in the 64 MB class |
+The console's own, in `[console]`:
+
+| Setting | Default | What it does |
+|---|---|---|
+| `bypass_security` | `false` | XNet starts insecure: the internet, the game list and play with PCs need it (`tools/xbox_package.py` writes `true` unless `--secure`); internet play (`network.online`) is off without it |
+| `game_list_server` | `""` | the list's server (host or address, `:port` optional) when `warthog.milenko.org` does not resolve |
+| `join` | `""` | a host's LAN address (System Link joins it directly) or an invite (ONLINE GAMES' Y joins it) |
+| `trace` | `false` | the bring-up traces: the main loop each second, every hop of an internet join, the advertisements seen, other hosts only as `enet#` tags (salted per run), never their Ethernet addresses; and XLink Kai's address for the console |
+| `large_caches` | `false` | on a 128 MB console, a 44 MB texture cache (64 MB on a 256 MB one); on a 64 MB console, a message and the Xbox's 22 MB |
+| `simulate_64mb` | `false` | a 128 MB console (a devkit) acts as a stock 64 MB one: its memory above 64 MB is taken at the start and kept, and it is in the 64 MB class |
+
+And the desktop builds' that apply on the console: `display.direct_camera`,
+`audio.music_volume`, `audio.effects_volume`, `game.console_log`,
+`network.online`, `network.tunnel_port`, `network.brokers_file`,
+`network.stun_servers`, `debug.telnet_console`, `debug.telnet_console_port`
+and the `debug.network_test` settings (port/linux/README.md has them).
+Another setting the shared code reads is empty, 0 or false on the console,
+as before it had the file.
+
+The switch files that came before it are still read for this release, each
+logged as deprecated in `debug.txt` ("D:\memory_64.txt is deprecated, use
+console.simulate_64mb in config.toml"): `bypass_security.txt`,
+`memory_64.txt`, `large_caches.txt` and `trace.txt` (an empty file turns
+the setting on), and `join.txt` and `game_list.txt` (one line, used when
+the setting is empty).
 
 ## Memory
 
@@ -146,7 +171,7 @@ upgrade) or 256 MB (the bigger mods). The XBE does not limit itself to 64 MB
 reports it.
 
 The class sets only what the console can safely change at run time: the
-texture cache (`large_caches.txt`, above). The game's limits (players,
+texture cache (`console.large_caches`, above). The game's limits (players,
 machines, objects, the game state) stay the Xbox's on every console, so all
 of them play the same game; docs/cross-play.md has why the bigger game
 state needs more than a bigger console. `xbox_memory_require` is how a
@@ -172,14 +197,14 @@ Every step of the start is in `debug.txt` before the game's own log opens
 image's size, each cache as it is made, the first Direct3D device, each heap
 allocation of 256 KB or more and any that fails, and the free memory at the
 main loop; later, `memory: N KB free (a new low)` as a map loads or a match
-peaks. `memory_64.txt` (above) runs that path on a devkit.
+peaks. `console.simulate_64mb` (above) runs that path on a devkit.
 
 ## XLink Kai
 
 At the start `debug.txt` says whether the console's address is XLink
 Kai's for its MAC: yes or no. Kai's address itself (`10.252.EE.FF`, mask
 `255.255.0.0`, from the MAC's last two bytes) is logged only with
-`D:\trace.txt`. The "XLink mode" that would set it is a design
+`console.trace`. The "XLink mode" that would set it is a design
 (docs/xlink.md).
 
 ## Status
@@ -187,8 +212,7 @@ Kai's for its MAC: yes or no. Kai's address itself (`10.252.EE.FF`, mask
 The build booted on a development kit on October 4: the menus at a steady
 30 fps, profiles, DHCP, the game list and ONLINE GAMES. Music played from
 October 13 (until then the console had no `audio.music_volume` or
-`audio.effects_volume` setting, so both read as 0; `src/xbox_port.c` has
-them at 1.0): the menu music and the campaign's music and effects play on a
+`audio.effects_volume` setting, so both read as 0; they are now 1.0): the menu music and the campaign's music and effects play on a
 development kit. The same day it joined a [D] dedicated server through
 ONLINE GAMES.
 The October 2 build also started on a modified retail console. The code is
@@ -204,12 +228,12 @@ a message. Known:
   and Slayer's state into its 16 slots, and leaves a game that grows past
   them as a full one (docs/cross-play.md, "What is built"). It joins an
   internet game by its invite from ONLINE GAMES (A on a listed game, Y for
-  the invite in `D:\join.txt`), through the desktop builds' tunnel
+  the invite in `console.join`), through the desktop builds' tunnel
   (`port/linux/src/p2p*.c`, built as they are; `src/xbox_p2p.c` and
   `src/xbox_winsock_hooks.c` are its platform), with
-  `D:\bypass_security.txt`; that join is built but not yet seen working on
+  `console.bypass_security`; that join is built but not yet seen working on
   a console. On a LAN it finds a PC host in System Link, or joins the host
-  whose IPv4 address is in `D:\join.txt` (`src/xbox_direct_join.c`). It
+  whose IPv4 address is in `console.join` (`src/xbox_direct_join.c`). It
   does not yet host the PCs, and its object array (2,048) is the Xbox's:
   `debug.txt` logs how high a PC host's object indices go ("cross-play:"
   lines).

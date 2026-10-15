@@ -35,7 +35,7 @@ int xbox_memory_class(void);
 
 /* the texture cache's size (cache/physical_memory_map.c and
 xbox_texture_cache.c), and the highest physical address it may have: the
-Xbox's 22 MB, unless a 128 MB console has D:\large_caches.txt, or a 64 MB
+Xbox's 22 MB, unless a 128 MB console has console.large_caches, or a 64 MB
 console has too little free for it */
 unsigned long xbox_memory_texture_cache_size(void);
 unsigned long xbox_memory_texture_cache_maximum_address(void);
@@ -46,7 +46,8 @@ and the caller goes on without the feature. Never a crash */
 int xbox_memory_require(int memory_class, const wchar_t *text);
 
 /* the first thing main does (shell_xbox.c): the memory read and logged
-(and D:\memory_64.txt's simulation set up) before anything is allocated */
+(and console.simulate_64mb's simulation set up, after D:\config.toml is
+read: xbox_config.h) before anything else is allocated */
 void xbox_memory_startup(void);
 
 /* a line straight to D:\debug.txt ("boot: "), opened and closed for each,

@@ -387,7 +387,7 @@ int game_list_parse(const char *text, unsigned long size, struct game_list *list
 	return GAME_LIST_OK;
 }
 
-/* ---------- D:\game_list.txt */
+/* ---------- console.game_list_server (D:\config.toml) */
 
 int game_list_parse_server(const char *text, unsigned long size, char *host, int host_size, unsigned short *port)
 {

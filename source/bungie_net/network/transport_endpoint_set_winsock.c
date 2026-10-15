@@ -284,6 +284,8 @@ typedef struct
 	char reserved[512];
 } XNetConfigStatus;
 long __stdcall XNetGetConfigStatus(XNetConfigStatus *status);
+/* (D:\config.toml's, port/linux/src/port_config.h) */
+int config_boolean(char const *name);
 #endif
 
 short transport_initialize(
@@ -318,13 +320,21 @@ short transport_initialize(
 			(link_status & XNET_ETHERNET_LINK_FULL_DUPLEX) ? " in full-duplex mode" : "",
 			(link_status & XNET_ETHERNET_LINK_HALF_DUPLEX) ? " in half-duplex mode" : "");
 
+#ifdef HALO_XBOX_CONSOLE
+		/* port: console.bypass_security in D:\config.toml (port/xbox/src/
+		xbox_config.c, which takes the old D:\bypass_security.txt for one
+		release) */
+		if (config_boolean("console.bypass_security"))
+#else
 		bypass_file = fopen("d:\\bypass_security.txt", "r");
 		if (bypass_file)
+#endif
 		{
 			error(_error_silent, "XNET_STARTUP_BYPASS_SECURITY [ON]");
 			startup_params.cfgFlags |= XNET_STARTUP_BYPASS_SECURITY;
+#ifndef HALO_XBOX_CONSOLE
 			fclose(bypass_file);
-#ifdef HALO_XBOX_CONSOLE
+#else
 			/* port: internet play over plain IP needs room for DHCP, DNS and
 			TCP that secure system link never did: the pool and queues a
 			dashboard uses, and XNet's own security tables left at their
@@ -406,7 +416,7 @@ short transport_initialize(
 			(10.252.EE.FF, port/xbox/src/xbox_xlink.c, docs/xlink.md), so a
 			player setting up system link over Kai sees what to set: yes or
 			no, and Kai's address (from the MAC's last two bytes) only with
-			D:\trace.txt; never the MAC itself */
+			console.trace; never the MAC itself */
 			extern int xbox_xlink_report(unsigned char const *mac, unsigned long address, int detailed, char *text,
 				int size);
 			extern int xbox_trace_enabled(void);

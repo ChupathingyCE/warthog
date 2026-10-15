@@ -69,9 +69,9 @@ other copyrighted game data, and we don't link to them.
 
 | You want to | Do this |
 | --- | --- |
-| Join a game online | **Multiplayer → ONLINE GAMES**, pick a game, press **A**. Needs `bypass_security.txt` (below), which the packaging script writes. |
+| Join a game online | **Multiplayer → ONLINE GAMES**, pick a game, press **A**. Needs `bypass_security = true` in `config.toml` (below), which the packaging script writes. |
 | Join a game on your network | **Multiplayer → System Link**, as on the disc. PC hosts on your network show up too. |
-| Join one host directly | Put its LAN address (`192.168.1.20`) or its invite link in `D:\join.txt`; System Link joins the address, ONLINE GAMES' **Y** the invite. |
+| Join one host directly | Put its LAN address (`join = "192.168.1.20"`) or its invite link in `config.toml`'s `[console]`; System Link joins the address, ONLINE GAMES' **Y** the invite. |
 | See your stats | Not yet on the console. |
 
 What to know:
@@ -90,20 +90,43 @@ What to know:
 
 ## Settings on the console
 
-The console has no settings file yet. Its switches are small text files in
-the game's folder (`D:\`, beside `default.xbe`): an empty file turns a
-switch on.
+The console's settings are in `config.toml` in the game's folder (`D:\`,
+beside `default.xbe`), the same kind of file as the PC builds'. The first
+start writes it with every setting and what it does, each commented out at
+its default: take out the `# ` in front of one and change its value, then
+restart the game. Edit it over FTP, or on the computer before copying the
+folder over.
 
-| File | What it does |
+```toml
+[console]
+bypass_security = true
+join = "192.168.1.20"
+```
+
+| Setting (`[console]`) | What it does |
 | --- | --- |
-| `bypass_security.txt` | Starts the network in its open mode, which the internet and the PC builds need. The packaging script writes it; `--secure` leaves it out for console-only System Link. |
-| `game_list.txt` | One line, a host or address (`:port` optional): where to get the game list if `warthog.milenko.org` doesn't resolve. |
-| `join.txt` | One line: a host's LAN address, or an invite (`halo://join/…`). |
-| `trace.txt` | Detailed network traces in `debug.txt`, for reporting a join that fails. Other hosts appear only as tags (`enet#` and six hex digits), never by their network cards' addresses; with it, `debug.txt` also gives XLink Kai's address for the console. |
-| `large_caches.txt` | On a 128 MB console, a bigger texture cache (44 MB; 64 MB on a 256 MB console). On a stock 64 MB console it shows a message and keeps the Xbox's own. |
-| `memory_64.txt` | For testing: a 128 MB console (or devkit) acts as a stock 64 MB one. |
-| `brokers.txt` | The signalling servers internet play uses, one `host:port` a line, if the built-in ones can't be reached. |
-| `xlink.txt` | Planned: XLink Kai addressing ([docs/xlink.md](docs/xlink.md)). Today `debug.txt` says whether the console's address is already Kai's (yes or no; Kai's address itself with `trace.txt`). |
+| `bypass_security` | `true` starts the network in its open mode, which the internet and the PC builds need. The packaging script writes `true`; `--secure` writes `false` for console-only System Link. |
+| `game_list_server` | A host or address (`:port` optional): where to get the game list if `warthog.milenko.org` doesn't resolve. |
+| `join` | A host's LAN address, or an invite (`halo://join/…`). |
+| `trace` | `true` writes detailed network traces to `debug.txt`, for reporting a join that fails. Other hosts appear only as tags (`enet#` and six hex digits), never by their network cards' addresses; with it, `debug.txt` also gives XLink Kai's address for the console. |
+| `large_caches` | `true` gives a 128 MB console a bigger texture cache (44 MB; 64 MB on a 256 MB console). On a stock 64 MB console it shows a message and keeps the Xbox's own. |
+| `simulate_64mb` | For testing: `true` makes a 128 MB console (or devkit) act as a stock 64 MB one. |
+
+A few of the PC builds' settings work on the console too (music and effects
+volume, `network.online`, `network.brokers_file` and the other network
+ones); `port/xbox/README.md` lists them.
+
+`brokers.txt` beside `default.xbe` still lists the signalling servers
+internet play uses, one `host:port` a line, if the built-in ones can't be
+reached. An XLink Kai mode is planned
+([docs/xlink.md](docs/xlink.md)). Today `debug.txt` says whether the
+console's address is already Kai's (yes or no; Kai's address itself with
+`trace`).
+
+The old switch files (`bypass_security.txt`, `memory_64.txt`,
+`large_caches.txt`, `trace.txt`, `join.txt`, `game_list.txt`) still work
+in this release, and `debug.txt` says which setting replaces each. They
+will be dropped in the next one.
 
 The game writes its log to `D:\debug.txt`; attach it to bug reports.
 
@@ -147,8 +170,8 @@ python3 tools/xbox_package.py --maps /path/to/your/maps --out ~/Downloads/Wartho
 ```
 
 `xbox_package.py` lays out `default.xbe` and your own `maps/` as one folder
-for the console's hard disk, with an empty `bypass_security.txt` (`--secure`
-leaves it out). Copy it to the console (FTP on a modified console), for
+for the console's hard disk, with a `config.toml` that sets
+`bypass_security = true` (`--secure` sets it `false`). Copy it to the console (FTP on a modified console), for
 example to `E:\Games\Warthog\`, and start `default.xbe`.
 [docs/building.md](docs/building.md) has every step, the versions tested
 and the options. `xbox360`, `wiiu` and `switch` build the other consoles'
@@ -178,7 +201,7 @@ so we can coordinate, and see [CONTRIBUTING.md](CONTRIBUTING.md).
 logs `halo:` lines to the debug monitor (XBDM) and writes `D:\debug.txt`.
 It is a debug build: an assertion stops it and shows the error on screen
 and in `debug.txt`. A watchdog reports a main loop that stalls;
-`D:\trace.txt` turns on the bring-up traces.
+`trace = true` in `D:\config.toml` turns on the bring-up traces.
 
 **xemu.** vsod99's fork of OpenCE (`vsod99/halo-ce-universal`, branch
 `xbox-backport`, CC0) has a development loop, `tools/xbox_dev.py`: it packs
@@ -187,7 +210,7 @@ ISO and xemu steps work for any XBE. xemu needs the user's own MCPX boot
 ROM, flash image and hard disk image.
 
 **On the host.** `port/xbox/tests/run.sh` builds the console's parsers
-(the game list, the settings record's fold, `join.txt`, the memory class,
+(the game list, the settings record's fold, `console.join`, the memory class,
 XLink's addressing) on the computer under AddressSanitizer, with a fuzzer;
 `--xbox` adds the Xbox build's own checks.
 
@@ -211,7 +234,7 @@ console. The field-by-field analysis and the plan are in
 
 Internet games go through the PCs' own tunnel (`port/linux/src/p2p.c`,
 built for the console as a joiner), which needs XNet in its open mode
-(`D:\bypass_security.txt`). Memory detection and the console's switches are in
+(`console.bypass_security`). Memory detection and the console's settings are in
 `port/xbox/README.md`; XLink Kai is in
 [docs/xlink.md](docs/xlink.md).
 

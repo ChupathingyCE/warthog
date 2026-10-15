@@ -46,8 +46,8 @@ port/xbox/tests/run.sh --xbox
 
 This runs the console's parsers and rules on your computer under
 AddressSanitizer and UndefinedBehaviorSanitizer: the game list, the
-settings record's fold, `join.txt`, the memory class, XLink's addressing
-and the log's tags. `--xbox` adds the Xbox build's own checks (it needs
+settings record's fold, `console.join`, the console's `config.toml`, the
+memory class, XLink's addressing and the log's tags. `--xbox` adds the Xbox build's own checks (it needs
 `configure.py` to have been run with `--xbox-d3d8`). `--fuzz SECONDS` adds a
 libFuzzer run (LLVM's clang), and `--fetch` fetches the real game list over
 your computer's network.
@@ -60,11 +60,12 @@ python3 tools/xbox_package.py --maps /path/to/your/maps --out ~/Downloads/Wartho
 
 This lays out one folder for the console's hard disk: `default.xbe`, your
 own `maps/` (`*.map` and `loading.tga`, from your own disc; hard links
-where it can, so they take no more space) and an empty
-`bypass_security.txt`, which online play and play with the PC builds need.
-`--secure` leaves that file out, for System Link between consoles only.
-`--game-list-server HOST[:PORT]` writes a `game_list.txt`, for a console
-whose DNS can't find the list's host. The folder is for your own console:
+where it can, so they take no more space) and a `config.toml` with
+`bypass_security = true`, which online play and play with the PC builds
+need. `--secure` writes `false`, for System Link between consoles only.
+`--game-list-server HOST[:PORT]` writes `game_list_server`, for a console
+whose DNS can't find the list's host. A `config.toml` already in the folder
+keeps its other settings; the game adds the rest when it starts. The folder is for your own console:
 don't share it, because it holds your maps.
 
 ## Onto the console
@@ -81,6 +82,6 @@ on a development kit.
    On a development kit, the debug monitor (XBDM) shows its `halo:` lines
    too.
 
-The switches beside `default.xbe` (`bypass_security.txt`, `join.txt`,
-`trace.txt` and the rest) are in the README, "Settings on the console".
+The settings in `D:\config.toml` (`bypass_security`, `join`, `trace` and
+the rest) are in the README, "Settings on the console".
 xemu (128 MB, NAT) can run the build too: README, "Testing".
