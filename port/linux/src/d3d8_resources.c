@@ -242,6 +242,13 @@ static void lock_level(const DWORD *resource, unsigned long face, unsigned long 
 	xgpu_texture_describe(resource[3], resource[4], &description);
 	pitch = xgpu_texture_level_pitch(&description, level);
 	bits = (char *)resource_data(resource[1]);
+#ifdef HALO_XBOX360
+	/* (the console has no page faults to see the writes by: a lock is one,
+	to the face it locks) */
+	if (bits)
+		memory_watch_prepare_write(bits + face * xgpu_texture_face_size(&description),
+			xgpu_texture_face_size(&description));
+#endif
 	if (bits)
 		bits += face * xgpu_texture_face_size(&description) + xgpu_texture_level_offset(&description, level);
 	if (rectangle && bits)
@@ -285,6 +292,10 @@ void WINAPI D3DVolumeTexture_LockBox(D3DVolumeTexture *texture, UINT level, D3DL
 	row_pitch = xgpu_texture_level_pitch(&description, level);
 	slice = row_pitch * level_dimension(description.height, level);
 	bits = (char *)resource_data(resource[1]);
+#ifdef HALO_XBOX360
+	if (bits)
+		memory_watch_prepare_write(bits, xgpu_texture_face_size(&description));
+#endif
 	if (bits)
 		bits += xgpu_texture_level_offset(&description, level);
 	if (box && bits)
@@ -393,6 +404,11 @@ void WINAPI D3DVertexBuffer_Lock(D3DVertexBuffer *buffer, UINT offset, UINT size
 	(void)size;
 	(void)flags;
 	*data = buffer->Data ? (BYTE *)resource_data(buffer->Data) + offset : NULL;
+#ifdef HALO_XBOX360
+	/* (a lock is a write: the console has no page faults to see it by) */
+	if (*data && size)
+		memory_watch_prepare_write(*data, size);
+#endif
 }
 
 HRESULT WINAPI D3DDevice_CreateIndexBuffer(UINT length, DWORD usage, D3DFORMAT format, D3DPOOL pool, D3DIndexBuffer **result)

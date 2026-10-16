@@ -11,12 +11,13 @@ them has run anything on hardware.
 | Console | Folder | `ninja` target | Toolchain | Status |
 |---|---|---|---|---|
 | Original Xbox | `port/xbox` | `xbox` | clang, lld-link, [OXDK](https://github.com/MrMilenko/OXDK), the user's 5933 XDK | plays: menus, game list, joins PC hosts |
-| Xbox 360 | `port/xbox360` | `xbox360` | [OXDK360](https://github.com/MrMilenko/OXDK360), llvm-xenon, the user's 360 SDK (`XDK_DIR`) | planned; stub, not built here yet |
+| Xbox 360 | `port/xbox360` | `xbox360` | [OXDK360](https://github.com/MrMilenko/OXDK360), llvm-xenon, the user's 360 SDK (`XDK_DIR`) | the game builds into a XEX that starts on a development kit and stops early in its start-up (`port/xbox360/README.md`); no renderer or sound yet |
 | Wii U | `port/wiiu` | `wiiu` | devkitPPC, wut | planned; stub builds, game not built |
 | Switch | `port/switch` | `switch` | devkitA64, libnx | thelinkin3000's port, being brought in; the stub here until it is |
 
 A target exists only when `configure.py` finds its toolchain (the Xbox 360's
-needs the user's SDK as well), so a desktop checkout configures as before.
+needs the user's SDK as well; without it, `ninja xbox360` says what is
+missing), so a desktop checkout configures as before.
 
 ## What each console needs before it plays
 

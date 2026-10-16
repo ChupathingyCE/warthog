@@ -215,7 +215,14 @@ static unsigned char *png_decode(const unsigned char *data, unsigned long size, 
 	/* (the game's zlib is 1.1, which can stop short of saying the stream has
 	ended when the output is exactly full: all of it is enough) */
 	if ((result != Z_OK && result != Z_BUF_ERROR) || inflated_size != filtered_size)
+	{
+		static int reported;
+
+		if (reported++ < 3)
+			platform_log("png: inflating %lu bytes gave %d, %lu of %lu bytes", compressed_size, result,
+				(unsigned long)inflated_size, filtered_size);
 		goto failed;
+	}
 	/* (each row by its filter, the first pixel's 4 bytes, which have none to
 	their left, apart; the first row has none above: zeroes) */
 	for (row = 0; row < height; row++)

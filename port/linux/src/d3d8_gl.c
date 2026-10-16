@@ -467,6 +467,12 @@ vertices. */
 #define STREAM_BUFFER_SIZE (16 * 1024 * 1024)
 #define INDEX_BUFFER_SIZE (2 * 1024 * 1024)
 #define STREAM_BUFFER_RING 3
+#elif defined(HALO_XBOX360)
+/* The Xbox 360 has 512 MB in all, 256 MB of it the Xbox's window: an
+orphaned buffer is new physical memory until the GPU is done with the old
+one two frames later (port/xbox360/src/x360_gl.c), so these stay small. */
+#define STREAM_BUFFER_SIZE (8 * 1024 * 1024)
+#define INDEX_BUFFER_SIZE (2 * 1024 * 1024)
 #else
 #define STREAM_BUFFER_SIZE (32 * 1024 * 1024)
 #define INDEX_BUFFER_SIZE (8 * 1024 * 1024)
@@ -2986,7 +2992,7 @@ struct mip_composite
 
 static struct mip_composite *mip_composites;
 
-#if defined(HALO_ANDROID) || defined(__APPLE__)
+#if defined(HALO_ANDROID) || defined(__APPLE__) || defined(HALO_XBOX360)
 #ifdef HALO_ANDROID
 #define HOST_GL_COPY_IMAGE xgpu_capabilities.copy_image
 #else
@@ -2994,8 +3000,8 @@ static struct mip_composite *mip_composites;
 #endif
 static GLuint framebuffer_get(GLuint color, GLuint depth);
 
-/* glCopyImageSubData for ES 3.0/3.1 contexts without the extension, and
-macOS's OpenGL 4.1 */
+/* glCopyImageSubData for ES 3.0/3.1 contexts without the extension,
+macOS's OpenGL 4.1 and the Xbox 360's GL layer (port/xbox360/src/x360_gl.c) */
 static void copy_level_by_blit(GLuint source, GLuint destination, GLint level, GLsizei width, GLsizei height)
 {
 	static GLuint draw_framebuffer;
@@ -3090,7 +3096,7 @@ static GLuint mip_composite_get(const struct xgpu_texture_description *descripti
 		composite->level_sources[level] = target->texture;
 		composite->level_written[level] = target->written;
 		render_target_resolve(target);
-#if defined(HALO_ANDROID) || defined(__APPLE__)
+#if defined(HALO_ANDROID) || defined(__APPLE__) || defined(HALO_XBOX360)
 		/* (OpenGL 4.3: macOS's 4.1 copies levels with a blit instead) */
 		if (!HOST_GL_COPY_IMAGE)
 		{
@@ -3920,6 +3926,9 @@ every write; after a few such rewrites a page counts as volatile for a
 while, and draws that use it stream their data as before. */
 
 #define MIRROR_SEGMENT_SIZE 0x400000UL
+#ifdef HALO_XBOX360
+void x360_gl_buffer_alias(GLenum target, void *memory, unsigned long size);
+#endif
 #define MIRROR_SEGMENT_COUNT (PLATFORM_CONTIGUOUS_SIZE / MIRROR_SEGMENT_SIZE)
 #define MIRROR_PAGE_SIZE 0x1000UL
 #define MIRROR_PAGE_COUNT (PLATFORM_CONTIGUOUS_SIZE / MIRROR_PAGE_SIZE)
@@ -4031,10 +4040,18 @@ static BOOL mirror_refresh(unsigned long first, unsigned long last)
 		{
 			glGenBuffers(1, &mirror.buffers[segment]);
 			glBindBuffer(GL_COPY_WRITE_BUFFER, mirror.buffers[segment]);
+#ifdef HALO_XBOX360
+			/* (the console's GPU reads the window where it is: the segment's
+			buffer is the window's memory, and an upload only makes the CPU's
+			writes visible to it: port/xbox360/src/x360_gl.c) */
+			x360_gl_buffer_alias(GL_COPY_WRITE_BUFFER,
+				xbox_pointer(PLATFORM_CONTIGUOUS_BASE + segment * MIRROR_SEGMENT_SIZE), MIRROR_SEGMENT_SIZE);
+#else
 			glBufferData(GL_COPY_WRITE_BUFFER, MIRROR_SEGMENT_SIZE, NULL, GL_DYNAMIC_DRAW);
 #ifdef HALO_ANDROID
 			/* (no glBufferSubData yet: as if long enough ago) */
 			mirror.subdata_frame[segment] = device.frame - STREAM_BUFFER_RING;
+#endif
 #endif
 		}
 		glBindBuffer(GL_COPY_WRITE_BUFFER, mirror.buffers[segment]);

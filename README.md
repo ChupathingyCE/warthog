@@ -43,7 +43,7 @@ PC builds. Expect rough edges, and please report them.
 | Console | Status |
 | --- | --- |
 | Original Xbox | In development: this page |
-| Xbox 360 | Next, with the Wii U alongside: both are big-endian, so the byte-order groundwork is shared. Scaffolding only so far |
+| Xbox 360 | Next, with the Wii U alongside: both are big-endian, so the byte-order groundwork is shared. Phase 0: a boot test, not the game |
 | Wii U | Alongside the Xbox 360. Scaffolding only so far |
 | Switch | thelinkin3000's port, being brought in |
 

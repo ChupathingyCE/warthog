@@ -125,6 +125,13 @@ parser.add_argument(
     help="patched LLVM directory for `ninja xbox360` (default: LLVM_XENON_DIR or ~/llvm-xenon)",
 )
 parser.add_argument(
+    "--xdk360",
+    metavar="DIR",
+    type=Path,
+    help="your extracted Xbox 360 SDK for `ninja xbox360`, the folder holding lib/xbox/xboxkrnl.lib "
+    "(default: XDK_DIR, or OXDK360's search)",
+)
+parser.add_argument(
     "--devkitppc",
     metavar="DIR",
     type=Path,
@@ -168,6 +175,7 @@ sln = SimpleNamespace(
     oxdk_dir=args.oxdk,
     oxdk360_dir=args.oxdk360,
     llvm_xenon=args.llvm_xenon,
+    x360_sdk=args.xdk360,
     devkitppc_dir=args.devkitppc,
     wut_dir=args.wut,
     devkita64_dir=args.devkita64,
