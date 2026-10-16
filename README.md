@@ -245,6 +245,14 @@ with no warranty. The full text is in [LICENSE](LICENSE).
   and ChupathingyCE's authors. It gives no rights in Halo, its maps or
   anything else Microsoft owns, and no SDK is included.
 
+### Delta's wire format stays CC0
+
+So that other clients and servers can speak Delta under any license, these
+files stay under [CC0 1.0](LICENSES/CC0-1.0.txt), as each one says at its
+top: [docs/delta.md](docs/delta.md), `port/linux/src/delta_wire.c`,
+`port/linux/src/delta_wire.h` and `port/linux/include/delta.h` (the numbers
+the wire format uses). Everything else is GPL.
+
 ### Console SDK permission
 
 You may build Warthog yourself with a console maker's SDK (see "Building it
