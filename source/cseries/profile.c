@@ -287,7 +287,14 @@ enum
 {
 	MAXIMUM_PROFILE_SECTIONS = 256,
 	MAXIMUM_GAME_TICKS_PER_FRAME = 150,
+#ifndef HALO_XBOX_CONSOLE
 	MAXIMUM_PROFILE_FRAMES = 256,
+#else
+	/* port: the frames' history, which only the profiler's display reads,
+	kept short on the console: 256 were a megabyte of a 64 MB Xbox's
+	image */
+	MAXIMUM_PROFILE_FRAMES = 16,
+#endif
 	MAXIMUM_PROFILE_WINDOWS = 4,
 };
 

@@ -67,6 +67,17 @@ unsigned long xbox_memory_texture_cache_maximum_address(void);
 #endif
 #define SOUND_CACHE_SIZE 0x400000
 
+#ifdef HALO_XBOX_CONSOLE
+/* port: each cache logged as it is made, before the game's own log is up
+(port/xbox/src/xbox_memory.c): a console without the memory for one says
+which */
+void xbox_memory_allocation(char const *name, unsigned long size, void const *address);
+
+#define PHYSICAL_MEMORY_LOG(name, size, address) xbox_memory_allocation(name, size, address)
+#else
+#define PHYSICAL_MEMORY_LOG(name, size, address)
+#endif
+
 /* ---------- macros */
 
 /* ---------- structures */
@@ -91,6 +102,7 @@ void physical_memory_allocate(
 	void)
 {
 	physical_memory_map_globals.game_state_base_address = XPhysicalAlloc(GAME_STATE_SIZE, GAME_STATE_BASE_ADDRESS & 0x7FFFFFFF, 0, PAGE_READWRITE);
+	PHYSICAL_MEMORY_LOG("game state", GAME_STATE_SIZE, physical_memory_map_globals.game_state_base_address);
 #ifdef HALO_64BIT
 #line 46 "c:\\halo\\SOURCE\\cache\\physical_memory_map.c"
 	match_assert(__FILE__, __LINE__, XBOX_ADDRESS(physical_memory_map_globals.game_state_base_address)==GAME_STATE_BASE_ADDRESS);
@@ -100,6 +112,7 @@ void physical_memory_allocate(
 #endif
 
 	physical_memory_map_globals.tag_cache_base_address = XPhysicalAlloc(TAG_CACHE_SIZE, TAG_CACHE_BASE_ADDRESS & 0x7FFFFFFF, 0, PAGE_READWRITE);
+	PHYSICAL_MEMORY_LOG("tag cache", TAG_CACHE_SIZE, physical_memory_map_globals.tag_cache_base_address);
 #ifdef HALO_64BIT
 #line 50 "c:\\halo\\SOURCE\\cache\\physical_memory_map.c"
 	match_assert(__FILE__, __LINE__, XBOX_ADDRESS(physical_memory_map_globals.tag_cache_base_address)==TAG_CACHE_BASE_ADDRESS);
@@ -109,10 +122,12 @@ void physical_memory_allocate(
 #endif
 
 	physical_memory_map_globals.texture_cache_base_address = XPhysicalAlloc(TEXTURE_CACHE_SIZE, TEXTURE_CACHE_MAXIMUM_ADDRESS, 0, PAGE_READWRITE | PAGE_WRITECOMBINE);
+	PHYSICAL_MEMORY_LOG("texture cache", TEXTURE_CACHE_SIZE, physical_memory_map_globals.texture_cache_base_address);
 #line 55 "c:\\halo\\SOURCE\\cache\\physical_memory_map.c"
 	match_assert(__FILE__, __LINE__, physical_memory_map_globals.texture_cache_base_address);
 
 	physical_memory_map_globals.sound_cache_base_address = XPhysicalAlloc(SOUND_CACHE_SIZE, -1, 0, PAGE_READWRITE);
+	PHYSICAL_MEMORY_LOG("sound cache", SOUND_CACHE_SIZE, physical_memory_map_globals.sound_cache_base_address);
 #line 58 "c:\\halo\\SOURCE\\cache\\physical_memory_map.c"
 	match_assert(__FILE__, __LINE__, physical_memory_map_globals.sound_cache_base_address);
 

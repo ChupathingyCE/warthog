@@ -134,6 +134,7 @@ line) in the game's folder (`D:\`):
 | `join.txt` | a host's LAN address (System Link joins it directly) or an invite (ONLINE GAMES' Y joins it) |
 | `trace.txt` | the bring-up traces: the main loop each second, every hop of an internet join, the advertisements seen, other hosts only as `enet#` tags (salted per run), never their Ethernet addresses; and XLink Kai's address for the console |
 | `large_caches.txt` | on a 128 MB console, a 44 MB texture cache (64 MB on a 256 MB one); on a 64 MB console, a message and the Xbox's 22 MB |
+| `memory_64.txt` | a 128 MB console (a devkit) acts as a stock 64 MB one: its memory above 64 MB is taken at the start and kept, and it is in the 64 MB class |
 
 ## Memory
 
@@ -151,7 +152,27 @@ of them play the same game; docs/cross-play.md has why the bigger game
 state needs more than a bigger console. `xbox_memory_require` is how a
 feature that needs 128 MB says so: a message at the main menu, and the
 game goes on without it. `xbox_memory_delta_class` is the hook for Delta
-Peer's platform key (`memory_class`) once Delta is built for the console.
+Peer's platform key (`memory_class`, log2 of the megabytes: 6, 7 or 8)
+once Delta is built for the console.
+
+A stock 64 MB console has about what the Xbox game had: its caches (game
+state, tags, textures, sound: 51 MB) are the Xbox's, so the image and the
+heap must stay near the Xbox game's. The debug build the port comes from
+kept debug records the console does not (the AI's per-actor debug records
+and path copies, 10 MB of heap; the profiler's 256-frame history; the
+oversized surface bit vector); the map checks' 2.75 MB of claims are made
+on the heap on a console of 128 MB or more only (a 64 MB console loads
+maps unchecked, as the Xbox game did). If what is free at the start still
+cannot hold the Xbox's 22 MB texture cache and leave 8 MB for Direct3D and
+the heap, the cache is made smaller, down to 19 MB (the attract movie
+borrows 16 MB of it), rather than the start failing.
+
+Every step of the start is in `debug.txt` before the game's own log opens
+(`boot:` lines, the file closed after each): the memory and the class, the
+image's size, each cache as it is made, the first Direct3D device, each heap
+allocation of 256 KB or more and any that fails, and the free memory at the
+main loop; later, `memory: N KB free (a new low)` as a map loads or a match
+peaks. `memory_64.txt` (above) runs that path on a devkit.
 
 ## XLink Kai
 

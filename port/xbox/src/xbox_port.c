@@ -242,7 +242,9 @@ static unsigned long __stdcall xbox_watchdog(void *parameter)
 
 void xbox_watchdog_start(void)
 {
-	CreateThread(NULL, 0, xbox_watchdog, NULL, 0, NULL);
+	/* (a stack of its own size: 0 is the main thread's, the XBE's 1 MB, all
+	of it committed memory on the Xbox) */
+	CreateThread(NULL, 64 * 1024, xbox_watchdog, NULL, 0, NULL);
 }
 
 /* ---------- the settings: their defaults (port/linux/src/port_config.c's)

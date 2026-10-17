@@ -40,7 +40,7 @@ parser.add_argument(
 parser.add_argument(
     "--release",
     action="store_true",
-    help="release builds (Linux, Windows, Android): assertions are not checked",
+    help="release builds (Linux, Windows, Android, original Xbox): assertions are not checked",
 )
 parser.add_argument(
     "--game-browser",

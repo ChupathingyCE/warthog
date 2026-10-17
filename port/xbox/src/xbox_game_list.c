@@ -194,7 +194,9 @@ void xbox_game_list_request(void)
 	list_taken = 0;
 	shown_state = XBOX_GAME_LIST_FETCHING;
 	set_state(_list_fetching);
-	thread = CreateThread(NULL, 0, game_list_thread, NULL, 0, NULL);
+	/* (a stack of its own size: 0 is the main thread's, the XBE's 1 MB, all
+	of it committed memory on the Xbox) */
+	thread = CreateThread(NULL, 128 * 1024, game_list_thread, NULL, 0, NULL);
 	if (!thread)
 	{
 		list_error = GAME_LIST_ERROR_CONNECT;

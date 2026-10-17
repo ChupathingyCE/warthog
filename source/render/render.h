@@ -99,7 +99,13 @@ struct render_globals
 	unsigned long visible_cluster_flags[MAXIMUM_CLUSTERS_PER_STRUCTURE / LONG_BITS];
 	struct rendered_cluster rendered_clusters[MAXIMUM_RENDERED_CLUSTERS];
 	short rendered_cluster_count;
+#ifndef HALO_XBOX_CONSOLE
 	unsigned long environment_surface_flags[MAXIMUM_SURFACES_PER_STRUCTURE];
+#else
+	/* port: a bit for each surface (every use is a bit vector's), not a
+	long: 16 KB of the console's image, not 512 */
+	unsigned long environment_surface_flags[BIT_VECTOR_SIZE_IN_LONGS(MAXIMUM_SURFACES_PER_STRUCTURE)];
+#endif
 	short environment_surface_count;
 	long environment_surface_indices[MAXIMUM_RENDERED_ENVIRONMENT_SURFACES];
 };

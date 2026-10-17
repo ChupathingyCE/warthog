@@ -252,7 +252,11 @@ def generate_xbox_build(n: Writer, sln: Any) -> None:
     # the game's sources, defines and include directories (port/linux/port.json)
     config = _load_port_config()
     game_cflags = " ".join([
-        " ".join(GAME_FLAGS), f"-include {_quote(prefix_header)}", f"-include {_quote(semantics_header)}",
+        " ".join(GAME_FLAGS),
+        # configure.py --release: a failed assertion is noted in debug.txt
+        # and the game goes on, as the retail game did (cseries.h)
+        *(["-DHALO_RELEASE"] if getattr(sln, "port_release", False) else []),
+        f"-include {_quote(prefix_header)}", f"-include {_quote(semantics_header)}",
         game_defines_and_includes(config), f"-idirafter {_quote(XDK_INCLUDE)}", f"-idirafter {_quote(xdk / 'include')}",
         # the port's own headers (halo_menus.h, halo_keyboard.h), after the
         # SDK's so its C runtime headers win
