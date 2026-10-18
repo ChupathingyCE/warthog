@@ -232,7 +232,7 @@ symbols in this file:
 #include "memory/data_compress.h"
 #include "memory/texture_page.h"
 
-#ifndef HALO_XBOX_NO_DEBUG_TOOLS
+#ifndef HALO_CONSOLE_NO_DEBUG_TOOLS
 
 /* ---------- constants */
 

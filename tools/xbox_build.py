@@ -264,10 +264,10 @@ def generate_xbox_build(n: Writer, sln: Any) -> None:
                 implicit=[*implicit, *([source] if compiled and compiled != source else [])],
                 variables={"cflags": cflags})
 
-    # configure.py --xbox-players: the players the build holds (16, a stock
+    # configure.py --console-players: the players the build holds (16, a stock
     # Xbox's; halo_port_limits.h)
-    players = int(getattr(sln, "xbox_players", 16) or 16)
-    players_flag = f"-DHALO_XBOX_PLAYERS={players}"
+    players = int(getattr(sln, "console_players", 16) or 16)
+    players_flag = f"-DHALO_CONSOLE_PLAYERS={players}"
     prefix_header = PORT_DIR / "include" / "halo_xbox_prefix.h"
     # the game's sources, defines and include directories (port/linux/port.json)
     config = _load_port_config()
@@ -276,9 +276,9 @@ def generate_xbox_build(n: Writer, sln: Any) -> None:
         # configure.py --release: a failed assertion is noted in debug.txt
         # and the game goes on, as the retail game did (cseries.h)
         *(["-DHALO_RELEASE"] if getattr(sln, "port_release", False) else []),
-        # configure.py --xbox-debug-tools: the developer tools of the debug
+        # configure.py --console-debug-tools: the developer tools of the debug
         # decomp stay in (halo_xbox_prefix.h)
-        *(["-DHALO_XBOX_DEBUG_TOOLS"] if getattr(sln, "xbox_debug_tools", False) else []),
+        *(["-DHALO_CONSOLE_DEBUG_TOOLS"] if getattr(sln, "console_debug_tools", False) else []),
         players_flag,
         f"-include {_quote(prefix_header)}", f"-include {_quote(semantics_header)}",
         game_defines_and_includes(config), f"-idirafter {_quote(XDK_INCLUDE)}", f"-idirafter {_quote(xdk / 'include')}",
@@ -289,7 +289,7 @@ def generate_xbox_build(n: Writer, sln: Any) -> None:
         # co-op's: port/xbox/game/xbox_coop.c answers them on the console)
         f"-idirafter {_quote(Path('port/linux/game'))}",
     ])
-    debug_tools = getattr(sln, "xbox_debug_tools", False)
+    debug_tools = getattr(sln, "console_debug_tools", False)
     for source in game_sources(config):
         # (libtiff is a developer tool's: tiff_file.c, which exports the
         # screenshots, is its only caller)

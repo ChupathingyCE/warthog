@@ -175,7 +175,7 @@ symbols in this file:
 #include "cutscene/recorded_animations.h"
 #endif
 
-#ifndef HALO_XBOX_NO_DEBUG_TOOLS
+#ifndef HALO_CONSOLE_NO_DEBUG_TOOLS
 
 /* ---------- constants */
 

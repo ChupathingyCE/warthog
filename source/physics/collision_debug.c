@@ -72,7 +72,7 @@ symbols in this file:
 #include "scenario/scenario.h"
 #include "tag_files/tag_groups.h"
 
-#ifndef HALO_XBOX_NO_DEBUG_TOOLS
+#ifndef HALO_CONSOLE_NO_DEBUG_TOOLS
 
 /* ---------- constants */
 

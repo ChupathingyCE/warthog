@@ -57,7 +57,7 @@ symbols in this file:
 #include "tag_files/files.h"
 #endif
 
-#ifndef HALO_XBOX_NO_DEBUG_TOOLS
+#ifndef HALO_CONSOLE_NO_DEBUG_TOOLS
 
 #ifdef HALO_64BIT
 /* The modern fork drops libtiff: the platform layer writes screenshots
@@ -515,7 +515,7 @@ char const * tiff_export(
 	struct file_reference *file,
 	struct bitmap_data *bitmap)
 {
-	return "screenshots as TIFF files are not in this build (configure.py --xbox-debug-tools)";
+	return "screenshots as TIFF files are not in this build (configure.py --console-debug-tools)";
 }
 
 char const * tiff_import(

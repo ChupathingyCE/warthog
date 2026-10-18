@@ -2059,7 +2059,7 @@ short actor_select_firing_position(
 			evaluation_context->debug_nonrejected_count=
 			evaluation_context->debug_post_evaluated_count=
 			evaluation_context->debug_skipped_count= 0;
-#ifndef HALO_XBOX_NO_DEBUG_TOOLS
+#ifndef HALO_CONSOLE_NO_DEBUG_TOOLS
 		if (debug_evaluation)
 		{
 			ai_debug.evaluation_context_valid= TRUE;
@@ -2088,7 +2088,7 @@ short actor_select_firing_position(
 					index,
 					struct firing_position_definition);
 
-#ifndef HALO_XBOX_NO_DEBUG_TOOLS
+#ifndef HALO_CONSOLE_NO_DEBUG_TOOLS
 				if (debug_evaluation)
 				{
 					ai_debug.actor_record[index].valid= FALSE;
@@ -2096,7 +2096,7 @@ short actor_select_firing_position(
 #endif
 				if (TEST_FLAG(evaluation_context->allowed_position_mask, firing_position_definition->group_index))
 				{
-#ifndef HALO_XBOX_NO_DEBUG_TOOLS
+#ifndef HALO_CONSOLE_NO_DEBUG_TOOLS
 					if (actor->meta.encounter_index==ai_debug.selected_squad_index)
 					{
 						ai_debug.actor_record[index].pursuit=
@@ -2361,7 +2361,7 @@ short actor_select_firing_position(
 				{
 					best_index= NONE;
 				}
-#ifndef HALO_XBOX_NO_DEBUG_TOOLS
+#ifndef HALO_CONSOLE_NO_DEBUG_TOOLS
 				if (debug_evaluation)
 				{
 					ai_debug.actor_record[firing_position->original_index].valid= TRUE;
@@ -2438,7 +2438,7 @@ short actor_select_firing_position(
 					}
 				}
 
-#ifndef HALO_XBOX_NO_DEBUG_TOOLS
+#ifndef HALO_CONSOLE_NO_DEBUG_TOOLS
 				if (debug_evaluation)
 				{
 					for (index= 0; index<firing_position_count; index++)

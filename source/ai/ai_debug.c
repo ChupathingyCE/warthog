@@ -355,7 +355,7 @@ void ai_debug_actor_deleted(
 	return;
 }
 
-#ifndef HALO_XBOX_NO_DEBUG_TOOLS
+#ifndef HALO_CONSOLE_NO_DEBUG_TOOLS
 
 struct path_debug_storage *ai_debug_get_last_path(
 	long actor_index)
@@ -6253,7 +6253,7 @@ void ai_debug_communication_suppress(
 	long name_count,
 	char const **names)
 {
-	xbox_debug_tools_unavailable("ai_debug_communication_suppress");
+	console_debug_tools_unavailable("ai_debug_communication_suppress");
 
 	return;
 }
@@ -6262,7 +6262,7 @@ void ai_debug_communication_ignore(
 	long name_count,
 	char const **names)
 {
-	xbox_debug_tools_unavailable("ai_debug_communication_ignore");
+	console_debug_tools_unavailable("ai_debug_communication_ignore");
 
 	return;
 }
@@ -6271,7 +6271,7 @@ void ai_debug_communication_focus(
 	long name_count,
 	char const **names)
 {
-	xbox_debug_tools_unavailable("ai_debug_communication_focus");
+	console_debug_tools_unavailable("ai_debug_communication_focus");
 
 	return;
 }
@@ -6379,7 +6379,7 @@ void ai_debug_vocalize(
 	char const *priority_name,
 	char const *vocalization_name)
 {
-	xbox_debug_tools_unavailable("ai_debug_vocalize");
+	console_debug_tools_unavailable("ai_debug_vocalize");
 
 	return;
 }
@@ -6387,7 +6387,7 @@ void ai_debug_vocalize(
 void ai_debug_speak_list(
 	char const *list_name)
 {
-	xbox_debug_tools_unavailable("ai_debug_speak_list");
+	console_debug_tools_unavailable("ai_debug_speak_list");
 
 	return;
 }
@@ -6395,7 +6395,7 @@ void ai_debug_speak_list(
 void ai_debug_change_selected_encounter(
 	boolean a1)
 {
-	xbox_debug_tools_unavailable("ai_debug_change_selected_encounter");
+	console_debug_tools_unavailable("ai_debug_change_selected_encounter");
 
 	return;
 }
@@ -6403,7 +6403,7 @@ void ai_debug_change_selected_encounter(
 void ai_debug_teleport_to(
 	long ai_index)
 {
-	xbox_debug_tools_unavailable("ai_debug_teleport_to");
+	console_debug_tools_unavailable("ai_debug_teleport_to");
 
 	return;
 }
@@ -6411,7 +6411,7 @@ void ai_debug_teleport_to(
 void ai_debug_change_selected_actor(
 	boolean a1)
 {
-	xbox_debug_tools_unavailable("ai_debug_change_selected_actor");
+	console_debug_tools_unavailable("ai_debug_change_selected_actor");
 
 	return;
 }

@@ -281,7 +281,7 @@ symbols in this file:
 #include <xtl.h>
 #endif
 
-#ifndef HALO_XBOX_NO_DEBUG_TOOLS
+#ifndef HALO_CONSOLE_NO_DEBUG_TOOLS
 
 /* ---------- constants */
 
@@ -1970,7 +1970,7 @@ void profile_texture_end(
 void profile_sections_activate(
 	char const *section_name)
 {
-	xbox_debug_tools_unavailable("profile_sections_activate");
+	console_debug_tools_unavailable("profile_sections_activate");
 
 	return;
 }
@@ -1978,7 +1978,7 @@ void profile_sections_activate(
 void profile_sections_deactivate(
 	char const *section_name)
 {
-	xbox_debug_tools_unavailable("profile_sections_deactivate");
+	console_debug_tools_unavailable("profile_sections_deactivate");
 
 	return;
 }
@@ -1990,7 +1990,7 @@ void profile_dump(
 	short maximum_section_count,
 	char *buffer)
 {
-	xbox_debug_tools_unavailable("profile_dump");
+	console_debug_tools_unavailable("profile_dump");
 
 	return;
 }
@@ -1998,7 +1998,7 @@ void profile_dump(
 void profile_dump_to_file(
 	const char *name)
 {
-	xbox_debug_tools_unavailable("profile_dump_to_file");
+	console_debug_tools_unavailable("profile_dump_to_file");
 
 	return;
 }

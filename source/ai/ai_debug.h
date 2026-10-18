@@ -340,7 +340,7 @@ struct ai_debug_state
 	real field_4C814;
 	boolean field_4C818;
 	char __unknown4C819[3];
-#ifndef HALO_XBOX_NO_DEBUG_TOOLS
+#ifndef HALO_CONSOLE_NO_DEBUG_TOOLS
 	struct path_state path_state;
 	boolean field_608A8;
 	char __unknown608A9[91];

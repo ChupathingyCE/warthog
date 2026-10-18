@@ -107,18 +107,18 @@ parser.add_argument(
     help="an Aug 2001 Direct3D library (d3d8ntpr.lib) for the original Xbox build, `ninja xbox` (port/xbox/README.md)",
 )
 parser.add_argument(
-    "--xbox-debug-tools",
+    "--console-debug-tools",
     action="store_true",
-    help="original Xbox build: the debug decomp's developer tools (HALO_XBOX_DEBUG_TOOLS: the profiler, "
+    help="console builds (the original Xbox's today): the debug decomp's developer tools (HALO_CONSOLE_DEBUG_TOOLS: the profiler, "
     "AI, render and collision debug, stack walker, libtiff and the bitmap tools), left out of the "
     "console's build by default (port/xbox/README.md)",
 )
 parser.add_argument(
-    "--xbox-players",
+    "--console-players",
     type=int,
     choices=(16, 32, 64),
     default=16,
-    help="original Xbox build: the players its network tables hold (HALO_XBOX_PLAYERS). 16 is the Xbox's; "
+    help="console builds (the original Xbox's today): the players their network tables hold (HALO_CONSOLE_PLAYERS). 16 is the Xbox's; "
     "32 and 64 are test builds a stock 64 MB console does not hold, and say so when they start",
 )
 parser.add_argument(
@@ -180,8 +180,8 @@ sln = SimpleNamespace(
     android_ndk=args.android_ndk,
     android_guest_cc=args.android_guest_cc,
     xbox_d3d8=args.xbox_d3d8,
-    xbox_debug_tools=args.xbox_debug_tools,
-    xbox_players=args.xbox_players,
+    console_debug_tools=args.console_debug_tools,
+    console_players=args.console_players,
     oxdk_dir=args.oxdk,
     oxdk360_dir=args.oxdk360,
     llvm_xenon=args.llvm_xenon,

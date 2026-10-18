@@ -32,7 +32,7 @@ enum profile_dump_format_mode
 
 /* ---------- macros */
 
-#ifndef HALO_XBOX_NO_DEBUG_TOOLS
+#ifndef HALO_CONSOLE_NO_DEBUG_TOOLS
 #define profile_enter(section)							\
 if (profile_global_enable && section.active)	\
 {														\

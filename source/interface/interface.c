@@ -224,7 +224,7 @@ static void render_debug_profile_stall_tick(
 	real scale);
 /* ---------- globals */
 
-#ifndef HALO_XBOX_NO_DEBUG_TOOLS
+#ifndef HALO_CONSOLE_NO_DEBUG_TOOLS
 short profile_game_value_count = NUMBER_OF_PROFILE_GAME_VALUES;
 struct profile_value profile_game_values[MAXIMUM_PROFILE_VALUES] =
 {
@@ -782,7 +782,7 @@ void interface_draw_bitmap_modulated_p32(
 	return;
 }
 
-#ifndef HALO_XBOX_NO_DEBUG_TOOLS
+#ifndef HALO_CONSOLE_NO_DEBUG_TOOLS
 void profile_graph_toggle(
 	char const *graph_name)
 {
@@ -1233,7 +1233,7 @@ static void render_debug_profile(
 void profile_graph_toggle(
 	char const *graph_name)
 {
-	xbox_debug_tools_unavailable("profile_graph_toggle");
+	console_debug_tools_unavailable("profile_graph_toggle");
 
 	return;
 }
