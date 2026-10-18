@@ -3327,10 +3327,8 @@ void main_loop(
 
 				xbox_log_flush();
 			}
-			{
-				/* (debug.txt's waiting lines, once a second: errors.c) */
-				error_log_update();
-			}
+			/* (debug.txt's waiting lines, once a second: errors.c) */
+			error_log_update();
 		}
 #endif
 		if (!game_in_editor())
