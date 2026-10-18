@@ -128,6 +128,9 @@ enum
 	/* a stock console's memory, which console.simulate_64mb makes a bigger one
 	keep to */
 	_stock_memory = 64UL << 20,
+	/* the free memory a stock console starts the game with (measured on
+	retail hardware: about 57 MB) */
+	_stock_free_target = 57UL << 20,
 	_simulation_chunk = 0x100000,
 	_simulation_smallest_chunk = 0x10000,
 
@@ -220,13 +223,19 @@ static void simulate_stock_memory(void)
 {
 	unsigned long wanted = memory.total > _stock_memory ? memory.total - _stock_memory : 0;
 	unsigned long chunk = _simulation_chunk;
+	/* (the kernel takes the highest acceptable address as the last byte it
+	may use, and turns 0xFFFFFFFF into an empty range: the console's own last
+	byte is the highest) */
+	unsigned long highest = memory.total ? memory.total - 1 : 0;
+	unsigned long taken_below = 0;
+	unsigned long available, excess;
 
 	memory.simulated = 1;
 	while (memory.simulation_held < wanted)
 	{
 		if (chunk > wanted - memory.simulation_held)
 			chunk = wanted - memory.simulation_held;
-		if (XPhysicalAllocEx(chunk, _stock_memory, 0xFFFFFFFFUL, 0, PAGE_READWRITE))
+		if (XPhysicalAllocEx(chunk, _stock_memory, highest, 0, PAGE_READWRITE))
 		{
 			memory.simulation_held += chunk;
 			continue;
@@ -235,8 +244,34 @@ static void simulate_stock_memory(void)
 			break;
 		chunk >>= 1;
 	}
-	xbox_boot_log("memory: console.simulate_64mb: acting as a 64 MB console, %lu KB above 64 MB held (of %lu KB)",
-		memory.simulation_held >> 10, wanted >> 10);
+	/* a devkit keeps memory of its own above 64 MB (and a stock console's
+	kernel, below, takes about 7 MB): what is still free beyond a stock
+	console's is taken from anywhere, to land where a stock console starts */
+	status_read(&memory.total, &memory.available, &memory.source);
+	available = memory.available;
+	chunk = _simulation_chunk;
+	while (available > _stock_free_target)
+	{
+		excess = available - _stock_free_target;
+		if (chunk > excess)
+			chunk = excess & ~0xFFFUL;
+		if (!chunk)
+			break;
+		if (XPhysicalAllocEx(chunk, 0, highest, 0, PAGE_READWRITE))
+		{
+			taken_below += chunk;
+			available -= chunk;
+			continue;
+		}
+		if (chunk <= _simulation_smallest_chunk)
+			break;
+		chunk >>= 1;
+	}
+	xbox_boot_log("memory: console.simulate_64mb: acting as a 64 MB console, %lu KB above 64 MB held (of %lu KB), "
+		"%lu KB more below it; %lu KB free (a stock console starts near %lu KB)",
+		memory.simulation_held >> 10, wanted >> 10, taken_below >> 10, available >> 10,
+		(unsigned long)_stock_free_target >> 10);
+	memory.simulation_held += taken_below;
 }
 
 static void memory_read(void)
