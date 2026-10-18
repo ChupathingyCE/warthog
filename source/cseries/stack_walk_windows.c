@@ -119,7 +119,10 @@ symbols in this file:
 /* January calls the CRT isspace function rather than the multibyte ctype macro. */
 #undef isspace
 
-#ifndef HALO_XBOX_NO_DEBUG_TOOLS
+/* port: kept in the console's build without the developer tools too: its
+addresses on the halt screen and in debug.txt are how a tester's crash is
+read (against the build's map file) */
+#if 1
 
 /* ---------- constants */
 
