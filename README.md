@@ -33,8 +33,12 @@ PC builds. Expect rough edges, and please report them.
 - **System Link** with PC builds: joins a PC host's game, a [D] dedicated
   server's too, at the console's 16 slots (tested with a desktop build at the
   console's limits; not yet on a console)
-- Reads the console's memory (64, 128 or 256 MB) at the start, and can use
-  more on a bigger one
+- **Plays on a stock 64 MB console.** The target is the console most people
+  own: it boots to the menus, plays the campaign and joins online games with
+  the PC builds, within the Xbox's memory. A bigger console (a 128 MB
+  devkit, or the common upgrade) only gets extras, such as a larger texture
+  cache. The first matches on a stock console were played on October 18
+- Reads the console's memory (64, 128 or 256 MB) at the start, and logs it
 - Music and sound: the menu music, the campaign's music and effects
 - Not yet: hosting PC players, Bink movies, reverb, network co-op
 
@@ -110,7 +114,9 @@ join = "192.168.1.20"
 | `join` | A host's LAN address, or an invite (`halo://join/…`). |
 | `trace` | `true` writes detailed network traces to `debug.txt`, for reporting a join that fails. Other hosts appear only as tags (`enet#` and six hex digits), never by their network cards' addresses; with it, `debug.txt` also gives XLink Kai's address for the console. |
 | `large_caches` | `true` gives a 128 MB console a bigger texture cache (44 MB; 64 MB on a 256 MB console). On a stock 64 MB console it shows a message and keeps the Xbox's own. |
-| `simulate_64mb` | For testing: `true` makes a 128 MB console (or devkit) act as a stock 64 MB one. |
+| `debug_geometry` | For development: `true` brings back the debug build's debug geometry (lines and triangles drawn by debug commands), whose buffers take 1.4 MB. Off by default: a stock 64 MB console has no room to spare. |
+| `log_flush` | When `debug.txt` is written: `"buffered"` (the default) writes the game's lines together, once a second and at once for a crash; `"every_line"` writes each as it comes (slow), for a crash hunt. |
+| `simulate_64mb` | Deprecated and ignored (`debug.txt` says so). A devkit gets 64 MB from the executable's own flag now: `tools/xbox_package.py --devkit-64mb`. |
 
 A few of the PC builds' settings work on the console too (music and effects
 volume, `network.online`, `network.brokers_file` and the other network

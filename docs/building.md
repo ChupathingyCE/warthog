@@ -47,7 +47,7 @@ port/xbox/tests/run.sh --xbox
 This runs the console's parsers and rules on your computer under
 AddressSanitizer and UndefinedBehaviorSanitizer: the game list, the
 settings record's fold, `console.join`, the console's `config.toml`, the
-memory class, XLink's addressing and the log's tags. `--xbox` adds the Xbox build's own checks (it needs
+memory class, XLink's addressing, the log's tags, co-op names and the package script's devkit flag. `--xbox` adds the Xbox build's own checks (it needs
 `configure.py` to have been run with `--xbox-d3d8`). `--fuzz SECONDS` adds a
 libFuzzer run (LLVM's clang), and `--fetch` fetches the real game list over
 your computer's network.
@@ -67,6 +67,18 @@ need. `--secure` writes `false`, for System Link between consoles only.
 whose DNS can't find the list's host. A `config.toml` already in the folder
 keeps its other settings; the game adds the rest when it starts. The folder is for your own console:
 don't share it, because it holds your maps.
+
+`--devkit-64mb` sets the flag in `default.xbe` that limits a development
+kit's memory to 64 MB, so a 128 MB devkit runs the game with a stock
+console's memory (a stock console ignores it). Stock 64 MB is the target, so
+test with it on a devkit.
+
+Two options of `configure.py` change what the console's build holds, and
+are for development: `--console-debug-tools` keeps the debug decomp's
+developer tools in (the profiler, the AI, render and collision debug, the
+stack walker), which the build leaves out by default, and `--console-players
+32` (or 64) makes the network tables hold more than the Xbox's 16 players, for
+tests a stock console's memory can't hold.
 
 ## Onto the console
 

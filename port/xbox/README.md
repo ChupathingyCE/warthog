@@ -144,7 +144,8 @@ The console's own, in `[console]`:
 | `join` | `""` | a host's LAN address (System Link joins it directly) or an invite (ONLINE GAMES' Y joins it) |
 | `trace` | `false` | the bring-up traces: the main loop each second, every hop of an internet join, the advertisements seen, other hosts only as `enet#` tags (salted per run), never their Ethernet addresses; and XLink Kai's address for the console |
 | `large_caches` | `false` | on a 128 MB console, a 44 MB texture cache (64 MB on a 256 MB one); on a 64 MB console, a message and the Xbox's 22 MB |
-| `simulate_64mb` | `false` | a 128 MB console (a devkit) acts as a stock 64 MB one: its memory above 64 MB is taken at the start and kept, and it is in the 64 MB class |
+| `debug_geometry` | `false` | the debug build's debug geometry (lines and triangles drawn by debug commands): its three 480 KB buffers are made at the start only with it on. For development, on a console with room (a devkit) |
+| `simulate_64mb` | `false` | deprecated and ignored (`debug.txt` says so): a devkit gets 64 MB from the XBE's flag now, `tools/xbox_package.py --devkit-64mb` (see "Memory") |
 | `log_flush` | `"buffered"` | when `debug.txt` is written: `"buffered"` keeps the game's lines in memory and writes them once a second, when 8 KB wait, and at once for an assert, an exit or a crash; `"every_line"` writes each line as it comes (slow), for a crash hunt |
 
 And the desktop builds' that apply on the console: `display.direct_camera`,
@@ -157,7 +158,7 @@ as before it had the file.
 
 The switch files that came before it are still read for this release, each
 logged as deprecated in `debug.txt` ("D:\memory_64.txt is deprecated, use
-console.simulate_64mb in config.toml"): `bypass_security.txt`,
+console.simulate_64mb in config.toml", which now ignores it): `bypass_security.txt`,
 `memory_64.txt`, `large_caches.txt` and `trace.txt` (an empty file turns
 the setting on), and `join.txt` and `game_list.txt` (one line, used when
 the setting is empty).
@@ -169,7 +170,8 @@ the setting is empty).
 with its class: 64 MB (a stock Xbox), 128 MB (a devkit, or the common
 upgrade) or 256 MB (the bigger mods). The XBE does not limit itself to 64 MB
 (`cxbe -LIMIT64MB:no`), so a console whose kernel knows the upper 64 MB
-reports it.
+reports it; `tools/xbox_package.py --devkit-64mb` sets the flag that
+limits a devkit again.
 
 The class sets only what the console can safely change at run time: the
 texture cache (`console.large_caches`, above). The game's limits (players,
@@ -181,10 +183,11 @@ game goes on without it. `xbox_memory_delta_class` is the hook for Delta
 Peer's platform key (`memory_class`, log2 of the megabytes: 6, 7 or 8)
 once Delta is built for the console.
 
-The network tables hold 16 players (`HALO_XBOX_PLAYERS`, as the Xbox's): the
+The network tables hold 16 players (`HALO_CONSOLE_PLAYERS`, as the Xbox's;
+`configure.py --console-players`, console-neutral like `--console-debug-tools`): the
 players, the machines and the internet tunnel's peers. A host's game with
 more machines or players is left as a full game, never overflowed. A test
-build with 32 or 64 (`configure.py --xbox-players 32`) is more than a stock
+build with 32 or 64 (`configure.py --console-players 32`) is more than a stock
 console's memory holds, and says so on screen when the main menu comes up.
 
 A stock 64 MB console has about what the Xbox game had: its caches (game
@@ -204,10 +207,19 @@ Every step of the start is in `debug.txt` before the game's own log opens
 image's size, each cache as it is made, the first Direct3D device, each heap
 allocation of 256 KB or more and any that fails, and the free memory at the
 main loop; later, `memory: N KB free (a new low)` as a map loads or a match
-peaks. `console.simulate_64mb` (above) runs that path on a devkit.
+peaks.
+
+The target is a stock 64 MB console; 128 MB (a devkit, the common upgrade)
+only makes it smoother. To test the 64 MB path on a 128 MB devkit, package
+with `tools/xbox_package.py --devkit-64mb`: it sets `XINIT_LIMIT_DEVKIT_MEMORY`
+in the XBE's init flags (`0x4`, in the header at `0x124`; `cxbe`'s `Xbe.h`
+has them), and the devkit's kernel gives the game 64 MB, as a stock console
+has. A stock console ignores the flag. (`console.simulate_64mb`, which tried
+to hold the memory above 64 MB from inside the game, cannot take a devkit's
+upper 64 MB and starved the debug kernel; it is replaced by the flag.)
 
 The debug decomp's developer tools are not in the console's build unless
-it is configured with `--xbox-debug-tools` (`HALO_XBOX_DEBUG_TOOLS`): the
+it is configured with `--console-debug-tools` (`HALO_CONSOLE_DEBUG_TOOLS`): the
 profiler, the AI debug displays, the render and collision debug, the stack
 walker, the texture cache listing, libtiff and the bitmap tools. Their code
 is kept, not removed, and what the game calls in them is a stub in the
