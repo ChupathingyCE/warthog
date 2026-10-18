@@ -496,6 +496,10 @@ static const struct config_setting config_settings[] =
 		"On a 128 MB console, a larger texture cache (44 MB; 64 MB on a 256 MB\n"
 		"console). A stock 64 MB console shows a message and keeps the Xbox's\n"
 		"22 MB." },
+	{ "console.debug_geometry", _config_boolean, "false", NULL, _environment_value, _platform_xbox,
+		"For development: the debug build's debug geometry (lines and triangles\n"
+		"drawn by debug commands), whose buffers take 1440 KB. Off, as the retail\n"
+		"game had none; a stock 64 MB console may not have the room." },
 	{ "console.trace", _config_boolean, "false", NULL, _environment_value, _platform_xbox,
 		"Detailed traces in debug.txt, for reporting a join that fails: the main\n"
 		"loop each second, every hop of an internet join, the games advertised.\n"
