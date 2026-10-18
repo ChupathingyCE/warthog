@@ -514,6 +514,11 @@ static const struct config_setting config_settings[] =
 		"For testing joins without the game list: a host's LAN address\n"
 		"(\"192.168.1.20\"), which System Link joins directly, or an invite\n"
 		"(\"halo://join/...\"), which Y in ONLINE GAMES joins; empty for none." },
+	{ "console.delta", _config_string, "\"auto\"", NULL, _environment_value, _platform_xbox,
+		"Delta Peer: when joining a game whose host offers it, tell the host\n"
+		"this is an Xbox (its platform, memory and nothing else), so the stats\n"
+		"site, the scoreboard and the server show Xbox. \"auto\": on; \"off\" for\n"
+		"the legacy protocol alone. The game is the same either way." },
 	{ "console.game_list_server", _config_string, "\"\"", NULL, _environment_value, _platform_xbox,
 		"Where to get the game list (\"host\" or \"a.b.c.d\", \":port\" optional)\n"
 		"when warthog.milenko.org does not resolve; empty for none." },
@@ -1495,6 +1500,7 @@ static const struct
 	{ "game.move_old_map_folders", { "ask", "yes", "no", NULL }, "\"ask\"" },
 	{ "network.protocol", { "auto", "opence", "delta", NULL }, NULL },
 	{ "network.platform_limits", { "on", "off", NULL }, "\"on\"" },
+	{ "console.delta", { "auto", "on", "off", NULL }, "\"auto\"" },
 	{ "network.coop_friendly_fire", { "off", "on", "shields_only", "explosives_only", NULL }, NULL },
 	{ "network.coop_enemies_mode", { "none", "per_player", "multiplier", NULL }, "\"none\"" },
 	{ "crash_reports.upload", { "ask", "yes", "no", NULL }, "\"ask\"" },

@@ -63,6 +63,12 @@ $CC -std=gnu11 -O1 -w -c port/third_party/tomlc17/tomlc17.c -o "$OUT/config/toml
 $CC -std=gnu11 -Wall -Wextra -Werror $SAN -DHALO_XBOX_CONSOLE -Iport/linux/src -Iport/third_party/tomlc17 \
 	port/xbox/tests/config_test.c "$OUT/config/port_config.c" "$OUT/config/tomlc17.o" -o "$OUT/config/config_test"
 (cd "$OUT/config/run" && ../config_test new && ../config_test given)
+# the console's Delta Peer client (HALO_XBOX_CONSOLE: its 16 machines, no table room)
+$CC -std=gnu11 -Wall -Wextra -Werror $SAN -DHALO_XBOX_CONSOLE -Iport/linux/src -Iport/third_party/monocypher \
+	-idirafter port/linux/include port/xbox/tests/delta_console_test.c port/linux/src/delta_peer.c \
+	port/linux/src/delta_wire.c port/third_party/monocypher/monocypher.c \
+	port/third_party/monocypher/monocypher-ed25519.c -o "$OUT/delta_console_test"
+"$OUT/delta_console_test"
 while [ $# -gt 0 ]; do
 	case "$1" in
 	--fuzz)

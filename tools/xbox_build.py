@@ -34,6 +34,7 @@ from pathlib import Path
 from typing import Any, List, Optional
 
 from .ninja_syntax import Writer
+from .version import version
 from .linux_build import _load_port_config, game_defines_and_includes, game_sources
 from .windows_build import COMMENT, EXPORTED_INLINE
 
@@ -55,6 +56,8 @@ GAME_FLAGS = [
     "-D_XBOX", "-D_X86_", "-D_NTOS_", "-D_MT",
     # the console's own capacity (port/linux/include/halo_port_capacity.h)
     "-DHALO_XBOX_CONSOLE",
+    # Delta Peer as a client (port/linux/src/delta_peer_game.c)
+    "-DHALO_CONSOLE_DELTA",
     "-w",
     "-Wno-error=incompatible-pointer-types",
     "-Wno-error=incompatible-function-pointer-types",
@@ -103,6 +106,10 @@ P2P_SOURCES = [
     LINUX_SRC / "p2p.c", LINUX_SRC / "p2p_signal.c", LINUX_SRC / "p2p_crypto.c", KCP_DIR / "ikcp.c",
     MONOCYPHER_DIR / "monocypher.c", MONOCYPHER_DIR / "monocypher-ed25519.c",
 ]
+# Delta Peer's (docs/delta.md), as the desktop builds compile them: the wire
+# format, a session as a client, and the game's session over the game's
+# sockets (no signed legacy table, no thread: delta.c is not in the console)
+DELTA_SOURCES = [LINUX_SRC / "delta_wire.c", LINUX_SRC / "delta_peer.c", LINUX_SRC / "delta_peer_game.c"]
 # the settings, D:\config.toml: the desktop builds' port_config.c and its
 # TOML parser (tools/linux_build.py's TOML_DIR)
 CONFIG_SOURCE = LINUX_SRC / "port_config.c"
@@ -341,6 +348,18 @@ def generate_xbox_build(n: Writer, sln: Any) -> None:
         n.build(outputs=generated, rule="xbox_source", inputs=source, implicit=[Path("tools/xbox_sources.py")],
                 variables={"kind": "copy"})
         add_object(generated, p2p_cflags, sorted((PORT_DIR / "p2p").glob("*.h")))
+
+    # Delta Peer: as internet play's sources, with the console's limits
+    # (HALO_XBOX_CONSOLE), the C99 calls its C runtime lacks, and the port's
+    # headers (delta.h, halo_port_limits.h) after the SDK's
+    delta_cflags = " ".join([p2p_cflags, "-DHALO_XBOX_CONSOLE", "-DHALO_CONSOLE_DELTA", f'-DHALO_VERSION=\\"{version()}\\"',
+                             f"-include {_quote(PORT_DIR / 'p2p' / 'xbox_stdio.h')}",
+                             f"-idirafter {_quote(PORT_LINUX_INCLUDE)}"])
+    for source in DELTA_SOURCES:
+        generated = gen_dir / "p2p" / source.name
+        n.build(outputs=generated, rule="xbox_source", inputs=source, implicit=[Path("tools/xbox_sources.py")],
+                variables={"kind": "copy"})
+        add_object(generated, delta_cflags, sorted((PORT_DIR / "p2p").glob("*.h")))
 
     # the settings (port/xbox/src/xbox_config.c): port_config.c as it is,
     # copied as internet play's are, with the console's headers first

@@ -33,9 +33,15 @@ game state; its limits only make a host take fewer players.
 enum
 {
 	/* a game's machines and players (HALO_PORT_MAXIMUM_NETWORK_MACHINES and
-	_PLAYERS) */
+	_PLAYERS): the original Xbox's game keeps 16 of each (its 64 MB), so its
+	sessions keep no more either */
+#ifdef HALO_XBOX_CONSOLE
+	DELTA_PEER_MAXIMUM_MACHINES = 16,
+	DELTA_PEER_MAXIMUM_PLAYERS = 16,
+#else
 	DELTA_PEER_MAXIMUM_MACHINES = 128,
 	DELTA_PEER_MAXIMUM_PLAYERS = 128,
+#endif
 	/* a room limit nothing sets */
 	DELTA_PEER_NO_LIMIT = 255,
 
@@ -308,6 +314,15 @@ struct delta_peer_host_peer
 	struct delta_peer_host_moderation moderation;
 };
 
+/* the room for a signed legacy table going out or coming in: the console
+relays none (its game_legacy_table_* hooks are not set: relaying() is false),
+and its 64 MB do not keep 32 KB for one */
+#ifdef HALO_XBOX_CONSOLE
+#define DELTA_PEER_TABLE_BYTES 1
+#else
+#define DELTA_PEER_TABLE_BYTES DELTA_LEGACY_SIGNED_SIZE
+#endif
+
 /* a signed legacy table coming in, piece by piece: one at a time, from one
 machine */
 struct delta_peer_table_in
@@ -320,7 +335,7 @@ struct delta_peer_table_in
 	/* the pieces in (bit n: the piece at n * DELTA_WIRE_TABLE_CHUNK) */
 	delta_u32 pieces;
 	delta_u32 time;
-	unsigned char data[DELTA_LEGACY_SIGNED_SIZE];
+	unsigned char data[DELTA_PEER_TABLE_BYTES];
 };
 
 struct delta_peer
@@ -368,7 +383,7 @@ struct delta_peer
 	goes out (its serial: 0 not read yet), and one coming in */
 	delta_u32 table_out_serial;
 	int table_out_size;
-	unsigned char table_out[DELTA_LEGACY_SIGNED_SIZE];
+	unsigned char table_out[DELTA_PEER_TABLE_BYTES];
 	struct delta_peer_table_in table_in;
 
 	/* both: what is known of each machine, the room, and each player's

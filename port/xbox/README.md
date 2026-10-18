@@ -154,6 +154,7 @@ The console's own, in `[console]`:
 | `large_caches` | `false` | on a 128 MB console, a 44 MB texture cache (64 MB on a 256 MB one); on a 64 MB console, a message and the Xbox's 22 MB |
 | `debug_geometry` | `false` | the debug build's debug geometry (lines and triangles drawn by debug commands): its three 480 KB buffers are made at the start only with it on. For development, on a console with room (a devkit) |
 | `simulate_64mb` | `false` | deprecated and ignored (`debug.txt` says so): a devkit gets 64 MB from the XBE's flag now, `tools/xbox_package.py --devkit-64mb` (see "Memory") |
+| `delta` | `"auto"` | Delta Peer as a client: joining a game whose host offers it (the desktop builds and the dedicated servers), the console says it is an Xbox, with its memory class, and nothing else, so that the stats site, the scoreboard and the server show Xbox. `"auto"` and `"on"` send it; `"off"` keeps the legacy protocol alone. A host without Delta, or any failure, leaves the game as it was. About 50 KB of the console's memory (all static: its code and 11 KB of data) |
 | `log_flush` | `"buffered"` | when `debug.txt` is written: `"buffered"` keeps the game's lines in memory and writes them once a second, when 8 KB wait, and at once for an assert, an exit or a crash; `"every_line"` writes each line as it comes (slow), for a crash hunt |
 
 And the desktop builds' that apply on the console: `display.direct_camera`,
@@ -187,9 +188,8 @@ machines, objects, the game state) stay the Xbox's on every console, so all
 of them play the same game; docs/cross-play.md has why the bigger game
 state needs more than a bigger console. `xbox_memory_require` is how a
 feature that needs 128 MB says so: a message at the main menu, and the
-game goes on without it. `xbox_memory_delta_class` is the hook for Delta
-Peer's platform key (`memory_class`, log2 of the megabytes: 6, 7 or 8)
-once Delta is built for the console.
+game goes on without it. `xbox_memory_delta_class` is Delta Peer's platform
+key's `memory_class` (log2 of the megabytes: 6, 7 or 8).
 
 The network tables hold 16 players (`HALO_CONSOLE_PLAYERS`, as the Xbox's;
 `configure.py --console-players`, console-neutral like `--console-debug-tools`): the

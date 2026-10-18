@@ -817,7 +817,7 @@ static struct
 } network_game_client_advertised_versions[MAXIMUM_NETWORK_ADVERTISED_GAMES];
 
 
-#ifdef HALO_GAME_BROWSER
+#if defined(HALO_GAME_BROWSER) || defined(HALO_CONSOLE_DELTA)
 /* port: the joined game's advertisement's flags (HALO_PORT_ADVERTISED_FLAGS_OFFSET),
 for Delta Peer (network_game_client_delta_frame); 0 for the host's own game */
 static byte network_game_client_joined_flags;
@@ -930,7 +930,7 @@ void network_game_client_dispose(
 		network_game_client_dont_use_directly_in_use = FALSE;
 	}
 
-#ifdef HALO_GAME_BROWSER
+#if defined(HALO_GAME_BROWSER) || defined(HALO_CONSOLE_DELTA)
 	delta_peer_game_stop(FALSE);
 #endif
 	network_event("network client disposed");
@@ -1271,7 +1271,7 @@ boolean network_game_client_idle(
 		break;
 	}
 
-#ifdef HALO_GAME_BROWSER
+#if defined(HALO_GAME_BROWSER) || defined(HALO_CONSOLE_DELTA)
 	network_game_client_delta_frame(client);
 #endif
 
@@ -2091,7 +2091,7 @@ boolean network_game_client_initiate_join_game(
 	client->join_in_progress = TRUE;
 	client->connect_process = 0;
 	client->connection_attempt_time = system_milliseconds();
-#ifdef HALO_GAME_BROWSER
+#if defined(HALO_GAME_BROWSER) || defined(HALO_CONSOLE_DELTA)
 	/* (an advertised game's flags; the host's own game, joined through
 	127.0.0.1, is no advertised one) */
 	{
@@ -3527,7 +3527,7 @@ long network_game_client_invite_host_advertisement(
 }
 #endif
 
-#ifdef HALO_GAME_BROWSER
+#if defined(HALO_GAME_BROWSER) || defined(HALO_CONSOLE_DELTA)
 #include "memory/byte_swapping.h"
 #include "../../port/linux/src/delta_peer.h"
 
