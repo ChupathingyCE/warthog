@@ -70,7 +70,8 @@ int main(int argc, char **argv)
 	if (!strcmp(mode, "new"))
 	{
 		remove(CONFIG_FILE);
-		expect(config_boolean("console.simulate_64mb") == 0, "console.simulate_64mb is not false");
+		expect(config_boolean("console.debug_geometry") == 0, "console.debug_geometry is not false");
+		expect(!strcmp(config_string("console.log_flush"), "buffered"), "console.log_flush is not buffered");
 		expect(!strcmp(config_string("console.join"), ""), "console.join is not empty");
 		expect_shared();
 		text = file_text();
@@ -80,7 +81,8 @@ int main(int argc, char **argv)
 			expect(strstr(text, "config_version = 2\n") != NULL, "no config_version");
 			expect(strstr(text, "\n[console]\n") != NULL, "no [console]");
 			expect(strstr(text, "# bypass_security = false\n") != NULL, "no bypass_security");
-			expect(strstr(text, "# simulate_64mb = false\n") != NULL, "no simulate_64mb");
+			expect(strstr(text, "# debug_geometry = false\n") != NULL, "no debug_geometry");
+			expect(strstr(text, "# log_flush = \"buffered\"\n") != NULL, "no log_flush");
 			expect(strstr(text, "# game_list_server = \"\"\n") != NULL, "no game_list_server");
 			expect(strstr(text, "# online = true\n") != NULL, "no network.online");
 			expect(strstr(text, "fullscreen") == NULL, "a desktop setting written");
@@ -105,15 +107,19 @@ int main(int argc, char **argv)
 		if (!file)
 			return 1;
 		fputs("# The layout of this file, for the game: leave it.\nconfig_version = 2\n\n[console]\n"
-			"bypass_security = true\nsimulate_64mb = true\njoin = \"192.168.1.20\"\n", file);
+			"bypass_security = true\ndebug_geometry = true\nlog_flush = \"every_line\"\n"
+			"simulate_64mb = true\njoin = \"192.168.1.20\"\n", file);
 		fclose(file);
 		expect(config_boolean("console.bypass_security") == 1, "console.bypass_security is not true");
+		expect(config_boolean("console.debug_geometry") == 1, "console.debug_geometry is not true");
+		expect(!strcmp(config_string("console.log_flush"), "every_line"), "console.log_flush is not every_line");
+		/* (deprecated, ignored by the game, still a setting that reads) */
 		expect(config_boolean("console.simulate_64mb") == 1, "console.simulate_64mb is not true");
 		expect(config_boolean("console.large_caches") == 0, "console.large_caches is not false");
 		expect(!strcmp(config_string("console.join"), "192.168.1.20"), "console.join is not the address");
 		expect_shared();
 		text = file_text();
-		expect(text && strstr(text, "simulate_64mb = true\n") != NULL, "the value written is gone");
+		expect(text && strstr(text, "debug_geometry = true\n") != NULL, "the value written is gone");
 		expect(text && strstr(text, "# large_caches = false\n") != NULL, "the missing settings were not added");
 		free(text);
 	}

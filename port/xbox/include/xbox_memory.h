@@ -46,8 +46,8 @@ and the caller goes on without the feature. Never a crash */
 int xbox_memory_require(int memory_class, const wchar_t *text);
 
 /* the first thing main does (shell_xbox.c): the memory read and logged
-(and console.simulate_64mb's simulation set up, after D:\config.toml is
-read: xbox_config.h) before anything else is allocated */
+(after D:\config.toml is read: xbox_config.h) before anything else is
+allocated */
 void xbox_memory_startup(void);
 
 /* a line straight to D:\debug.txt ("boot: "), opened and closed for each,

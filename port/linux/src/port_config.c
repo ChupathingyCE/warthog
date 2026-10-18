@@ -490,8 +490,8 @@ static const struct config_setting config_settings[] =
 		"keeps System Link's security, Xboxes only. tools/xbox_package.py\n"
 		"writes true unless --secure. Read when the game starts." },
 	{ "console.simulate_64mb", _config_boolean, "false", NULL, _environment_value, _platform_xbox,
-		"For testing: a 128 MB console (a devkit) acts as a stock 64 MB one, its\n"
-		"memory above 64 MB held for the whole run." },
+		"Deprecated, ignored: a devkit gets 64 MB from the XBE's own flag now\n"
+		"(tools/xbox_package.py --devkit-64mb)." },
 	{ "console.large_caches", _config_boolean, "false", NULL, _environment_value, _platform_xbox,
 		"On a 128 MB console, a larger texture cache (44 MB; 64 MB on a 256 MB\n"
 		"console). A stock 64 MB console shows a message and keeps the Xbox's\n"

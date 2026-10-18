@@ -25,8 +25,10 @@ memory cannot hold the Xbox's caches and still leave Direct3D and the heap
 theirs gets a smaller texture cache (down to 19 MB) rather than a failed
 start.
 
-console.simulate_64mb makes a devkit or upgraded console act as a stock one
-(simulate_stock_memory), to test the 64 MB path on a 128 MB devkit.
+A devkit tests the 64 MB path with the XBE's own flag (tools/xbox_package.py
+--devkit-64mb: XINIT_LIMIT_DEVKIT_MEMORY), which makes its kernel give the
+game 64 MB, as a stock console has. console.simulate_64mb, which held the
+memory above 64 MB from inside the game, is replaced by it.
 
 From the first line of main (xbox_memory_startup), each step of the start
 is written to D:\debug.txt at once ("boot:" lines: the memory, each cache
@@ -65,7 +67,6 @@ int xbox_memory_delta_class_of(int memory_class)
 		return 0;
 	}
 }
-
 
 #ifdef _XBOX
 
@@ -125,15 +126,6 @@ enum
 	buffer), and the game's and the system's own allocations */
 	_free_after_caches = 0x800000,
 
-	/* a stock console's memory, which console.simulate_64mb makes a bigger one
-	keep to */
-	_stock_memory = 64UL << 20,
-	/* the free memory a stock console starts the game with (measured on
-	retail hardware: about 57 MB) */
-	_stock_free_target = 57UL << 20,
-	_simulation_chunk = 0x100000,
-	_simulation_smallest_chunk = 0x10000,
-
 	/* how often xbox_memory_update looks at the free memory (main loop
 	passes), and how far below the last low it must be to be logged */
 	_low_check_interval = 300,
@@ -147,8 +139,6 @@ static struct
 	unsigned long available;
 	const char *source;
 	int memory_class;
-	int simulated;
-	unsigned long simulation_held;
 	int large_caches;
 	unsigned long texture_cache_size;
 	int texture_cache_reduced;
@@ -221,74 +211,13 @@ unsigned long xbox_memory_free(void)
 	return available;
 }
 
-/* console.simulate_64mb: a console with more than 64 MB acts as a stock one. All
-of its memory above the first 64 MB (physical addresses from 0x4000000) is
-taken and kept for the whole run, so that every later allocation (the
-caches, Direct3D's, the heap's) has only what a stock console has. A
-devkit's own debug software lives in the low 64 MB too, so the test is a
-little harder than a stock console, never easier */
-static void simulate_stock_memory(void)
-{
-	unsigned long wanted = memory.total > _stock_memory ? memory.total - _stock_memory : 0;
-	unsigned long chunk = _simulation_chunk;
-	/* (the kernel takes the highest acceptable address as the last byte it
-	may use, and turns 0xFFFFFFFF into an empty range: the console's own last
-	byte is the highest) */
-	unsigned long highest = memory.total ? memory.total - 1 : 0;
-	unsigned long taken_below = 0;
-	unsigned long available, excess;
-
-	memory.simulated = 1;
-	while (memory.simulation_held < wanted)
-	{
-		if (chunk > wanted - memory.simulation_held)
-			chunk = wanted - memory.simulation_held;
-		if (XPhysicalAllocEx(chunk, _stock_memory, highest, 0, PAGE_READWRITE))
-		{
-			memory.simulation_held += chunk;
-			continue;
-		}
-		if (chunk <= _simulation_smallest_chunk)
-			break;
-		chunk >>= 1;
-	}
-	/* a devkit keeps memory of its own above 64 MB (and a stock console's
-	kernel, below, takes about 7 MB): what is still free beyond a stock
-	console's is taken from anywhere, to land where a stock console starts */
-	status_read(&memory.total, &memory.available, &memory.source);
-	available = memory.available;
-	chunk = _simulation_chunk;
-	while (available > _stock_free_target)
-	{
-		excess = available - _stock_free_target;
-		if (chunk > excess)
-			chunk = excess & ~0xFFFUL;
-		if (!chunk)
-			break;
-		if (XPhysicalAllocEx(chunk, 0, highest, 0, PAGE_READWRITE))
-		{
-			taken_below += chunk;
-			available -= chunk;
-			continue;
-		}
-		if (chunk <= _simulation_smallest_chunk)
-			break;
-		chunk >>= 1;
-	}
-	xbox_boot_log("memory: console.simulate_64mb: acting as a 64 MB console, %lu KB above 64 MB held (of %lu KB), "
-		"%lu KB more below it; %lu KB free (a stock console starts near %lu KB)",
-		memory.simulation_held >> 10, wanted >> 10, taken_below >> 10, available >> 10,
-		(unsigned long)_stock_free_target >> 10);
-	memory.simulation_held += taken_below;
-}
-
 static void memory_read(void)
 {
 	if (memory.known)
 		return;
 	memory.known = 1;
 #if defined(HALO_CONSOLE_PLAYERS) && HALO_CONSOLE_PLAYERS > 16
-	/* a test build (configure.py --xbox-players): its network tables hold
+	/* a test build (configure.py --console-players): its network tables hold
 	more than the Xbox's 16 players, which a stock console's memory does not
 	(the first message, shown at the main menu) */
 	xbox_boot_log("players: this build holds %d players, not the Xbox's 16: a test build", HALO_CONSOLE_PLAYERS);
@@ -296,13 +225,9 @@ static void memory_read(void)
 #endif
 	status_read(&memory.total, &memory.available, &memory.source);
 	if (config_boolean("console.simulate_64mb"))
-	{
-		simulate_stock_memory();
-		status_read(&memory.total, &memory.available, &memory.source);
-		memory.memory_class = _xbox_memory_class_64mb;
-	}
-	else
-		memory.memory_class = xbox_memory_class_of(memory.total);
+		xbox_boot_log("console.simulate_64mb is deprecated and ignored: a devkit gets 64 MB from the XBE's flag "
+			"(tools/xbox_package.py --devkit-64mb)");
+	memory.memory_class = xbox_memory_class_of(memory.total);
 	memory.lowest_free = memory.available;
 	memory.large_caches = config_boolean("console.large_caches");
 

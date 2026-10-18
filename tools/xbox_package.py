@@ -16,6 +16,10 @@ other setting, at its default, when it starts. The old switch files there
 OUT to the console as one folder, e.g. E:\\Games\\Warthog
 (port/xbox/README.md).
 
+With --devkit-64mb the copied default.xbe asks the kernel for 64 MB
+(XINIT_LIMIT_DEVKIT_MEMORY in the XBE's init flags), so a 128 MB devkit runs
+the game with the memory of a stock console. A stock console ignores the flag.
+
 The maps are the user's own (the NTSC disc's, 01.10.12.2276); none are in
 this repository.
 """
@@ -35,6 +39,24 @@ def place(source: Path, destination: Path) -> None:
         os.link(source, destination)
     except OSError:
         shutil.copy2(source, destination)
+
+
+# The XBE header's init flags (cxbe's Xbe.h: dwInitFlags, at 0x124) and the
+# bit that limits a devkit's memory to 64 MB (XINIT_LIMIT_DEVKIT_MEMORY)
+XBE_INIT_FLAGS_OFFSET = 0x124
+XINIT_LIMIT_DEVKIT_MEMORY = 0x4
+
+
+def set_devkit_memory_limit(image: bytes, limit: bool) -> bytes:
+    """image (an XBE) with the init flag that limits a devkit to 64 MB set or
+    cleared; every other byte as it was."""
+    if len(image) < XBE_INIT_FLAGS_OFFSET + 4 or image[:4] != b"XBEH":
+        raise ValueError("not an Xbox executable (XBEH)")
+    flags = int.from_bytes(image[XBE_INIT_FLAGS_OFFSET:XBE_INIT_FLAGS_OFFSET + 4], "little")
+    flags = flags | XINIT_LIMIT_DEVKIT_MEMORY if limit else flags & ~XINIT_LIMIT_DEVKIT_MEMORY
+    patched = bytearray(image)
+    patched[XBE_INIT_FLAGS_OFFSET:XBE_INIT_FLAGS_OFFSET + 4] = flags.to_bytes(4, "little")
+    return bytes(patched)
 
 
 # a host or IPv4 address, :port optional
@@ -86,6 +108,8 @@ def main() -> int:
                         help="console.bypass_security = false: XNet's secure system link")
     parser.add_argument("--game-list-server", metavar="HOST[:PORT]",
                         help="console.game_list_server: the list's server if its name does not resolve")
+    parser.add_argument("--devkit-64mb", action="store_true",
+                        help="set the XBE's flag that limits a devkit's memory to 64 MB, to test as a stock console")
     args = parser.parse_args()
     if args.game_list_server and not re.fullmatch(SERVER_PATTERN, args.game_list_server):
         print("--game-list-server: a host or IPv4 address, :port optional", file=sys.stderr)
@@ -101,7 +125,13 @@ def main() -> int:
         print(f"no ui.map in {maps}", file=sys.stderr)
         return 1
     (out / "maps").mkdir(parents=True, exist_ok=True)
-    shutil.copy2(args.xbe, out / "default.xbe")
+    image = args.xbe.read_bytes()
+    try:
+        image = set_devkit_memory_limit(image, args.devkit_64mb)
+    except ValueError as error:
+        print(f"{args.xbe}: {error}", file=sys.stderr)
+        return 1
+    (out / "default.xbe").write_bytes(image)
     for path in files:
         place(path, out / "maps" / path.name)
     config = out / "config.toml"
@@ -119,7 +149,8 @@ def main() -> int:
     for old in ("bypass_security.txt", "game_list.txt"):
         if (out / old).exists():
             (out / old).unlink()
-    print(f"{out}: default.xbe, {len(files)} map files, config.toml")
+    print(f"{out}: default.xbe{' (devkit limited to 64 MB)' if args.devkit_64mb else ''}, "
+          f"{len(files)} map files, config.toml")
     return 0
 
 
