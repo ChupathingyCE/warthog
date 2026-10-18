@@ -509,6 +509,23 @@ static void render_player_frame(
 		window->render_camera.z_far = window->render_camera.z_near + 0.01f;
 	}
 
+	/* port: a map whose sky or fog gives the camera a near plane that is not
+	a number, or so far that adding to it changes nothing (a damaged or
+	foreign map's), drew nothing the retail game could have shown and halted
+	the debug build at render_camera_build_frustum: the camera takes the
+	game's own near and far clip distances instead */
+	if (!(window->render_camera.z_near >= 0.0f) ||
+		!(window->render_camera.z_far > window->render_camera.z_near))
+	{
+		if (!render_invalid_fog_warning_displayed)
+		{
+			error(2, "### ERROR the camera's near and far planes are not numbers; drawn without the fog's");
+			render_invalid_fog_warning_displayed = TRUE;
+		}
+		window->render_camera.z_near = rasterizer_globals.near_clip_distance;
+		window->render_camera.z_far = rasterizer_globals.far_clip_distance;
+	}
+
 	match_assert(
 		"c:\\halo\\SOURCE\\render\\render.c",
 		187,
