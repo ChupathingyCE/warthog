@@ -244,6 +244,13 @@ static void memory_read(void)
 	if (memory.known)
 		return;
 	memory.known = 1;
+#if defined(HALO_XBOX_PLAYERS) && HALO_XBOX_PLAYERS > 16
+	/* a test build (configure.py --xbox-players): its network tables hold
+	more than the Xbox's 16 players, which a stock console's memory does not
+	(the first message, shown at the main menu) */
+	xbox_boot_log("players: this build holds %d players, not the Xbox's 16: a test build", HALO_XBOX_PLAYERS);
+	memory.message = L"Test build: more than 16 players.\r\nNot for a stock 64 MB Xbox.";
+#endif
 	status_read(&memory.total, &memory.available, &memory.source);
 	if (config_boolean("console.simulate_64mb"))
 	{

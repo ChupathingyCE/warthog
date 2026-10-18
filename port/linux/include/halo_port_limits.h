@@ -25,8 +25,22 @@ limits, to test the console's side of cross-play against the PC builds on
 one computer (configure.py --console-limits); it is never a release. */
 #if defined(HALO_XBOX_CONSOLE) || defined(HALO_CONSOLE_LIMITS)
 #define HALO_PORT_CONSOLE_LIMITS 1
+#ifdef HALO_XBOX_CONSOLE
+/* HALO_XBOX_PLAYERS (configure.py --xbox-players) is the players the
+console's build takes: 16, the Xbox's, unless a test build asks for 32 or 64
+(which a stock console's memory does not hold: the build says so when it
+starts). The tables of the players, the machines and the tunnel's peers
+(P2P_MAXIMUM_PEERS, p2p_internal.h) are sized by it; a host's game with more
+is left as a full game is (network_client_message_handler.c). */
+#ifndef HALO_XBOX_PLAYERS
+#define HALO_XBOX_PLAYERS 16
+#endif
+#define HALO_PORT_MAXIMUM_NETWORK_PLAYERS HALO_XBOX_PLAYERS
+#define HALO_PORT_MAXIMUM_NETWORK_MACHINES HALO_XBOX_PLAYERS
+#else
 #define HALO_PORT_MAXIMUM_NETWORK_PLAYERS 16
 #define HALO_PORT_MAXIMUM_NETWORK_MACHINES 16
+#endif
 #else
 #define HALO_PORT_MAXIMUM_NETWORK_PLAYERS 128
 #define HALO_PORT_MAXIMUM_NETWORK_MACHINES 128

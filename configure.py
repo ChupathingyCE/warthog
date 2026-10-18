@@ -114,6 +114,14 @@ parser.add_argument(
     "console's build by default (port/xbox/README.md)",
 )
 parser.add_argument(
+    "--xbox-players",
+    type=int,
+    choices=(16, 32, 64),
+    default=16,
+    help="original Xbox build: the players its network tables hold (HALO_XBOX_PLAYERS). 16 is the Xbox's; "
+    "32 and 64 are test builds a stock 64 MB console does not hold, and say so when they start",
+)
+parser.add_argument(
     "--oxdk",
     metavar="DIR",
     type=Path,
@@ -173,6 +181,7 @@ sln = SimpleNamespace(
     android_guest_cc=args.android_guest_cc,
     xbox_d3d8=args.xbox_d3d8,
     xbox_debug_tools=args.xbox_debug_tools,
+    xbox_players=args.xbox_players,
     oxdk_dir=args.oxdk,
     oxdk360_dir=args.oxdk360,
     llvm_xenon=args.llvm_xenon,

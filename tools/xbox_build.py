@@ -252,6 +252,10 @@ def generate_xbox_build(n: Writer, sln: Any) -> None:
                 implicit=[*implicit, *([source] if compiled and compiled != source else [])],
                 variables={"cflags": cflags})
 
+    # configure.py --xbox-players: the players the build holds (16, a stock
+    # Xbox's; halo_port_limits.h)
+    players = int(getattr(sln, "xbox_players", 16) or 16)
+    players_flag = f"-DHALO_XBOX_PLAYERS={players}"
     prefix_header = PORT_DIR / "include" / "halo_xbox_prefix.h"
     # the game's sources, defines and include directories (port/linux/port.json)
     config = _load_port_config()
@@ -263,6 +267,7 @@ def generate_xbox_build(n: Writer, sln: Any) -> None:
         # configure.py --xbox-debug-tools: the developer tools of the debug
         # decomp stay in (halo_xbox_prefix.h)
         *(["-DHALO_XBOX_DEBUG_TOOLS"] if getattr(sln, "xbox_debug_tools", False) else []),
+        players_flag,
         f"-include {_quote(prefix_header)}", f"-include {_quote(semantics_header)}",
         game_defines_and_includes(config), f"-idirafter {_quote(XDK_INCLUDE)}", f"-idirafter {_quote(xdk / 'include')}",
         # the port's own headers (halo_menus.h, halo_keyboard.h), after the
@@ -298,7 +303,7 @@ def generate_xbox_build(n: Writer, sln: Any) -> None:
     for source in sorted((PORT_DIR / "game").glob("*.c")):
         add_object(source, f"-std=gnu89 {game_cflags}", [semantics_header, prefix_header])
 
-    support_cflags = " ".join([*SUPPORT_FLAGS, f"-I{_quote(xdk / 'include')}"])
+    support_cflags = " ".join([*SUPPORT_FLAGS, players_flag, f"-I{_quote(xdk / 'include')}"])
     for source in sorted((PORT_DIR / "src").glob("*.c")):
         add_object(source, support_cflags)
     for source in sorted((PORT_DIR / "src").glob("*.cpp")):
@@ -316,7 +321,7 @@ def generate_xbox_build(n: Writer, sln: Any) -> None:
     # internet play (the desktop builds' tunnel, joining only: port/xbox/src/
     # xbox_p2p.c is its platform layer), its sources as they are, with
     # port/xbox/p2p's headers in place of the Linux layer's
-    p2p_cflags = " ".join([*SUPPORT_FLAGS, "-std=gnu11", f"-I{_quote(PORT_DIR / 'p2p')}", f"-I{_quote(LINUX_SRC)}",
+    p2p_cflags = " ".join([*SUPPORT_FLAGS, players_flag, "-std=gnu11", f"-I{_quote(PORT_DIR / 'p2p')}", f"-I{_quote(LINUX_SRC)}",
                            f"-I{_quote(KCP_DIR)}", f"-I{_quote(MONOCYPHER_DIR)}", f"-I{_quote(xdk / 'include')}"])
     for source in P2P_SOURCES:
         generated = gen_dir / "p2p" / source.name
