@@ -113,6 +113,15 @@ static void clean_up_for_image_launch(
 	void)
 {
 	error(_error_silent, "preparing for XLaunchNewImage()...");
+#ifdef HALO_XBOX_CONSOLE
+	{
+		/* port: back to the dashboard from the game: debug.txt's waiting
+		lines (errors.c) reach the disk first */
+		extern void error_log_flush(void);
+
+		error_log_flush();
+	}
+#endif
 	saved_game_files_take_mutex();
 
 	if (cache_files_precache_in_progress())

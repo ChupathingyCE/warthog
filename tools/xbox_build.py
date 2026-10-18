@@ -233,6 +233,18 @@ def generate_xbox_build(n: Writer, sln: Any) -> None:
         restat=True,
     )
 
+    # the stamp of this build (xbox_memory.c logs it): written on every
+    # ninja run, from the commit and the time (tools/xbox_stamp.py)
+    stamp_source = gen_dir / "xbox_build_stamp.c"
+    n.rule(
+        name="xbox_stamp",
+        command="$python tools/xbox_stamp.py $out",
+        description="XBOX STAMP $out",
+        restat=True,
+    )
+    n.build(outputs="xbox_stamp_always", rule="phony")
+    n.build(outputs=stamp_source, rule="xbox_stamp", implicit=[Path("tools/xbox_stamp.py"), "xbox_stamp_always"])
+
     semantics_header = build_dir / "halo_msvc_semantics.h"
     game_headers = sorted(p for p in Path("source").rglob("*") if p.suffix in (".c", ".h"))
     # (the file-scope struct tags only: clang's MSVC target already gives a C
@@ -306,6 +318,7 @@ def generate_xbox_build(n: Writer, sln: Any) -> None:
     support_cflags = " ".join([*SUPPORT_FLAGS, players_flag, f"-I{_quote(xdk / 'include')}"])
     for source in sorted((PORT_DIR / "src").glob("*.c")):
         add_object(source, support_cflags)
+    add_object(stamp_source, support_cflags)
     for source in sorted((PORT_DIR / "src").glob("*.cpp")):
         add_object(source, " ".join([support_cflags, *SUPPORT_CXX_FLAGS]))
     for kind, source in (("common", LINUX_SRC / "halo_linker_common.c"), ("bink", LINUX_SRC / "bink_null.c")):
