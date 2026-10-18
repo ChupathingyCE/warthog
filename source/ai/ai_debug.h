@@ -340,6 +340,7 @@ struct ai_debug_state
 	real field_4C814;
 	boolean field_4C818;
 	char __unknown4C819[3];
+#ifndef HALO_XBOX_NO_DEBUG_TOOLS
 	struct path_state path_state;
 	boolean field_608A8;
 	char __unknown608A9[91];
@@ -348,6 +349,12 @@ struct ai_debug_state
 	char __unknown7D381[3];
 	struct firing_position_evaluation_context evaluation_context;
 	struct ai_debug_actor_record actor_record[NUMBER_OF_AI_DEBUG_ACTOR_RECORDS];
+#else
+	/* port: the console's build without the developer tools
+	(halo_xbox_prefix.h) has none of the path, firing position and actor
+	displays' records (almost 200 KB); their only writers are the AI's
+	(actor_firing_position.c) and ai_debug.c's displays */
+#endif
 	long field_859F4;
 	boolean field_859F8;
 	boolean field_859F9;

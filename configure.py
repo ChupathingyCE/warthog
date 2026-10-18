@@ -107,6 +107,13 @@ parser.add_argument(
     help="an Aug 2001 Direct3D library (d3d8ntpr.lib) for the original Xbox build, `ninja xbox` (port/xbox/README.md)",
 )
 parser.add_argument(
+    "--xbox-debug-tools",
+    action="store_true",
+    help="original Xbox build: the debug decomp's developer tools (HALO_XBOX_DEBUG_TOOLS: the profiler, "
+    "AI, render and collision debug, stack walker, libtiff and the bitmap tools), left out of the "
+    "console's build by default (port/xbox/README.md)",
+)
+parser.add_argument(
     "--oxdk",
     metavar="DIR",
     type=Path,
@@ -165,6 +172,7 @@ sln = SimpleNamespace(
     android_ndk=args.android_ndk,
     android_guest_cc=args.android_guest_cc,
     xbox_d3d8=args.xbox_d3d8,
+    xbox_debug_tools=args.xbox_debug_tools,
     oxdk_dir=args.oxdk,
     oxdk360_dir=args.oxdk360,
     llvm_xenon=args.llvm_xenon,

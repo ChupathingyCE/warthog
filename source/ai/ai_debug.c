@@ -355,6 +355,8 @@ void ai_debug_actor_deleted(
 	return;
 }
 
+#ifndef HALO_XBOX_NO_DEBUG_TOOLS
+
 struct path_debug_storage *ai_debug_get_last_path(
 	long actor_index)
 {
@@ -6239,3 +6241,205 @@ static long ai_debug_get_this_actor(
 
 	return actor_index;
 }
+
+#else
+
+/* port: the console's build without the developer tools
+(halo_xbox_prefix.h) keeps the AI debug state (the flags the AI and the
+scripts read, all off) and the actor record, and has none of its displays:
+the calls the AI makes answer with nothing, the commands say so */
+
+void ai_debug_communication_suppress(
+	long name_count,
+	char const **names)
+{
+	xbox_debug_tools_unavailable("ai_debug_communication_suppress");
+
+	return;
+}
+
+void ai_debug_communication_ignore(
+	long name_count,
+	char const **names)
+{
+	xbox_debug_tools_unavailable("ai_debug_communication_ignore");
+
+	return;
+}
+
+void ai_debug_communication_focus(
+	long name_count,
+	char const **names)
+{
+	xbox_debug_tools_unavailable("ai_debug_communication_focus");
+
+	return;
+}
+
+struct path_debug_storage *ai_debug_get_last_path(
+	long actor_index)
+{
+	return NULL;
+}
+
+struct path_debug_storage *ai_debug_get_path_storage(
+	long actor_index)
+{
+	return NULL;
+}
+
+void ai_debug_initialize_for_new_map(
+	void)
+{
+	return;
+}
+
+void ai_debug_update(
+	void)
+{
+	return;
+}
+
+void ai_debug_render(
+	void)
+{
+	return;
+}
+
+void ai_debug_sound_point_set(
+	void)
+{
+	return;
+}
+
+void ai_debug_lineoffire_new(
+	real_point3d const *origin,
+	real_vector3d const *vector)
+{
+	return;
+}
+
+void ai_debug_lineoffire_addpill(
+	real_point3d const *base,
+	real_vector3d const *directedheight,
+	real width,
+	boolean hit)
+{
+	return;
+}
+
+void ai_debug_lineoffire_success(
+	boolean success)
+{
+	return;
+}
+
+boolean ai_debug_highlight_cluster(
+	short index,
+	real_argb_color const **highlight_color)
+{
+	return FALSE;
+}
+
+void ai_debug_lineofsight_reset(
+	void)
+{
+	return;
+}
+
+void ai_debug_lineofsight(
+	real_point3d const *start,
+	short start_key,
+	real_point3d const *end,
+	short end_key)
+{
+	return;
+}
+
+void ai_debug_idle_look_clear(
+	long unit_index)
+{
+	return;
+}
+
+void ai_debug_idle_look_addprop(
+	long prop_index,
+	real weight)
+{
+	return;
+}
+
+void ai_debug_speak(
+	char const *vocalization_type_name)
+{
+	return;
+}
+
+void ai_debug_vocalize(
+	char const *priority_name,
+	char const *vocalization_name)
+{
+	xbox_debug_tools_unavailable("ai_debug_vocalize");
+
+	return;
+}
+
+void ai_debug_speak_list(
+	char const *list_name)
+{
+	xbox_debug_tools_unavailable("ai_debug_speak_list");
+
+	return;
+}
+
+void ai_debug_change_selected_encounter(
+	boolean a1)
+{
+	xbox_debug_tools_unavailable("ai_debug_change_selected_encounter");
+
+	return;
+}
+
+void ai_debug_teleport_to(
+	long ai_index)
+{
+	xbox_debug_tools_unavailable("ai_debug_teleport_to");
+
+	return;
+}
+
+void ai_debug_change_selected_actor(
+	boolean a1)
+{
+	xbox_debug_tools_unavailable("ai_debug_change_selected_actor");
+
+	return;
+}
+
+void ai_debug_select_encounter(
+	long encounter_index)
+{
+	return;
+}
+
+void ai_debug_select_actor(
+	long encounter_index,
+	long actor_index)
+{
+	return;
+}
+
+char *ai_debug_describe_actor(
+	long actor_index,
+	long unit_index,
+	boolean include_squad,
+	char *buffer,
+	long bufsize)
+{
+	if (buffer && bufsize > 0)
+		buffer[0] = '\0';
+
+	return buffer;
+}
+
+#endif

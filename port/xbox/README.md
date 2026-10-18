@@ -199,6 +199,14 @@ allocation of 256 KB or more and any that fails, and the free memory at the
 main loop; later, `memory: N KB free (a new low)` as a map loads or a match
 peaks. `console.simulate_64mb` (above) runs that path on a devkit.
 
+The debug decomp's developer tools are not in the console's build unless
+it is configured with `--xbox-debug-tools` (`HALO_XBOX_DEBUG_TOOLS`): the
+profiler, the AI debug displays, the render and collision debug, the stack
+walker, the texture cache listing, libtiff and the bitmap tools. Their code
+is kept, not removed, and what the game calls in them is a stub in the
+console's build; a console command or script that reaches one prints
+"not in this build". About 0.9 MB of the image.
+
 ## XLink Kai
 
 At the start `debug.txt` says whether the console's address is XLink

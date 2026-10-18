@@ -260,6 +260,9 @@ def generate_xbox_build(n: Writer, sln: Any) -> None:
         # configure.py --release: a failed assertion is noted in debug.txt
         # and the game goes on, as the retail game did (cseries.h)
         *(["-DHALO_RELEASE"] if getattr(sln, "port_release", False) else []),
+        # configure.py --xbox-debug-tools: the developer tools of the debug
+        # decomp stay in (halo_xbox_prefix.h)
+        *(["-DHALO_XBOX_DEBUG_TOOLS"] if getattr(sln, "xbox_debug_tools", False) else []),
         f"-include {_quote(prefix_header)}", f"-include {_quote(semantics_header)}",
         game_defines_and_includes(config), f"-idirafter {_quote(XDK_INCLUDE)}", f"-idirafter {_quote(xdk / 'include')}",
         # the port's own headers (halo_menus.h, halo_keyboard.h), after the
@@ -269,7 +272,12 @@ def generate_xbox_build(n: Writer, sln: Any) -> None:
         # co-op's: port/xbox/game/xbox_coop.c answers them on the console)
         f"-idirafter {_quote(Path('port/linux/game'))}",
     ])
+    debug_tools = getattr(sln, "xbox_debug_tools", False)
     for source in game_sources(config):
+        # (libtiff is a developer tool's: tiff_file.c, which exports the
+        # screenshots, is its only caller)
+        if not debug_tools and source.as_posix().startswith("source/bitmaps/libtiff/"):
+            continue
         add_object(source, f"-std=gnu89 {game_cflags}", [semantics_header, prefix_header],
                    _inline_export_wrapper(source, build_dir))
     # the game's C++, which the native builds replace (d3d8_gl.c): the frame

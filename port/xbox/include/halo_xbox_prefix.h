@@ -10,6 +10,18 @@ XDK.
 #ifndef __HALO_XBOX_PREFIX_H
 #define __HALO_XBOX_PREFIX_H
 
+/* The debug decomp's developer tools (the profiler, the AI, render and
+collision debug, the stack walker, libtiff and the bitmap tools) are not in
+the console's build unless it is configured with --xbox-debug-tools
+(HALO_XBOX_DEBUG_TOOLS). Their modules keep their code under
+#ifndef HALO_XBOX_NO_DEBUG_TOOLS and answer their calls with stubs;
+xbox_debug_tools_unavailable (port/xbox/game/xbox_debug_tools.c) says so
+for the console commands and scripts that reach them. */
+#ifndef HALO_XBOX_DEBUG_TOOLS
+#define HALO_XBOX_NO_DEBUG_TOOLS
+void xbox_debug_tools_unavailable(char const *name);
+#endif
+
 /* clang predeclares the MSVC _Interlocked* intrinsics with prototypes that
 conflict with the SDK's; the game never calls them (xdk_win32.h) */
 #define _InterlockedCompareExchange halo_xbox_InterlockedCompareExchange

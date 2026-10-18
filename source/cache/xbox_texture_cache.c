@@ -357,9 +357,11 @@ static const long bitmap_d3d_format_tables
 		NONE,
 	},
 };
+#ifndef HALO_XBOX_NO_DEBUG_TOOLS
 /* provisional name: the January map leaves this .bss array unnamed; it holds the debug
  * listing's cached bitmaps */
 static struct bitmap_data *texture_cache_debug_bitmaps[XBOX_TEXTURE_CACHE_ARRAY_PAGE_COUNT];
+#endif
 static struct xbox_texture_cache_globals xbox_texture_cache_globals;
 struct texture_cache_debug_options texture_cache_debug_options = {0};
 boolean debug_texture_cache = FALSE;
@@ -943,6 +945,7 @@ static boolean texture_cache_start_loading_bitmap(
 	return FALSE;
 }
 
+#ifndef HALO_XBOX_NO_DEBUG_TOOLS
 void texture_cache_debug_render(
 	void)
 {
@@ -1075,6 +1078,16 @@ void texture_cache_debug_render(
 
 	return;
 }
+#else
+
+/* port: the texture cache listing and graph are developer tools
+(halo_xbox_prefix.h) */
+void texture_cache_debug_render(
+	void)
+{
+	return;
+}
+#endif
 
 void *_texture_cache_bitmap_get_hardware_format(
 	struct bitmap_data *bitmap,
