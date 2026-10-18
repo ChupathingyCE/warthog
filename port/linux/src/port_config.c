@@ -189,7 +189,7 @@ static const struct config_setting config_settings[] =
 		_platform_all,
 		"Draw a panel behind the multiplayer scoreboard, for clearer text." },
 	{ "display.show_quit_players", _config_boolean, "true", "HALO_SHOW_QUIT_PLAYERS", _environment_value,
-		_platform_all,
+		_platform_all | _platform_xbox,
 		"Keep players who quit on the multiplayer scoreboard, as the original game\n"
 		"did; false leaves them off it, as OpenCE does." },
 	{ "display.scoreboard_background_color", _config_string, "\"16, 16, 16, 150\"", "HALO_SCOREBOARD_BACKGROUND_COLOR",
@@ -1857,11 +1857,13 @@ static const struct config_value *config_value(const char *name, enum config_typ
 	false, as before it had config.toml; the first few said in the log) */
 	if (!(config_settings[index].platforms & CONFIG_PLATFORM))
 	{
-		static int reported;
+		/* (each setting said once, not at each read: the scoreboard asks
+		every frame) */
+		static unsigned char reported[1024];
 
-		if (reported < 16)
+		if (index < (long)sizeof(reported) && !reported[index])
 		{
-			reported++;
+			reported[index] = 1;
 			platform_log("settings: %s is not one of the console's; read as empty", name);
 		}
 		return &none;
