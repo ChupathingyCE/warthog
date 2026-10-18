@@ -24,8 +24,11 @@ when the list's host does not resolve */
 #define GAME_LIST_FALLBACK_SETTING "console.game_list_server"
 #define GAME_LIST_FALLBACK_FILE "D:\\game_list.txt"
 
-/* the whole response, headers and all, at most */
-#define GAME_LIST_RESPONSE_SIZE 65536
+/* the whole response, headers and all, at most: the console's list is
+filtered to the games it can join (about 130 bytes a line, 41 lines in
+5.3 KB), and the buffer is on the fetch thread's stack, not the 64 KB
+malloc that a 64 MB console had no room for */
+#define GAME_LIST_RESPONSE_SIZE 10240
 /* the response's header lines, at most this many of this many bytes */
 #define GAME_LIST_HEADER_LINE 1024
 #define GAME_LIST_HEADERS 64

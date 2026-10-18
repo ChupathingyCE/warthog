@@ -127,7 +127,9 @@ static int fetch_once(char *buffer)
 
 static unsigned long __stdcall game_list_thread(void *parameter)
 {
-	char *buffer;
+	/* (the stack's: the thread has no other use for it, and the heap has
+	no 10 KB to spare on a 64 MB console while a game is open) */
+	char buffer[GAME_LIST_RESPONSE_SIZE];
 	unsigned long waited = 0;
 	int attempt;
 	int result = GAME_LIST_ERROR_CONNECT;
@@ -145,13 +147,6 @@ static unsigned long __stdcall game_list_thread(void *parameter)
 		set_state(_list_failed);
 		return 0;
 	}
-	buffer = (char *)malloc(GAME_LIST_RESPONSE_SIZE);
-	if (!buffer)
-	{
-		list_error = GAME_LIST_ERROR_TOO_LARGE;
-		set_state(_list_failed);
-		return 0;
-	}
 	DbgPrint("halo: game list: getting http://%s%s\n", GAME_LIST_HOST, GAME_LIST_PATH);
 	for (attempt = 1; attempt <= ATTEMPTS; attempt++)
 	{
@@ -163,7 +158,6 @@ static unsigned long __stdcall game_list_thread(void *parameter)
 		if (attempt < ATTEMPTS)
 			Sleep(RETRY_WAIT);
 	}
-	free(buffer);
 	list_error = result;
 	if (result == GAME_LIST_OK)
 	{
@@ -192,8 +186,9 @@ void xbox_game_list_request(void)
 	shown_state = XBOX_GAME_LIST_FETCHING;
 	set_state(_list_fetching);
 	/* (a stack of its own size: 0 is the main thread's, the XBE's 1 MB, all
-	of it committed memory on the Xbox) */
-	thread = CreateThread(NULL, 128 * 1024, game_list_thread, NULL, 0, NULL);
+	of it committed memory on the Xbox; 48 KB holds the response's buffer
+	and the fetch's frames, and is given back when the thread ends) */
+	thread = CreateThread(NULL, 48 * 1024, game_list_thread, NULL, 0, NULL);
 	if (!thread)
 	{
 		list_error = GAME_LIST_ERROR_CONNECT;
