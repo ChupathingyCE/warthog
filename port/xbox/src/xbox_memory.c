@@ -155,6 +155,9 @@ static struct
 	long update_count;
 } memory;
 
+/* the game's debug.txt lines, which wait in memory (source/cseries/errors.c) */
+void error_log_flush(void);
+
 void xbox_boot_log(const char *format, ...)
 {
 	char text[512];
@@ -166,6 +169,8 @@ void xbox_boot_log(const char *format, ...)
 	va_end(arguments);
 	text[sizeof(text) - 1] = 0;
 	DbgPrint("halo: %s\n", text);
+	/* (the game's lines first, which wait in memory: errors.c) */
+	error_log_flush();
 	/* (opened and closed for each line: a console that stops on the next
 	line still leaves this one in the file) */
 	file = fopen("d:\\debug.txt", "a+b");

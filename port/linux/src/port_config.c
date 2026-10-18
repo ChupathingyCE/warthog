@@ -500,6 +500,12 @@ static const struct config_setting config_settings[] =
 		"For development: the debug build's debug geometry (lines and triangles\n"
 		"drawn by debug commands), whose buffers take 1440 KB. Off, as the retail\n"
 		"game had none; a stock 64 MB console may not have the room." },
+	{ "console.log_flush", _config_string, "\"buffered\"", NULL, _environment_value, _platform_xbox,
+		"When debug.txt is written. \"buffered\": the game's lines wait in memory\n"
+		"and are written together, once a second, when 8 KB are waiting, and\n"
+		"at once for an assert, an exit or a crash. \"every_line\": each line is\n"
+		"written as it comes (slow, a file opened for each), for a crash hunt\n"
+		"where even the last line before the console stops must be there." },
 	{ "console.trace", _config_boolean, "false", NULL, _environment_value, _platform_xbox,
 		"Detailed traces in debug.txt, for reporting a join that fails: the main\n"
 		"loop each second, every hop of an internet join, the games advertised.\n"

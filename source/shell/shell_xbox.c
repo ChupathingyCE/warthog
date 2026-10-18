@@ -107,6 +107,8 @@ up (port/xbox/src/xbox_memory.c) */
 void xbox_memory_startup(void);
 void xbox_boot_log(char const *format, ...);
 unsigned long xbox_memory_free(void);
+/* (debug.txt's waiting lines: source/cseries/errors.c) */
+void error_log_flush(void);
 #endif
 
 int main(
@@ -136,6 +138,9 @@ int main(
 #endif
 			main_loop();
 			shell_dispose();
+#ifdef HALO_XBOX_CONSOLE
+			error_log_flush();
+#endif
 		}
 #ifdef HALO_XBOX_CONSOLE
 		else
@@ -147,6 +152,9 @@ int main(
 	}
 	__except (generic_exception_filter(GetExceptionCode(), GetExceptionInformation()))
 	{
+#ifdef HALO_XBOX_CONSOLE
+		error_log_flush();
+#endif
 		halt_and_catch_fire();
 	}
 

@@ -145,6 +145,7 @@ The console's own, in `[console]`:
 | `trace` | `false` | the bring-up traces: the main loop each second, every hop of an internet join, the advertisements seen, other hosts only as `enet#` tags (salted per run), never their Ethernet addresses; and XLink Kai's address for the console |
 | `large_caches` | `false` | on a 128 MB console, a 44 MB texture cache (64 MB on a 256 MB one); on a 64 MB console, a message and the Xbox's 22 MB |
 | `simulate_64mb` | `false` | a 128 MB console (a devkit) acts as a stock 64 MB one: its memory above 64 MB is taken at the start and kept, and it is in the 64 MB class |
+| `log_flush` | `"buffered"` | when `debug.txt` is written: `"buffered"` keeps the game's lines in memory and writes them once a second, when 8 KB wait, and at once for an assert, an exit or a crash; `"every_line"` writes each line as it comes (slow), for a crash hunt |
 
 And the desktop builds' that apply on the console: `display.direct_camera`,
 `audio.music_volume`, `audio.effects_volume`, `game.console_log`,
@@ -179,6 +180,12 @@ feature that needs 128 MB says so: a message at the main menu, and the
 game goes on without it. `xbox_memory_delta_class` is the hook for Delta
 Peer's platform key (`memory_class`, log2 of the megabytes: 6, 7 or 8)
 once Delta is built for the console.
+
+The network tables hold 16 players (`HALO_XBOX_PLAYERS`, as the Xbox's): the
+players, the machines and the internet tunnel's peers. A host's game with
+more machines or players is left as a full game, never overflowed. A test
+build with 32 or 64 (`configure.py --xbox-players 32`) is more than a stock
+console's memory holds, and says so on screen when the main menu comes up.
 
 A stock 64 MB console has about what the Xbox game had: its caches (game
 state, tags, textures, sound: 51 MB) are the Xbox's, so the image and the
