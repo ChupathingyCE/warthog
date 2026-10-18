@@ -117,7 +117,13 @@ enum
 	sending from ever new ports has a few a second, not one a datagram */
 	PROXY_REPLACE_TIME = 1000,
 	MAXIMUM_STUN_SERVERS = 4,
+#ifndef P2P_JOINER_ONLY
 	STREAM_BUFFER_SIZE = 16384,
+#else
+	/* (a message of the stream, 1.2 KB at most, is what it takes in: the
+	original Xbox's eight streams hold 64 KB, not 128 KB) */
+	STREAM_BUFFER_SIZE = 8192,
+#endif
 	STREAM_CHUNK_SIZE = 1024,
 	/* the most unacknowledged messages a stream sends ahead */
 	STREAM_WINDOW = 128,
@@ -368,7 +374,29 @@ static struct
 
 /* the proxy (its index + 1) with each local port (all of theirs are on
 p2p.local_address) */
+#ifndef P2P_JOINER_ONLY
 static unsigned short proxy_by_port[65536];
+#define PROXY_BY_PORT(port) proxy_by_port[port]
+#define PROXY_BY_PORT_SET(port, value) (proxy_by_port[port] = (unsigned short)(value))
+#else
+/* (the stand-in of a port, 1 more than its index, or 0: a machine that only
+joins has a few stand-ins, which a search finds, not a 128 KB table) */
+static unsigned short proxy_by_port_search(unsigned short port);
+#define PROXY_BY_PORT(port) proxy_by_port_search(port)
+#define PROXY_BY_PORT_SET(port, value) ((void)(port), (void)(value))
+
+static unsigned short proxy_by_port_search(unsigned short port)
+{
+	int index;
+
+	for (index = 0; index < MAXIMUM_PROXIES; index++)
+	{
+		if (p2p.proxies[index].socket >= 0 && p2p.proxies[index].local_port == port)
+			return (unsigned short)(index + 1);
+	}
+	return 0;
+}
+#endif
 
 static unsigned char identifier[P2P_IDENTIFIER_SIZE];
 /* this run's X25519 keys, which the identifier comes from: from an Ed25519
@@ -1437,7 +1465,7 @@ static void proxy_close(struct proxy *proxy)
 	if (proxy->socket < 0)
 		return;
 	close_socket(&proxy->socket);
-	proxy_by_port[proxy->local_port] = 0;
+	PROXY_BY_PORT_SET(proxy->local_port, 0);
 	remember_closed(0, proxy->local_port, proxy->peer, proxy->remote_port);
 	for (entry = 0; entry < peer->proxy_count; entry++)
 	{
@@ -1502,7 +1530,7 @@ static struct proxy *find_proxy(int peer_index, unsigned short remote_port, int 
 	free_proxy->used_time = p2p_now();
 	free_proxy->pinned_socket = -1;
 	peer->proxies[peer->proxy_count++] = (short)(free_proxy - p2p.proxies);
-	proxy_by_port[free_proxy->local_port] = (unsigned short)(free_proxy - p2p.proxies + 1);
+	PROXY_BY_PORT_SET(free_proxy->local_port, free_proxy - p2p.proxies + 1);
 	forget_closed(0, free_proxy->local_port);
 	return free_proxy;
 }
@@ -1634,9 +1662,9 @@ int p2p_incoming(int stream, unsigned long *address, unsigned short *port)
 			}
 		}
 	}
-	else if (proxy_by_port[*port])
+	else if (PROXY_BY_PORT(*port))
 	{
-		struct proxy const *proxy = &p2p.proxies[proxy_by_port[*port] - 1];
+		struct proxy const *proxy = &p2p.proxies[PROXY_BY_PORT(*port) - 1];
 
 		*address = p2p.peers[proxy->peer].virtual_address;
 		*port = proxy->remote_port;
@@ -3317,7 +3345,13 @@ void p2p_initialize(unsigned long local_address)
 		/* all of a host's traffic, up to a 128-machine game's, goes through
 		this one socket: buffers as large as the game's own sockets' (at
 		least 1 MB, transport_endpoint_winsock.c) */
+#ifndef P2P_JOINER_ONLY
 		int size = 1 << 20;
+#else
+		/* (the console's, 32 KB: it only joins one host's game of 16
+		players, and XNet's buffers are the console's memory) */
+		int size = 32 * 1024;
+#endif
 
 		posix_socket_setsockopt(p2p.tunnel_socket, SOL_SOCKET, SO_SNDBUF, &size, sizeof(size));
 		posix_socket_setsockopt(p2p.tunnel_socket, SOL_SOCKET, SO_RCVBUF, &size, sizeof(size));

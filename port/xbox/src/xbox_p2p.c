@@ -101,6 +101,9 @@ struct thread_start
 	void *argument;
 };
 
+#define THREAD_STACK_SIZE (96 * 1024)
+void xbox_memory_heap_allocation(const char *file, long line, unsigned long size, const void *address);
+
 static struct thread_start thread_starts[4];
 static long thread_start_next;
 
@@ -125,9 +128,13 @@ int pthread_create(pthread_t *thread, const pthread_attr_t *attributes, void *(*
 	slot = &thread_starts[index];
 	slot->start = start;
 	slot->argument = argument;
-	handle = CreateThread(NULL, 256 * 1024, thread_main, slot, 0, NULL);
+	/* (96 KB: the tunnel's locals are a few packets of 1.4 KB, and the
+	stack is committed memory a 64 MB console is short of; it is given back
+	when the thread ends) */
+	handle = CreateThread(NULL, THREAD_STACK_SIZE, thread_main, slot, 0, NULL);
 	if (!handle)
 		return -1;
+	xbox_memory_heap_allocation("xbox_p2p.c (thread stack)", index, THREAD_STACK_SIZE, handle);
 	*thread = (pthread_t)handle;
 	return 0;
 }

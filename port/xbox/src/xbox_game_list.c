@@ -24,6 +24,7 @@ No address is ever logged: the host's name, or "console.game_list_server's"
 #include "../../linux/src/port_config.h"
 
 ULONG __cdecl DbgPrint(PCSTR format, ...);
+void xbox_memory_heap_allocation(const char *file, long line, unsigned long size, const void *address);
 int snprintf(char *buffer, size_t size, const char *format, ...);
 /* the game's (cseries/errors.c, bungie_net/network/transport_endpoint_set_winsock.c) */
 void error(short priority, const char *format, ...);
@@ -189,6 +190,8 @@ void xbox_game_list_request(void)
 	of it committed memory on the Xbox; 48 KB holds the response's buffer
 	and the fetch's frames, and is given back when the thread ends) */
 	thread = CreateThread(NULL, 48 * 1024, game_list_thread, NULL, 0, NULL);
+	if (thread)
+		xbox_memory_heap_allocation("xbox_game_list.c (thread stack)", 0, 48 * 1024, thread);
 	if (!thread)
 	{
 		list_error = GAME_LIST_ERROR_CONNECT;

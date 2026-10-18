@@ -496,7 +496,7 @@ void *debug_malloc(
 	/* port: the console's large allocations, and any that fails, in
 	debug.txt (port/xbox/src/xbox_memory.c): what a 64 MB console runs out
 	of */
-	if (pointer == NULL || size >= 0x40000)
+	if (pointer == NULL || size >= 0x4000)
 	{
 		void xbox_memory_heap_allocation(char const *file, long line, unsigned long size, void const *address);
 
