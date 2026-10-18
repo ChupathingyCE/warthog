@@ -379,6 +379,7 @@ int xbox_trace_enabled(void);
 
 /* (port/xbox/game/xbox_coop.c; interface/ui_widget.c) */
 boolean xbox_coop_game(long engine_type);
+boolean xbox_coop_variant(long engine_type, wchar_t const *description);
 void display_error_text_deferred(wchar_t const *text, short local_player_index);
 
 static boolean network_game_client_from_tunnel(
@@ -1141,7 +1142,8 @@ static boolean network_game_client_receive_game_settings_piece(
 				xbox_coop.c): a game that turns co-op (its host set it in the
 				lobby, or a listing missed it) is left, and the player told */
 #ifdef HALO_XBOX_CONSOLE
-				if (xbox_coop_game(network_game_client_settings_folded.variant.game_engine_index))
+				if (xbox_coop_variant(network_game_client_settings_folded.variant.game_engine_index,
+					network_game_client_settings_folded.variant.human_readable_game_description))
 				{
 					network_event("co-op: leaving the host's game: it is co-op, which the original Xbox does not play");
 					display_error_text_deferred(L"This game is network co-op,\r\nwhich the original Xbox\r\ndoesn't play yet.", NONE);

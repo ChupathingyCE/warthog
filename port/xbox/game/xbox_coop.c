@@ -33,6 +33,19 @@ boolean xbox_coop_game(
 	return engine_type == game_engine_none;
 }
 
+/* whether a host's settings record is co-op: no game engine and the variant
+the host names "Co-op" (network_server_manager.c). A record with no engine
+and no name is a multiplayer game between rounds (the dedicated server's
+postgame and pregame records), not co-op */
+boolean xbox_coop_variant(
+	long engine_type,
+	wchar_t const *description)
+{
+	return xbox_coop_game(engine_type) && description &&
+		description[0] == L'C' && description[1] == L'o' && description[2] == L'-' &&
+		description[3] == L'o' && description[4] == L'p' && !description[5];
+}
+
 /* ---------- network_coop.h */
 
 boolean network_coop_active(void)
