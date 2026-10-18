@@ -1216,6 +1216,24 @@ boolean cache_files_map_present(
 			handle = CreateFileA(path, GENERIC_READ, 0, NULL, OPEN_EXISTING, 0, NULL);
 			if (handle != INVALID_HANDLE_VALUE)
 			{
+#ifdef HALO_XBOX_CONSOLE
+				/* port: a map whose header does not verify is refused here, as
+				a missing one is: precaching it (cache_file_read_header_from_dvd)
+				halts the console with a blue screen on the header's assert */
+				struct cache_file_header header;
+				unsigned long bytes_read = 0;
+
+				if (!ReadFile(handle, &header, sizeof(header), &bytes_read, NULL) ||
+					bytes_read != sizeof(header) ||
+					!cache_file_header_verify(&header, path, FALSE))
+				{
+					CloseHandle(handle);
+					platform_log("map damaged: %s read %lu of %lu header bytes, or its header does not verify "
+						"(not a cache file, an old version, or damaged)", path, bytes_read, (unsigned long)sizeof(header));
+					snprintf(message, sizeof(message), "Can't load %.63s: the map file is damaged or not this game's", file);
+					goto report;
+				}
+#endif
 				CloseHandle(handle);
 				return TRUE;
 			}
@@ -1235,6 +1253,9 @@ boolean cache_files_map_present(
 			}
 		}
 	}
+#ifdef HALO_XBOX_CONSOLE
+report:
+#endif
 	platform_log("map missing: %s", message);
 	for (index = 0; message[index] && index < NUMBEROF(error_text) - 1; index++)
 		error_text[index] = (wchar_t)(unsigned char)message[index];
