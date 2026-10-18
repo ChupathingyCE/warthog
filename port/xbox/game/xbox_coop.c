@@ -22,6 +22,8 @@ Link list and ONLINE GAMES leave co-op games out (xbox_coop_game).
 #include "coop_scripts.h"
 #include "coop_spectate.h"
 
+int xbox_coop_name(wchar_t const *description);
+
 /* ---------- a co-op game, as the console tells one */
 
 /* a host's game is co-op if it has no game engine (a co-op round's
@@ -42,9 +44,7 @@ boolean xbox_coop_variant(
 	long engine_type,
 	wchar_t const *description)
 {
-	return xbox_coop_game(engine_type) && description &&
-		description[0] == L'C' && description[1] == L'o' && description[2] == L'-' &&
-		description[3] == L'o' && description[4] == L'p' && (!description[5] || description[5] == L' ');
+	return xbox_coop_game(engine_type) && xbox_coop_name(description);
 }
 
 /* ---------- network_coop.h */

@@ -5,7 +5,9 @@
 #   port/xbox/tests/run.sh               the parsers', the screen's words', the
 #                                        settings record and game type state
 #                                        layouts', console.join's and the memory
-#                                        class's, XLink's and the log tags' tests,
+#                                        class's, XLink's, the log tags' and the
+#                                        co-op names' tests, tools/xbox_package.py's
+#                                        devkit flag,
 #                                        the console's config.toml, and 200,000
 #                                        mutations
 #   port/xbox/tests/run.sh --fuzz 300    and libFuzzer for 300 seconds (LLVM's clang)
@@ -44,6 +46,10 @@ $CC -std=c89 -pedantic -Wall -Wextra -Werror $SAN port/xbox/tests/log_tag_test.c
 	-o "$OUT/log_tag_test"
 "$OUT/log_tag_test"
 "$OUT/xlink_test"
+$CC -std=c89 -pedantic -Wall -Wextra -Werror $SAN port/xbox/tests/coop_name_test.c $SRC/xbox_coop_name.c \
+	-o "$OUT/coop_name_test"
+"$OUT/coop_name_test"
+python3 port/xbox/tests/package_test.py
 # D:\config.toml: port_config.c as the console builds it, beside a stand-in
 # for its platform.h, run in a folder where "d:\config.toml" is a name
 rm -rf "$OUT/config"
