@@ -1205,6 +1205,15 @@ void set_window_camera_values(
 	window->rasterizer_camera.mirrored = FALSE;
 	window->rasterizer_camera.z_near = rasterizer_globals.near_clip_distance;
 	window->rasterizer_camera.z_far = rasterizer_globals.far_clip_distance;
+	/* port: clip distances that are not numbers (the globals not read yet)
+	are the Xbox game's */
+	if (!(window->rasterizer_camera.z_near >= 0.0f) ||
+		!(window->rasterizer_camera.z_far > window->rasterizer_camera.z_near) ||
+		window->rasterizer_camera.z_far - window->rasterizer_camera.z_far != 0.0f)
+	{
+		window->rasterizer_camera.z_near = 0.0625f;
+		window->rasterizer_camera.z_far = 1024.0f;
+	}
 	if (!debug_render_freeze)
 		window->render_camera = window->rasterizer_camera;
 

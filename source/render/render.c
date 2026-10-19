@@ -524,6 +524,24 @@ static void render_player_frame(
 		}
 		window->render_camera.z_near = rasterizer_globals.near_clip_distance;
 		window->render_camera.z_far = rasterizer_globals.far_clip_distance;
+		if (!(window->render_camera.z_near >= 0.0f) ||
+			!(window->render_camera.z_far > window->render_camera.z_near))
+		{
+			/* (the game's own clip distances bad too: the Xbox game's) */
+			window->render_camera.z_near = 0.0625f;
+			window->render_camera.z_far = 1024.0f;
+		}
+	}
+
+	/* port: and the rasterizer's camera, a copy of its own (render_frame
+	builds its frustum too) with the same planes: its are the clip
+	distances, as they are before the fog narrows the render camera's, and
+	are not allowed to stay bad when the render camera's were */
+	if (!(window->rasterizer_camera.z_near >= 0.0f) ||
+		!(window->rasterizer_camera.z_far > window->rasterizer_camera.z_near))
+	{
+		window->rasterizer_camera.z_near = window->render_camera.z_near;
+		window->rasterizer_camera.z_far = window->render_camera.z_far;
 	}
 
 	match_assert(
