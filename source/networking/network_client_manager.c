@@ -2400,6 +2400,16 @@ void network_game_client_rejected_by_game(
 		rejection_code == _rejection_code_game_is_full || rejection_code == _rejection_code_game_is_closed ?
 			_error_network_join_game_closed :
 			_error_network_failed_to_join_game);
+	/* port: the game being played is left for the menus at once, while its
+	settings are still there to say whether objects are loaded: the reset
+	below clears them, and network_game_client_start_frame would then leave
+	the map running with no network game behind it (the next tick read the
+	player queues of a game that was gone) */
+	if (client->game.local_data.game_objects_loaded)
+	{
+		main_load_ui_scenario(TRUE);
+		game_connection_set(0);
+	}
 	network_game_abort();
 	network_game_client_reset(client, TRUE);
 

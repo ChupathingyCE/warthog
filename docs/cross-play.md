@@ -45,11 +45,11 @@ One declaration (`network_game_manager.h:45-68`), checked against
 
 | | console (16/16) | PCs (128/128) |
 |---|---|---|
-| `player_count` | 0x554 | 0x2314 |
-| `players` | 0x556 | 0x2316 |
-| `random_seed` | 0x758 | 0x3318 |
-| PC options | 0x760 | 0x3320 |
-| size | 0x780 (1,920) | 0x3340 (13,120) |
+| `player_count` | 0x598 | 0x2314 |
+| `players` | 0x59A | 0x2316 |
+| `random_seed` | 0x79C | 0x3318 |
+| PC options | 0x7A4 | 0x3320 |
+| size | 0x7C4 (1,988) | 0x3340 (13,120) |
 
 It goes in 0xE00-byte pieces (`message_server_game_settings_update`):
 four from a PC, one from the console. A client refuses any piece whose

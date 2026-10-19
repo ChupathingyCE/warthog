@@ -36,7 +36,9 @@ is left as a full game is (network_client_message_handler.c). */
 #define HALO_CONSOLE_PLAYERS 16
 #endif
 #define HALO_PORT_MAXIMUM_NETWORK_PLAYERS HALO_CONSOLE_PLAYERS
-#define HALO_PORT_MAXIMUM_NETWORK_MACHINES HALO_CONSOLE_PLAYERS
+/* one more machine than players: a dedicated host is machine #0, so 16
+players are machines #1 to #16 */
+#define HALO_PORT_MAXIMUM_NETWORK_MACHINES (HALO_CONSOLE_PLAYERS + 1)
 #else
 #define HALO_PORT_MAXIMUM_NETWORK_PLAYERS 16
 #define HALO_PORT_MAXIMUM_NETWORK_MACHINES 16

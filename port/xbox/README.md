@@ -193,7 +193,7 @@ once Delta is built for the console.
 
 The network tables hold 16 players (`HALO_CONSOLE_PLAYERS`, as the Xbox's;
 `configure.py --console-players`, console-neutral like `--console-debug-tools`): the
-players, the machines and the internet tunnel's peers. A host's game with
+players, the machines (one more, for a dedicated host) and the internet tunnel's peers. A host's game with
 more machines or players is left as a full game, never overflowed. A test
 build with 32 or 64 (`configure.py --console-players 32`) is more than a stock
 console's memory holds, and says so on screen when the main menu comes up.

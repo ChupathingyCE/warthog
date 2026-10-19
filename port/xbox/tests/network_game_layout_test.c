@@ -15,7 +15,10 @@ port/xbox/tests/run.sh.
 #include "../../linux/game/network_game_layout.h"
 
 #define PC NETWORK_GAME_LAYOUT_PC_SLOTS
-#define CONSOLE NETWORK_GAME_LAYOUT_CONSOLE_SLOTS
+/* the console's slots: 16 players, and 17 machines (a dedicated host is
+machine #0, halo_port_limits.h) */
+#define CONSOLE_P NETWORK_GAME_LAYOUT_CONSOLE_SLOTS
+#define CONSOLE_M (CONSOLE_P + 1)
 
 static int failures;
 
@@ -85,19 +88,19 @@ static unsigned char *pc_record(int machines, int players)
 
 static int fold(unsigned char *record, unsigned char *console)
 {
-	return network_game_layout_convert(record, PC, PC, console, CONSOLE, CONSOLE, NULL);
+	return network_game_layout_convert(record, PC, PC, console, CONSOLE_M, CONSOLE_P, NULL);
 }
 
 int main(void)
 {
 	unsigned long pc_size = network_game_layout_size(PC, PC);
-	unsigned long console_size = network_game_layout_size(CONSOLE, CONSOLE);
+	unsigned long console_size = network_game_layout_size(CONSOLE_M, CONSOLE_P);
 	unsigned char *record, *console, *back;
 	int clamped;
 
 	/* (halo_port_limits.h's HALO_PORT_NETWORK_GAME_SIZE at each build's limits) */
 	CHECK(pc_size == 13120);
-	CHECK(console_size == 0x780);
+	CHECK(console_size == 0x780 + 0x44);
 	/* (the retail game's 0x434 at 4 and 16, and version 11's 0x1C bytes of PC options) */
 	CHECK(network_game_layout_size(4, 16) == 0x434 + 0x1C);
 
@@ -108,25 +111,32 @@ int main(void)
 
 	/* a round trip, exact */
 	record = pc_record(5, 16);
-	CHECK(network_game_layout_convert(record, PC, PC, console, CONSOLE, CONSOLE, &clamped) == NETWORK_GAME_LAYOUT_OK);
+	CHECK(network_game_layout_convert(record, PC, PC, console, CONSOLE_M, CONSOLE_P, &clamped) == NETWORK_GAME_LAYOUT_OK);
 	CHECK(!clamped);
-	CHECK(player(console, CONSOLE, 15)[0] == 'p' && player(console, CONSOLE, 15)[NETWORK_GAME_LAYOUT_PLAYER_LIST_INDEX] == 15);
-	CHECK(machine(console, CONSOLE, 4)[0] == 'E' && machine(console, CONSOLE, 5)[NETWORK_GAME_LAYOUT_MACHINE_INDEX] == 0xFF);
+	CHECK(player(console, CONSOLE_M, 15)[0] == 'p' && player(console, CONSOLE_M, 15)[NETWORK_GAME_LAYOUT_PLAYER_LIST_INDEX] == 15);
+	CHECK(machine(console, CONSOLE_M, 4)[0] == 'E' && machine(console, CONSOLE_M, 5)[NETWORK_GAME_LAYOUT_MACHINE_INDEX] == 0xFF);
 	CHECK(!memcmp(console + console_size - NETWORK_GAME_LAYOUT_TAIL_SIZE, record + pc_size - NETWORK_GAME_LAYOUT_TAIL_SIZE,
 		NETWORK_GAME_LAYOUT_TAIL_SIZE));
-	CHECK(network_game_layout_convert(console, CONSOLE, CONSOLE, back, PC, PC, &clamped) == NETWORK_GAME_LAYOUT_OK);
+	CHECK(network_game_layout_convert(console, CONSOLE_M, CONSOLE_P, back, PC, PC, &clamped) == NETWORK_GAME_LAYOUT_OK);
 	CHECK(!memcmp(back, record, pc_size));
 	free(record);
 
 	/* the gametype's maximum held to the console's slots */
 	record = pc_record(2, 2);
 	record[NETWORK_GAME_LAYOUT_MAXIMUM_PLAYERS_OFFSET] = 128;
-	CHECK(network_game_layout_convert(record, PC, PC, console, CONSOLE, CONSOLE, &clamped) == NETWORK_GAME_LAYOUT_OK);
-	CHECK(clamped && console[NETWORK_GAME_LAYOUT_MAXIMUM_PLAYERS_OFFSET] == CONSOLE);
+	CHECK(network_game_layout_convert(record, PC, PC, console, CONSOLE_M, CONSOLE_P, &clamped) == NETWORK_GAME_LAYOUT_OK);
+	CHECK(clamped && console[NETWORK_GAME_LAYOUT_MAXIMUM_PLAYERS_OFFSET] == CONSOLE_P);
+	free(record);
+
+	/* a dedicated host and 16 players: 17 machines, machine #16 in the last slot */
+	record = pc_record(17, 16);
+	CHECK(fold(record, console) == NETWORK_GAME_LAYOUT_OK);
+	CHECK(machine(console, CONSOLE_M, 16)[0] == 'Q');
+	CHECK(player(console, CONSOLE_M, 15)[NETWORK_GAME_LAYOUT_PLAYER_MACHINE_INDEX] == 15);
 	free(record);
 
 	/* refusals */
-	record = pc_record(17, 2);
+	record = pc_record(18, 2);
 	CHECK(fold(record, console) == NETWORK_GAME_LAYOUT_TOO_MANY_MACHINES);
 	free(record);
 	record = pc_record(4, 17);
@@ -154,8 +164,8 @@ int main(void)
 	free(record);
 	/* (bad slot counts) */
 	record = pc_record(1, 1);
-	CHECK(network_game_layout_convert(record, PC, PC, console, 0, CONSOLE, NULL) == NETWORK_GAME_LAYOUT_BAD_SIZE);
-	CHECK(network_game_layout_convert(record, 129, PC, console, CONSOLE, CONSOLE, NULL) == NETWORK_GAME_LAYOUT_BAD_SIZE);
+	CHECK(network_game_layout_convert(record, PC, PC, console, 0, CONSOLE_P, NULL) == NETWORK_GAME_LAYOUT_BAD_SIZE);
+	CHECK(network_game_layout_convert(record, 129, PC, console, CONSOLE_M, CONSOLE_P, NULL) == NETWORK_GAME_LAYOUT_BAD_SIZE);
 	free(record);
 	CHECK(!strcmp(network_game_layout_error_string(99), "unknown error"));
 
@@ -175,37 +185,37 @@ int main(void)
 		int dropped, slot;
 
 		CHECK(network_game_layout_fields_size(slayer, 4, PC) == 1408);
-		CHECK(network_game_layout_fields_size(slayer, 4, CONSOLE) == 176);
+		CHECK(network_game_layout_fields_size(slayer, 4, CONSOLE_P) == 176);
 		memset(wire, 0, sizeof(wire));
 		memset(wire + 1024, 0xFF, 128);
-		for (slot = 0; slot < CONSOLE; slot++)
+		for (slot = 0; slot < CONSOLE_P; slot++)
 		{
 			wire[slot * 4] = (unsigned char)(slot + 1);
 			wire[512 + slot * 4 + 1] = (unsigned char)(slot + 2);
-			wire[1024 + slot] = (unsigned char)((slot + 1) % CONSOLE);
+			wire[1024 + slot] = (unsigned char)((slot + 1) % CONSOLE_P);
 			wire[1152 + slot * 2] = 0x40;
 		}
-		CHECK(network_game_layout_fold_fields(wire, sizeof(wire), PC, local, sizeof(local), CONSOLE, slayer, 4,
+		CHECK(network_game_layout_fold_fields(wire, sizeof(wire), PC, local, sizeof(local), CONSOLE_P, slayer, 4,
 			&dropped) == NETWORK_GAME_LAYOUT_OK);
 		CHECK(dropped == 0);
 		CHECK(local[15 * 4] == 16 && local[64 + 15 * 4 + 1] == 17 && local[128 + 15] == 0 && local[144 + 30] == 0x40);
 		/* (and back: the PCs' layout exactly) */
-		CHECK(network_game_layout_fold_fields(local, sizeof(local), CONSOLE, wide, sizeof(wide), PC, slayer, 4,
+		CHECK(network_game_layout_fold_fields(local, sizeof(local), CONSOLE_P, wide, sizeof(wide), PC, slayer, 4,
 			NULL) == NETWORK_GAME_LAYOUT_OK);
 		CHECK(!memcmp(wide, wire, sizeof(wire)));
 		/* a score, a target and a speed past slot 16: dropped and counted */
 		wire[20 * 4] = 3;
 		wire[1024 + 40] = 2;
 		wire[1152 + 100 * 2 + 1] = 1;
-		CHECK(network_game_layout_fold_fields(wire, sizeof(wire), PC, local, sizeof(local), CONSOLE, slayer, 4,
+		CHECK(network_game_layout_fold_fields(wire, sizeof(wire), PC, local, sizeof(local), CONSOLE_P, slayer, 4,
 			&dropped) == NETWORK_GAME_LAYOUT_OK);
 		CHECK(dropped == 3);
 		/* sizes that are not the layouts' */
-		CHECK(network_game_layout_fold_fields(wire, sizeof(wire) - 1, PC, local, sizeof(local), CONSOLE, slayer, 4,
+		CHECK(network_game_layout_fold_fields(wire, sizeof(wire) - 1, PC, local, sizeof(local), CONSOLE_P, slayer, 4,
 			NULL) == NETWORK_GAME_LAYOUT_BAD_SIZE);
-		CHECK(network_game_layout_fold_fields(wire, sizeof(wire), PC, local, sizeof(local) + 1, CONSOLE, slayer, 4,
+		CHECK(network_game_layout_fold_fields(wire, sizeof(wire), PC, local, sizeof(local) + 1, CONSOLE_P, slayer, 4,
 			NULL) == NETWORK_GAME_LAYOUT_BAD_SIZE);
-		CHECK(network_game_layout_fold_fields(local, sizeof(local), CONSOLE, wire, sizeof(wire), PC, slayer, 4,
+		CHECK(network_game_layout_fold_fields(local, sizeof(local), CONSOLE_P, wire, sizeof(wire), PC, slayer, 4,
 			NULL) == NETWORK_GAME_LAYOUT_OK);
 		/* fields of one element are copied whole */
 		CHECK(network_game_layout_fields_size(mixed, 3, PC) == 4 + 256 + 1);
@@ -216,7 +226,7 @@ int main(void)
 			from[0] = 9;
 			from[4] = 7;
 			from[260] = 5;
-			CHECK(network_game_layout_fold_fields(from, sizeof(from), PC, to, sizeof(to), CONSOLE, mixed, 3, &dropped) ==
+			CHECK(network_game_layout_fold_fields(from, sizeof(from), PC, to, sizeof(to), CONSOLE_P, mixed, 3, &dropped) ==
 				NETWORK_GAME_LAYOUT_OK);
 			CHECK(to[0] == 9 && to[4] == 7 && to[36] == 5 && dropped == 0);
 		}
