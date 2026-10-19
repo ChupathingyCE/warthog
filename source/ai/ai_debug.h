@@ -647,7 +647,11 @@ heap */
 #define ACTOR_DEBUG_INFO_GET(actor_index) (&actor_debug_array[DATUM_INDEX_TO_ABSOLUTE_INDEX(actor_index)])
 #else
 #define AI_DEBUG_ACTOR_RECORD_COUNT 1
-#define ACTOR_DEBUG_INFO_GET(actor_index) (&actor_debug_array[0])
+/* (made when the first actor of a map needs it, and given back with the
+map: 25 KB the console's multiplayer games and menus never take) */
+#define HALO_CONSOLE_AI_DEBUG_ON_DEMAND
+struct actor_debug_info *ai_debug_actor_record(void);
+#define ACTOR_DEBUG_INFO_GET(actor_index) ai_debug_actor_record()
 #endif
 extern struct path_debug_storage *actor_path_debug_array;
 

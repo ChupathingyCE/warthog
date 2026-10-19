@@ -272,13 +272,35 @@ void ai_debug_initialize(
 	ai_debug.last_render_id = 1;
 	ai_debug.render = TRUE;
 
+#ifndef HALO_CONSOLE_AI_DEBUG_ON_DEMAND
 	actor_debug_array = actor_debug_array==NULL ? (struct actor_debug_info *)debug_malloc(sizeof(*actor_debug_array) * AI_DEBUG_ACTOR_RECORD_COUNT, FALSE, "c:\\halo\\SOURCE\\ai\\ai_debug.c", 147) : actor_debug_array;
+#endif
 	actor_path_debug_array = actor_path_debug_array==NULL ? (struct path_debug_storage *)debug_malloc(sizeof(*actor_path_debug_array) * MAXIMUM_AI_DEBUG_PATH_STORAGE, FALSE, "c:\\halo\\SOURCE\\ai\\ai_debug.c", 148) : actor_path_debug_array;
 
+#ifndef HALO_CONSOLE_AI_DEBUG_ON_DEMAND
 	match_assert("c:\\halo\\SOURCE\\ai\\ai_debug.c", 150, actor_debug_array && actor_path_debug_array);
+#else
+	match_assert("c:\\halo\\SOURCE\\ai\\ai_debug.c", 150, actor_path_debug_array);
+#endif
 
 	return;
 }
+
+#ifdef HALO_CONSOLE_AI_DEBUG_ON_DEMAND
+/* the one record every actor writes to (ai_debug.h), made on first use */
+struct actor_debug_info *ai_debug_actor_record(
+	void)
+{
+	if (!actor_debug_array)
+	{
+		actor_debug_array = (struct actor_debug_info *)debug_malloc(sizeof(*actor_debug_array), FALSE, "c:\\halo\\SOURCE\\ai\\ai_debug.c", 147);
+		match_assert("c:\\halo\\SOURCE\\ai\\ai_debug.c", 150, actor_debug_array);
+		memset(actor_debug_array, 0, sizeof(*actor_debug_array));
+	}
+
+	return actor_debug_array;
+}
+#endif
 
 void ai_debug_dispose(
 	void)
@@ -324,9 +346,18 @@ void ai_debug_dispose_from_old_map(
 void ai_debug_clear_storage(
 	void)
 {
+#ifdef HALO_CONSOLE_AI_DEBUG_ON_DEMAND
+	/* (a new map's actors make their record again, zeroed) */
+	if (actor_debug_array)
+	{
+		debug_free(actor_debug_array, "c:\\halo\\SOURCE\\ai\\ai_debug.c", 160);
+		actor_debug_array = NULL;
+	}
+#else
 	match_assert("c:\\halo\\SOURCE\\ai\\ai_debug.c", 208, actor_debug_array);
 
 	memset(actor_debug_array, 0, sizeof(*actor_debug_array) * AI_DEBUG_ACTOR_RECORD_COUNT);
+#endif
 	match_assert("c:\\halo\\SOURCE\\ai\\ai_debug.c", 211, actor_path_debug_array)
 
 	memset(actor_path_debug_array, 0, sizeof(*actor_path_debug_array) * MAXIMUM_AI_DEBUG_PATH_STORAGE);
@@ -6291,6 +6322,15 @@ struct path_debug_storage *ai_debug_get_path_storage(
 void ai_debug_initialize_for_new_map(
 	void)
 {
+#ifdef HALO_CONSOLE_AI_DEBUG_ON_DEMAND
+	/* (the last map's record goes; a map with actors makes one again) */
+	if (actor_debug_array)
+	{
+		debug_free(actor_debug_array, "c:\\halo\\SOURCE\\ai\\ai_debug.c", 160);
+		actor_debug_array = NULL;
+	}
+#endif
+
 	return;
 }
 
