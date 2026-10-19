@@ -101,7 +101,7 @@ struct thread_start
 	void *argument;
 };
 
-#define THREAD_STACK_SIZE (96 * 1024)
+#define THREAD_STACK_SIZE (64 * 1024)
 void xbox_memory_heap_allocation(const char *file, long line, unsigned long size, const void *address);
 
 static struct thread_start thread_starts[4];
@@ -128,9 +128,10 @@ int pthread_create(pthread_t *thread, const pthread_attr_t *attributes, void *(*
 	slot = &thread_starts[index];
 	slot->start = start;
 	slot->argument = argument;
-	/* (96 KB: the tunnel's locals are a few packets of 1.4 KB, and the
-	stack is committed memory a 64 MB console is short of; it is given back
-	when the thread ends) */
+	/* (64 KB: the tunnel's deepest chain, from p2p_thread to a send through
+	the SDK's sockets or a key exchange, is some 20 KB by the frames
+	-fstack-usage gives, the largest 3.6 KB; the stack is committed memory a
+	64 MB console is short of, and is given back when the thread ends) */
 	handle = CreateThread(NULL, THREAD_STACK_SIZE, thread_main, slot, 0, NULL);
 	if (!handle)
 		return -1;
