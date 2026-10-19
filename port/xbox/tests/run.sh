@@ -50,6 +50,7 @@ $CC -std=c89 -pedantic -Wall -Wextra -Werror $SAN port/xbox/tests/coop_name_test
 	-o "$OUT/coop_name_test"
 "$OUT/coop_name_test"
 python3 port/xbox/tests/package_test.py
+python3 port/xbox/tests/easy_build_test.py
 # D:\config.toml: port_config.c as the console builds it, beside a stand-in
 # for its platform.h, run in a folder where "d:\config.toml" is a name
 rm -rf "$OUT/config"

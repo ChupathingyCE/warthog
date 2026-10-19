@@ -57,3 +57,6 @@ dist/
 port/android/keystore.properties
 *.keystore
 *.jks
+
+/.easy_build.json
+/out/
