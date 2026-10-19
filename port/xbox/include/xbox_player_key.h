@@ -31,6 +31,10 @@ int xbox_player_key_parse(const unsigned char *data, int size, unsigned char *ke
 /* the player ID of a key */
 void xbox_player_id_from_key(const unsigned char *key, unsigned char *id);
 
+/* the key in the file at path: 1 and the key, or 0 if there is no such file
+or it is not a key. The caller wipes the key */
+int xbox_player_key_from_file(const char *path, unsigned char *key);
+
 /* the ID of the key in the file at path: 1, or 0 if there is no such file
 or it is not a key. The key is wiped before this returns */
 int xbox_player_id_from_file(const char *path, unsigned char *id);

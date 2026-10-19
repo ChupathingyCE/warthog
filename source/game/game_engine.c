@@ -5276,6 +5276,17 @@ void game_engine_end_game(
 		if (global_network_game_server_get())
 			game_engine_report_game();
 #endif
+#ifdef HALO_XBOX_CONSOLE
+		/* (the first online game that ends: the console's signed platform
+		claim, port/xbox/src/xbox_claim_run.c) */
+		if (game_connection() == _game_connection_network_client ||
+			game_connection() == _game_connection_network_server)
+		{
+			extern void xbox_claim_game_ended(void);
+
+			xbox_claim_game_ended();
+		}
+#endif
 		game_engine_globals.postgame_state = game_engine_mode_postgame_delay;
 		game_engine_globals.postgame_timer = 7.0f;
 		game_engine_play_multiplayer_sound(_multiplayer_sound_game_over);

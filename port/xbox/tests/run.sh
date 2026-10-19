@@ -74,6 +74,18 @@ $CC -std=gnu11 -Wall -Wextra -Werror $SAN -DHALO_XBOX_CONSOLE -Iport/linux/src -
 	port/linux/src/delta_wire.c port/third_party/monocypher/monocypher.c \
 	port/third_party/monocypher/monocypher-ed25519.c -o "$OUT/delta_console_test"
 "$OUT/delta_console_test"
+# the console's signed platform claim (p2p_crypto.c as the console builds it,
+# beside empty stand-ins for the platform layer's headers)
+rm -rf "$OUT/claim"
+mkdir -p "$OUT/claim"
+cp port/linux/src/p2p_crypto.c "$OUT/claim/p2p_crypto.c"
+printf 'void platform_log(const char *format, ...);\n' > "$OUT/claim/platform.h"
+printf 'void posix_random_bytes(void *bytes, unsigned long size);\n' > "$OUT/claim/posix.h"
+$CC -std=gnu11 -O1 -w -Iport/linux/src -Iport/third_party/monocypher -c "$OUT/claim/p2p_crypto.c" -o "$OUT/claim/p2p_crypto.o"
+$CC -std=gnu11 -Wall -Wextra -Werror $SAN -Iport/third_party/monocypher port/xbox/tests/claim_test.c \
+	$SRC/xbox_claim.c $SRC/xbox_player_key.c "$OUT/claim/p2p_crypto.o" port/third_party/monocypher/monocypher.c \
+	port/third_party/monocypher/monocypher-ed25519.c -o "$OUT/claim_test"
+"$OUT/claim_test"
 while [ $# -gt 0 ]; do
 	case "$1" in
 	--fuzz)

@@ -145,6 +145,11 @@ bytes, the whole response); within timeout_ms */
 int game_list_fetch(unsigned long address, unsigned short port, const char *host, const char *path,
 	char *buffer, unsigned long size, unsigned long *received, unsigned long timeout_ms);
 
+/* the same, as a POST of body (JSON) when body is not NULL (the signed
+platform claim's, xbox_claim.h); the whole request is at most 1 KB */
+int game_list_request(unsigned long address, unsigned short port, const char *host, const char *path,
+	const char *body, char *buffer, unsigned long size, unsigned long *received, unsigned long timeout_ms);
+
 /* ---------- the console (xbox_game_list.c) */
 
 enum
@@ -164,6 +169,9 @@ void xbox_game_list_update(void);
 /* the main thread's: the last list taken (NULL before one came; kept while
 a refresh fails), and how many have come */
 const struct game_list *xbox_game_list_get(int *lists);
+/* the site to ask (the list's host, else console.game_list_server's): 1 with
+its address, the Host: name and the port; the signed claim asks it too */
+int xbox_game_list_server(unsigned long *address, char *host, int host_size, unsigned short *port);
 /* the latest request's state (XBOX_GAME_LIST_...), and its error's words */
 int xbox_game_list_state(void);
 const char *xbox_game_list_error(void);

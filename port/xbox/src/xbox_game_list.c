@@ -65,9 +65,9 @@ static void set_state(LONG state)
 	__atomic_store_n(&list_state, state, __ATOMIC_SEQ_CST);
 }
 
-/* the server to ask: the list's host, else console.game_list_server's (or
-the old D:\game_list.txt's) */
-static int find_server(unsigned long *address, char *host, int host_size, unsigned short *port)
+/* the server to ask (xbox_game_list.h): the list's host, else
+console.game_list_server's (or the old D:\game_list.txt's) */
+int xbox_game_list_server(unsigned long *address, char *host, int host_size, unsigned short *port)
 {
 	char line[128];
 	unsigned long size;
@@ -111,7 +111,7 @@ static int fetch_once(char *buffer)
 	int result;
 
 	list_status = 0;
-	if (!find_server(&address, host, sizeof(host), &port))
+	if (!xbox_game_list_server(&address, host, sizeof(host), &port))
 		return GAME_LIST_ERROR_RESOLVE;
 	result = game_list_fetch(address, port, host, GAME_LIST_PATH, buffer, GAME_LIST_RESPONSE_SIZE, &received,
 		FETCH_TIMEOUT);

@@ -89,10 +89,9 @@ void xbox_player_id_from_key(const unsigned char *key, unsigned char *id)
 	memset(digest, 0, sizeof(digest));
 }
 
-int xbox_player_id_from_file(const char *path, unsigned char *id)
+int xbox_player_key_from_file(const char *path, unsigned char *key)
 {
 	unsigned char data[MAXIMUM_FILE + 1];
-	unsigned char key[XBOX_PLAYER_KEY_SIZE];
 	FILE *file = fopen(path, "rb");
 	int size, ok;
 
@@ -101,9 +100,17 @@ int xbox_player_id_from_file(const char *path, unsigned char *id)
 	size = (int)fread(data, 1, sizeof(data), file);
 	fclose(file);
 	ok = size > 0 && size <= MAXIMUM_FILE && xbox_player_key_parse(data, size, key);
+	memset(data, 0, sizeof(data));
+	return ok;
+}
+
+int xbox_player_id_from_file(const char *path, unsigned char *id)
+{
+	unsigned char key[XBOX_PLAYER_KEY_SIZE];
+	int ok = xbox_player_key_from_file(path, key);
+
 	if (ok)
 		xbox_player_id_from_key(key, id);
-	memset(data, 0, sizeof(data));
 	memset(key, 0, sizeof(key));
 	return ok;
 }

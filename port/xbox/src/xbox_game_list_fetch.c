@@ -194,10 +194,10 @@ static int header_end(const char *data, unsigned long size, unsigned long *total
 	return 0;
 }
 
-int game_list_fetch(unsigned long address, unsigned short port, const char *host, const char *path,
-	char *buffer, unsigned long size, unsigned long *received, unsigned long timeout_ms)
+int game_list_request(unsigned long address, unsigned short port, const char *host, const char *path,
+	const char *body, char *buffer, unsigned long size, unsigned long *received, unsigned long timeout_ms)
 {
-	char request[512];
+	char request[1024];
 	struct sockaddr_in target;
 	socket_type socket_value;
 	unsigned long deadline = now_ms() + timeout_ms;
@@ -207,9 +207,15 @@ int game_list_fetch(unsigned long address, unsigned short port, const char *host
 	int result = GAME_LIST_OK;
 
 	*received = 0;
-	length = snprintf(request, sizeof(request),
-		"GET %s HTTP/1.0\r\nHost: %s\r\nUser-Agent: Warthog/1\r\nAccept: text/plain\r\n"
-		"Accept-Encoding: identity\r\nConnection: close\r\n\r\n", path, host);
+	if (body)
+		length = snprintf(request, sizeof(request),
+			"POST %s HTTP/1.0\r\nHost: %s\r\nUser-Agent: Warthog/1\r\nAccept: application/json\r\n"
+			"Accept-Encoding: identity\r\nContent-Type: application/json\r\nContent-Length: %d\r\n"
+			"Connection: close\r\n\r\n%s", path, host, (int)strlen(body), body);
+	else
+		length = snprintf(request, sizeof(request),
+			"GET %s HTTP/1.0\r\nHost: %s\r\nUser-Agent: Warthog/1\r\nAccept: text/plain\r\n"
+			"Accept-Encoding: identity\r\nConnection: close\r\n\r\n", path, host);
 	if (length <= 0 || length >= (int)sizeof(request))
 		return GAME_LIST_ERROR_SEND;
 
@@ -276,4 +282,10 @@ int game_list_fetch(unsigned long address, unsigned short port, const char *host
 	}
 	close_socket(socket_value);
 	return result;
+}
+
+int game_list_fetch(unsigned long address, unsigned short port, const char *host, const char *path,
+	char *buffer, unsigned long size, unsigned long *received, unsigned long timeout_ms)
+{
+	return game_list_request(address, port, host, path, NULL, buffer, size, received, timeout_ms);
 }
