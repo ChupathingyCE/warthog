@@ -1491,6 +1491,7 @@ long scenario_tags_load(
 
 				return NONE;
 			}
+#ifndef HALO_CONSOLE_NO_TAG_VALIDATE
 			/* port: and every tag checked against its group's schema before
 			anything reads it (port/linux/game/tag_validate.c): a map whose
 			tags' pointers cannot be trusted is refused; what can be
@@ -1505,6 +1506,7 @@ long scenario_tags_load(
 
 				return NONE;
 			}
+#endif
 
 			cache_file_globals.tag_header = tag_cache_base_address;
 			match_vassert(
@@ -1666,6 +1668,7 @@ boolean scenario_structure_bsp_load(
 	/* port: and checked against its schema, as the map's tags were
 	(port/linux/game/tag_validate.c); a Custom Edition or HaloMD map's
 	tags are Halo PC's layout, checked as they load (ce_map_checks.c) */
+#ifndef HALO_CONSOLE_NO_TAG_VALIDATE
 	if (
 #ifdef HALO_CUSTOM_EDITION
 		!cache_file_is_ce &&
@@ -1677,6 +1680,7 @@ boolean scenario_structure_bsp_load(
 	{
 		return FALSE;
 	}
+#endif
 
 	cache_file_globals.structure_bsp_header = structure_bsp_header;
 	match_assert(

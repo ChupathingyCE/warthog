@@ -32,6 +32,11 @@ telnet_console.h) */
 /* and no high-res text or HUD: the maps' own fonts and bitmaps, as retail */
 #define HALO_CONSOLE_NO_HIRES
 
+/* and no tag schema or validator (port/linux/game/tag_validate.c: 170 KB of
+the image, and already off on a 64 MB console, which has no room for its
+claims): the maps are the Xbox's own */
+#define HALO_CONSOLE_NO_TAG_VALIDATE
+
 /* clang predeclares the MSVC _Interlocked* intrinsics with prototypes that
 conflict with the SDK's; the game never calls them (xdk_win32.h) */
 #define _InterlockedCompareExchange halo_xbox_InterlockedCompareExchange
