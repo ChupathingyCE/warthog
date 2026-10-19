@@ -65,6 +65,12 @@ Warthog is licensed under the GNU GPL, version 3 or later (`GPL-3.0-or-later`, [
 - Changes to the files that stay CC0 (`docs/delta.md`, `port/linux/src/delta_wire.c`, `port/linux/src/delta_wire.h` and `port/linux/include/delta.h`) are under CC0 1.0, as those files are.
 - Code or assets from somewhere else must be under a license that works with the GPL (MIT, BSD, zlib, Apache-2.0, CC0, SIL OFL for fonts, and so on), credited, with the license beside them (`port/third_party` for code). Say where they come from in the pull request.
 
+## License
+
+Chupathingy is licensed under the GNU GPL, version 3 or later (`GPL-3.0-or-later`, [LICENSE](LICENSE)). By opening a pull request, you agree that your contribution is under the same license, with the console SDK permission in the README's [License](README.md#license) section, so that it can also be built into Warthog.
+
+- Code or assets from somewhere else must be under a license that works with the GPL (MIT, BSD, zlib, Apache-2.0, CC0, SIL OFL for fonts, and so on), credited, with the license beside them (`port/third_party` for code). Say where they come from in the pull request.
+
 ## Using AI tools
 
 You can use AI tools when you contribute. You're responsible for what you submit: understand every line, test it, and be able to explain it in review. Say in the pull request if a large part of it was generated. Pull requests that are mostly generated and untested will be closed.
