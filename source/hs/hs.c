@@ -3650,6 +3650,8 @@ boolean hs_scenario_postprocess(
 /* ---------- constants */
 
 #define MAXIMUM_HS_SYNTAX_NODES_PER_SCENARIO 19001
+/* port: the console's stand-in array (hs_allocate) */
+#define HS_SYNTAX_STAND_IN_NODES 2048
 /* port: the size of the "hs globals" array (hs_runtime_initialize), which
 holds the external globals and the map's */
 #define MAXIMUM_HS_GLOBALS 0x400
@@ -13786,10 +13788,20 @@ static void hs_allocate(
 		error(0, "the scenario's script data is missing or damaged; its scripts won't run");
 	}
 
+#ifdef HALO_XBOX_CONSOLE
+	/* port: this stand-in runs no map scripts (they are disabled above),
+	only the console's expressions, so it is small: the full 19001 nodes
+	were 371 KB of a 64 MB Xbox's heap at the menu */
+	hs_syntax_data = data_new(
+		"script node",
+		HS_SYNTAX_STAND_IN_NODES,
+		sizeof(struct hs_syntax_node));
+#else
 	hs_syntax_data = data_new(
 		"script node",
 		MAXIMUM_HS_SYNTAX_NODES_PER_SCENARIO,
 		sizeof(struct hs_syntax_node));
+#endif
 	if (hs_syntax_data)
 	{
 		data_make_valid(hs_syntax_data);
