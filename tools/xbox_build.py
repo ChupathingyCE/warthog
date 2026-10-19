@@ -302,6 +302,9 @@ def generate_xbox_build(n: Writer, sln: Any) -> None:
         # screenshots, is its only caller)
         if not debug_tools and source.as_posix().startswith("source/bitmaps/libtiff/"):
             continue
+        # (the script console is not the console's: telnet_console.h)
+        if source.as_posix() == "source/networking/telnet_console.c":
+            continue
         add_object(source, f"-std=gnu89 {game_cflags}", [semantics_header, prefix_header],
                    _inline_export_wrapper(source, build_dir))
     # the game's C++, which the native builds replace (d3d8_gl.c): the frame

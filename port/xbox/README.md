@@ -160,7 +160,7 @@ The console's own, in `[console]`:
 And the desktop builds' that apply on the console: `display.direct_camera`,
 `audio.music_volume`, `audio.effects_volume`, `game.console_log`,
 `network.online`, `network.tunnel_port`, `network.brokers_file`,
-`network.stun_servers`, `debug.telnet_console`, `debug.telnet_console_port`
+`network.stun_servers`
 and the `debug.network_test` settings (port/linux/README.md has them).
 Another setting the shared code reads is empty, 0 or false on the console,
 as before it had the file.

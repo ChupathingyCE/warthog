@@ -55,7 +55,6 @@ static void expect_shared(void)
 	expect(config_boolean("network.online") == 1, "network.online is not true");
 	expect(config_real("audio.music_volume") == 1.0, "audio.music_volume is not 1.0");
 	expect(!strcmp(config_string("game.console_log"), "important"), "game.console_log is not \"important\"");
-	expect(config_integer("debug.telnet_console_port") == 2323, "debug.telnet_console_port is not 2323");
 	/* and those that are not, empty, 0 or false, as before the file */
 	expect(config_boolean("display.interpolation") == 0, "display.interpolation is not false");
 	expect(config_boolean("network.allow_upnp") == 0, "network.allow_upnp is not false");
