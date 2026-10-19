@@ -287,12 +287,6 @@ int halo_linux_mouse_look(short gamepad_index, float *yaw, float *pitch)
 	return 0;
 }
 
-/* (the automated network tests' held action button) */
-void test_input_hold_action(int hold)
-{
-	(void)hold;
-}
-
 /* ---------- the high-res HUD and text: none, the game's own bitmaps */
 
 long hud_hires_asset_count(void)

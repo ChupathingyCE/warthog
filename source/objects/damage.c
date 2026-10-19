@@ -2803,6 +2803,7 @@ void damage_get_network_state(
 	state->recent_shield_damage = object->object.recent_shield_damage;
 }
 
+#ifndef HALO_CONSOLE_NO_NETWORK_TEST
 /* the automated network tests (port/linux/game/network_test.c): kills the
 object as falling damage does (an act of god), but credited to a player, so
 that the kill counts in the game's scores */
@@ -2827,3 +2828,4 @@ void damage_kill_object_for_player(
 	damage.owner_team_index = (short)player->team_index;
 	object_cause_damage(&damage, object_index, NONE, NONE, NONE, NULL);
 }
+#endif

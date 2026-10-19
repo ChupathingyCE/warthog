@@ -125,7 +125,7 @@ XBOX_GAME_CXX_SOURCES = [Path("source/main/d3d_intimacy.cpp")]
 # port/linux/game's sources the console builds too
 XBOX_PORT_GAME_SOURCES = [
     "hud_hires_tags.c", "map_families.c", "network_damage.c", "network_distributed.c", "network_game_layout.c",
-    "network_objects.c", "network_test.c", "pal_tags.c", "render_interpolation.c",
+    "network_objects.c", "pal_tags.c", "render_interpolation.c",
     # the checks of a map's tags as they load (tag_validate.c)
     "tag_schema_collision.c", "tag_schema_effects.c", "tag_schema_groups.c", "tag_schema_models.c",
     "tag_schema_objects.c", "tag_schema_render.c", "tag_schema_scenario.c", "tag_validate.c",
