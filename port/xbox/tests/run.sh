@@ -34,6 +34,10 @@ $CC -Wall -Wextra $SAN port/xbox/tests/game_list_test.c "$OUT/parse.o" "$OUT/tex
 "$OUT/game_list_test" 200000
 $CC -std=c89 -pedantic -Wall -Wextra -Werror $SAN port/xbox/tests/network_game_layout_test.c \
 	port/linux/game/network_game_layout.c -o "$OUT/network_game_layout_test"
+$CC -std=c99 -pedantic -Wall -Wextra -Werror $SAN port/xbox/tests/network_rules_console_test.c \
+	port/linux/game/network_rules.c -o "$OUT/network_rules_console_test"
+"$OUT/network_rules_console_test"
+python3 port/xbox/tests/network_keep_alive_test.py
 "$OUT/network_game_layout_test"
 $CC -std=c89 -pedantic -Wall -Wextra -Werror $SAN port/xbox/tests/direct_join_test.c $SRC/xbox_direct_join.c \
 	-o "$OUT/direct_join_test"
@@ -70,7 +74,7 @@ $CC -std=gnu11 -Wall -Wextra -Werror $SAN port/xbox/tests/player_key_test.c "$OU
 (cd "$OUT" && ./player_key_test)
 # the console's Delta Peer client (HALO_XBOX_CONSOLE: its 16 machines, no table room)
 $CC -std=gnu11 -Wall -Wextra -Werror $SAN -DHALO_XBOX_CONSOLE -Iport/linux/src -Iport/third_party/monocypher \
-	-idirafter port/linux/include port/xbox/tests/delta_console_test.c port/linux/src/delta_peer.c \
+	-idirafter port/linux/include port/xbox/tests/delta_console_test.c port/linux/src/delta_peer.c port/linux/src/delta_chat.c \
 	port/linux/src/delta_wire.c port/third_party/monocypher/monocypher.c \
 	port/third_party/monocypher/monocypher-ed25519.c -o "$OUT/delta_console_test"
 "$OUT/delta_console_test"

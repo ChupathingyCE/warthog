@@ -12,7 +12,7 @@
 
 > Warthog follows ChupathingyCE: the shared game code comes from there, and this repository adds only the consoles' own code. You need your own copy of Halo; no SDK or game files are included.
 
-> **Built on ChupathingyCE (network version 28, for online play with OpenCE's build-201).** Warthog joins games hosted on network versions 11 through 30, by ChupathingyCE and other builds alike, with up to 16 players. There's no release yet: Warthog is in development, and for now it runs on development kits and modified consoles.
+> **Built on ChupathingyCE (network version 32, wire chupa-32a, for online play with OpenCE's build-206).** Warthog joins games hosted on network versions 11 through 33, by ChupathingyCE and other builds alike, with up to 16 players. There's no release yet: Warthog is in development, and for now it runs on development kits and modified consoles.
 
 Warthog is the Halo: Combat Evolved decompilation built back for the console
 it was written for, on the same code as
@@ -241,7 +241,7 @@ XLink's addressing) on the computer under AddressSanitizer, with a fuzzer;
 
 The console builds 16 players on 16 machines and the Xbox's 2,048 objects;
 the PCs build 128, 128 and 8,192, and both send their game settings whole
-(13,120 bytes at 128 slots, unchanged through network version 28). As a client
+(13,120 bytes at 128 slots, unchanged through network version 32). As a client
 of a PC host, the console folds the PCs' 128-slot game settings record and
 Slayer's state into its own 16 slots as they arrive, checks the record's
 layout against its own at compile time, and leaves a game that grows past

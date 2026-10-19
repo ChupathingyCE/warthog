@@ -53,6 +53,18 @@ const char *platform_data_root(void)
 	return "d:";
 }
 
+/* (the desktop builds' lobby and Discord join, which the console does
+without: no rendezvous lobby, no Discord) */
+int p2p_lobby_open(void)
+{
+	return 0;
+}
+
+void p2p_discord_set_join(const char *code)
+{
+	(void)code;
+}
+
 /* ---------- threads */
 
 typedef char pthread_mutex_room_assert[sizeof(((pthread_mutex_t *)0)->storage) >= sizeof(CRITICAL_SECTION) ? 1 : -1];

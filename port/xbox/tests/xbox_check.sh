@@ -35,7 +35,7 @@ else
 fi
 # (format strings with a length modifier the 2003 runtime lacks)
 bad=$(grep -nE '"[^"]*%[-+ #0-9.*]*(z|ll|j|hh|t)[diouxXcs]' port/linux/src/p2p.c port/linux/src/p2p_signal.c \
-	port/linux/src/p2p_crypto.c port/linux/src/port_config.c port/linux/src/delta_wire.c port/linux/src/delta_peer.c port/linux/src/delta_peer_game.c port/xbox/src/*.c port/xbox/game/*.c \
+	port/linux/src/p2p_crypto.c port/linux/src/port_config.c port/linux/src/delta_wire.c port/linux/src/delta_peer.c port/linux/src/delta_chat.c port/linux/src/delta_peer_game.c port/xbox/src/*.c port/xbox/game/*.c \
 	port/linux/game/network_*.c || true)
 if [ -n "$bad" ]; then
 	echo "xbox_check: formats the console's C runtime does not read:" >&2

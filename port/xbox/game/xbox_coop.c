@@ -282,9 +282,33 @@ void coop_scripts_gather_in_volume(
 }
 
 void coop_scripts_teleport_followers(
-	long unit_index)
+	long unit_index,
+	real_point3d const *destination)
 {
 	(void)unit_index;
+	(void)destination;
+}
+
+boolean coop_scripts_unit_near(
+	long unit_index,
+	real_point3d const *destination)
+{
+	(void)unit_index;
+	(void)destination;
+	return FALSE;
+}
+
+boolean coop_scripts_arrive_at(
+	long player_index,
+	real_point3d const *destination,
+	long const *arrived_unit_indices,
+	short arrived_count)
+{
+	(void)player_index;
+	(void)destination;
+	(void)arrived_unit_indices;
+	(void)arrived_count;
+	return FALSE;
 }
 
 void coop_scripts_suspend_followers(

@@ -1043,6 +1043,7 @@ unsigned int delta_peer_game_chat_refused(struct delta_wire_chat_refused *refuse
 	return delta_game.peer.client_chat.refused_count;
 }
 
+#ifndef HALO_XBOX_CONSOLE
 int delta_peer_game_read_save_file(const char *name, char *text, int size)
 {
 	char path[1024];
@@ -1060,6 +1061,7 @@ int delta_peer_game_read_save_file(const char *name, char *text, int size)
 	text[length] = 0;
 	return (int)length;
 }
+#endif
 
 /* ---------- team changes (team_change.c) */
 

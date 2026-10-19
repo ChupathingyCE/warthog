@@ -1908,7 +1908,12 @@ void rasterizer_debug_model_vertices(
 	the compiler inlines it there: on the stack, the Windows build probed
 	the 128 KB the debug display rarely uses a page at a time (_chkstk) for
 	every model drawn */
+#ifdef HALO_XBOX_CONSOLE
+	/* (the console, whose memory holds no static 128 KB: as the Xbox had it) */
+	struct rasterizer_debug_model_vertex debug_vertices[MAXIMUM_RASTERIZER_DEBUG_MODEL_VERTICES];
+#else
 	static struct rasterizer_debug_model_vertex debug_vertices[MAXIMUM_RASTERIZER_DEBUG_MODEL_VERTICES];
+#endif
 
 	match_assert(
 		"c:\\halo\\SOURCE\\rasterizer\\rasterizer.c",

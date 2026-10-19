@@ -103,13 +103,14 @@ LIBRARIES = [
 KCP_DIR = Path("port/third_party/kcp")
 MONOCYPHER_DIR = Path("port/third_party/monocypher")
 P2P_SOURCES = [
-    LINUX_SRC / "p2p.c", LINUX_SRC / "p2p_signal.c", LINUX_SRC / "p2p_crypto.c", KCP_DIR / "ikcp.c",
+    LINUX_SRC / "p2p.c", LINUX_SRC / "p2p_probe.c", LINUX_SRC / "p2p_signal.c", LINUX_SRC / "p2p_crypto.c", KCP_DIR / "ikcp.c",
     MONOCYPHER_DIR / "monocypher.c", MONOCYPHER_DIR / "monocypher-ed25519.c",
 ]
 # Delta Peer's (docs/delta.md), as the desktop builds compile them: the wire
 # format, a session as a client, and the game's session over the game's
 # sockets (no signed legacy table, no thread: delta.c is not in the console)
-DELTA_SOURCES = [LINUX_SRC / "delta_wire.c", LINUX_SRC / "delta_peer.c", LINUX_SRC / "delta_peer_game.c"]
+DELTA_SOURCES = [LINUX_SRC / "delta_wire.c", LINUX_SRC / "delta_peer.c", LINUX_SRC / "delta_chat.c",
+                 LINUX_SRC / "delta_peer_game.c"]
 # the settings, D:\config.toml: the desktop builds' port_config.c and its
 # TOML parser (tools/linux_build.py's TOML_DIR)
 CONFIG_SOURCE = LINUX_SRC / "port_config.c"
@@ -125,7 +126,7 @@ XBOX_GAME_CXX_SOURCES = [Path("source/main/d3d_intimacy.cpp")]
 # port/linux/game's sources the console builds too
 XBOX_PORT_GAME_SOURCES = [
     "map_families.c", "network_damage.c", "network_distributed.c", "network_game_layout.c",
-    "network_objects.c", "pal_tags.c", "render_interpolation.c",
+    "network_objects.c", "network_rules.c", "pal_tags.c", "render_interpolation.c",
 ]
 # d3d_intimacy.cpp reads the device as the January library named it; the
 # kernel's build of the Aug 2001 library has it in its own namespace (the
@@ -341,6 +342,7 @@ def generate_xbox_build(n: Writer, sln: Any) -> None:
     # xbox_p2p.c is its platform layer), its sources as they are, with
     # port/xbox/p2p's headers in place of the Linux layer's
     p2p_cflags = " ".join([*SUPPORT_FLAGS, players_flag, "-std=gnu11", f"-I{_quote(PORT_DIR / 'p2p')}", f"-I{_quote(LINUX_SRC)}",
+                           f"-iquote {_quote(PORT_LINUX_INCLUDE)}",
                            f"-I{_quote(KCP_DIR)}", f"-I{_quote(MONOCYPHER_DIR)}", f"-I{_quote(xdk / 'include')}"])
     for source in P2P_SOURCES:
         generated = gen_dir / "p2p" / source.name
