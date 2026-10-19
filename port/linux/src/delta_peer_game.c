@@ -200,9 +200,10 @@ static int local_profile(struct delta_wire_profile *profile)
 #else
 	memset(profile, 0, sizeof(*profile));
 #ifdef HALO_XBOX_CONSOLE
-	/* (only a copy the player gave an identity file, and only when they
-	chose to share their profile: as the desktop builds') */
-	return config_boolean("network.share_profile") && xbox_player_id(profile->player_id);
+	/* (only a copy the player gave an identity file: on a console the file
+	being there is the player's consent, where a desktop build asks for
+	network.share_profile) */
+	return xbox_player_id(profile->player_id);
 #else
 	return 0;
 #endif
@@ -386,7 +387,7 @@ int delta_peer_protocol(void)
 		memset(&local, 0, sizeof(local));
 #ifdef HALO_XBOX_CONSOLE
 		/* (the console says what it is and no more: no maps or moderation;
-		its profile only if the player gave it an identity and shares it:
+		its profile only if the player gave it an identity file:
 		added below) */
 		local.capabilities = (delta_u32)1 << _delta_capability_platform;
 #else
