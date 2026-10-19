@@ -6,6 +6,10 @@
 game only: the platform layer of the other ports (`port/linux`) is not in it,
 because the game's Xbox code talks to the Xbox SDK directly.
 
+`python3 tools/easy_build.py` walks through everything below: it checks the
+tools, asks for the files you supply, builds and packages
+(`--check` only checks; `docs/building.md` has the options).
+
 ## Requirements
 
 - Python, [ninja](https://ninja-build.org/) and LLVM (clang and lld-link).
@@ -32,6 +36,9 @@ ninja xbox
 
 `configure.py` records the options, so later runs of ninja keep them. If
 OXDK or the Direct3D library is not found, there is no `xbox` target.
+The console-wide options: `--release` (assertions are not checked),
+`--console-players {16,32,64}` and `--console-debug-tools` (see "Memory");
+`--oxdk DIR` names OXDK's checkout. `docs/building.md` lists them all.
 
 ## Game data
 
@@ -54,8 +61,9 @@ E:\Games\Warthog\maps\a10.map ...
 
 `D:\` is the folder of the XBE when the game runs, and the game writes its
 log to `D:\debug.txt`. Saved games and profiles go to the utility drive
-(`Z:\`), as on the disc. The game is a debug build: an assertion stops it
-and shows the error on the screen and in `debug.txt`.
+(`Z:\`), as on the disc. A normal build is the debug decomp's: an assertion
+stops it and shows the error on the screen and in `debug.txt`. A `--release`
+build notes it in `debug.txt` and goes on.
 
 ## Direct3D
 
@@ -236,15 +244,13 @@ Kai's for its MAC: yes or no. Kai's address itself (`10.252.EE.FF`, mask
 
 ## Status
 
-The build booted on a development kit on October 4: the menus at a steady
-30 fps, profiles, DHCP, the game list and ONLINE GAMES. Music played from
-October 13 (until then the console had no `audio.music_volume` or
-`audio.effects_volume` setting, so both read as 0; they are now 1.0): the menu music and the campaign's music and effects play on a
-development kit. The same day it joined a [D] dedicated server through
-ONLINE GAMES.
-The October 2 build also started on a modified retail console. The code is
-now ChupathingyCE's at network version 28 (it joins hosts of 11 through
-30), merged October 13 and not yet booted on a console since.
+The build boots to the menus at a steady 30 fps on a development kit and on
+modified retail consoles, gets its address by DHCP, shows the game list
+(ONLINE GAMES) and joins [D] dedicated servers and PC hosts through the PCs'
+tunnel. It targets a stock 64 MB console (first matches played on October 18);
+128 MB only adds extras (see "Memory"). Music and the campaign's effects
+play. The code is ChupathingyCE's at network version 28 (it joins hosts of 11
+through 30).
 Network co-op is not built for the console (`game/xbox_coop.c`): co-op
 games are left out of its lists, and a game that turns co-op is left with
 a message. Known:
@@ -258,11 +264,10 @@ a message. Known:
   the invite in `console.join`), through the desktop builds' tunnel
   (`port/linux/src/p2p*.c`, built as they are; `src/xbox_p2p.c` and
   `src/xbox_winsock_hooks.c` are its platform), with
-  `console.bypass_security`; that join is built but not yet seen working on
-  a console. On a LAN it finds a PC host in System Link, or joins the host
+  `console.bypass_security`. On a LAN it finds a PC host in System Link, or joins the host
   whose IPv4 address is in `console.join` (`src/xbox_direct_join.c`). It
   does not yet host the PCs, and its object array (2,048) is the Xbox's:
   `debug.txt` logs how high a PC host's object indices go ("cross-play:"
   lines).
 - The menus are the Xbox's; the PC menus are not built.
-- Campaign and multiplayer levels are not yet tested.
+- Campaign and multiplayer levels are still being tested.

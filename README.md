@@ -17,9 +17,25 @@
 Warthog is the Halo: Combat Evolved decompilation built back for the console
 it was written for, on the same code as
 [ChupathingyCE](https://github.com/ChupathingyCE/chupathingyce) (the
-Windows, Mac, Linux and Android builds). The goal: Halo as it shipped on the
-Xbox, with its memory, caches and limits, that also plays online with the
-PC builds. Expect rough edges, and please report them.
+Windows, Mac, Linux and Android builds). A stock 64 MB original Xbox plays
+online in cross-play with the PCs and Macs through the **Online Games** list,
+at the console's 16 players. The maps are the ones on your own disc. Expect
+rough edges, and please report them.
+
+## Quick start
+
+You build Warthog yourself; there is no download. One script walks you
+through it, checks what you have, tells you what is missing and how to get
+it, then builds and lays the game out for the console:
+
+```sh
+python3 tools/easy_build.py
+```
+
+You need [OXDK](https://github.com/MrMilenko/OXDK) with your own copy of
+the Xbox SDK in it, your own `d3d8ntpr.lib`, and the maps from your own NTSC
+disc. `python3 tools/easy_build.py --check` only checks the tools.
+[docs/building.md](docs/building.md) has the same steps by hand.
 
 ## Status
 
@@ -61,8 +77,8 @@ American release (NTSC, 01.10.12.2276), as every ChupathingyCE build and
 dedicated server does; the PAL disc's maps work too.
 
 1. Copy the `maps` folder from your own disc (about 2 GB) to your computer.
-2. Lay the game out for the console's hard disk: `tools/xbox_package.py`
-   puts `default.xbe` beside your maps in one folder (see "Build").
+2. Lay the game out for the console's hard disk: `tools/easy_build.py` (or
+   `tools/xbox_package.py`) puts `default.xbe` beside your maps in one folder.
 3. Copy that folder to the console, for example to `E:\Games\Warthog\`, and
    start `default.xbe`.
 
@@ -154,17 +170,18 @@ The game writes its log to `D:\debug.txt`; attach it to bug reports.
 
 ## Building it yourself
 
-Warthog builds on macOS today, with [OXDK](https://github.com/MrMilenko/OXDK),
-clang and lld-link (Linux should work the same way, untested). Nothing from
+`python3 tools/easy_build.py` (see "Quick start") does all of this with
+questions and checks; `--yes` and its options run it without questions.
+By hand, with [OXDK](https://github.com/MrMilenko/OXDK), clang and lld-link
+(macOS today; Linux should work the same way, untested). Nothing from
 Microsoft's SDKs is in this repository, and none of it may be committed:
 you supply your own.
 
 - Python 3, [ninja](https://ninja-build.org/) and LLVM (clang and
   lld-link). On macOS: `brew install llvm lld ninja`.
-- [OXDK](https://github.com/MrMilenko/OXDK) in `~/OXDK` (or `--oxdk DIR`,
-  or `OXDK_DIR`), with its `cxbe` built, and the 5933 Xbox SDK's libraries
-  and headers in OXDK's `xbox/xdk/lib` and `xbox/xdk/include`, as OXDK's
-  README says.
+- OXDK in `~/OXDK` (or `--oxdk DIR`, or `OXDK_DIR`), with its `cxbe` built,
+  and the 5933 Xbox SDK's libraries and headers in OXDK's `xbox/xdk/lib` and
+  `xbox/xdk/include`, as OXDK's README says.
 - An Aug 2001 Direct3D library, `d3d8ntpr.lib` (the `aug01` i386 build),
   given to `configure.py --xbox-d3d8`.
 
@@ -177,11 +194,11 @@ python3 tools/xbox_package.py --maps /path/to/your/maps --out ~/Downloads/Wartho
 
 `xbox_package.py` lays out `default.xbe` and your own `maps/` as one folder
 for the console's hard disk, with a `config.toml` that sets
-`bypass_security = true` (`--secure` sets it `false`). Copy it to the console (FTP on a modified console), for
-example to `E:\Games\Warthog\`, and start `default.xbe`.
-[docs/building.md](docs/building.md) has every step, the versions tested
-and the options. `xbox360`, `wiiu` and `switch` build the other consoles'
-stubs where their toolchains are installed
+`bypass_security = true` (`--secure` sets it `false`). Copy it to the console
+(FTP on a modified console), for example to `E:\Games\Warthog\`, and start
+`default.xbe`. [docs/building.md](docs/building.md) has every step, the
+versions tested and the options. `xbox360`, `wiiu` and `switch` build the
+other consoles' stubs where their toolchains are installed
 ([docs/consoles.md](docs/consoles.md)).
 
 ## Help wanted: Windows tooling

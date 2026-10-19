@@ -9,11 +9,19 @@ Nothing from Microsoft's SDKs is in this repository, and none of it may be
 committed. You supply your own copies of the libraries and headers, and
 the build reads them from where you keep them.
 
+The quick way is `python3 tools/easy_build.py`: it checks everything below,
+says what is missing and how to get it, asks a few questions (build type,
+players, developer tools, packaging) and runs these steps. `--check` only
+checks, and `--yes` with `--d3d8 PATH`, `--oxdk DIR`, `--players N`,
+`--maps DIR` and `--out DIR` runs without questions. It remembers your
+answers in `.easy_build.json` (ignored by git). The rest of this page is the
+same thing by hand.
+
 ## What to install
 
 | What | Where it goes | Tested with |
 | --- | --- | --- |
-| Python 3 | on `PATH` | 3.9 (macOS's) |
+| Python 3 | on `PATH` (3.7 or newer) | 3.9 (macOS's) |
 | [ninja](https://ninja-build.org/) | on `PATH` | 1.13 |
 | LLVM: clang and lld-link | macOS: `brew install llvm lld ninja`. The build looks in `LLVM_DIR`, then Homebrew's `llvm` folder, then `PATH` | Homebrew clang 22.1, LLD 22.1 |
 | [OXDK](https://github.com/MrMilenko/OXDK), with its `cxbe` built | `~/OXDK` (or `--oxdk DIR`, or `OXDK_DIR`) | |
@@ -73,12 +81,30 @@ kit's memory to 64 MB, so a 128 MB devkit runs the game with a stock
 console's memory (a stock console ignores it). Stock 64 MB is the target, so
 test with it on a devkit.
 
-Two options of `configure.py` change what the console's build holds, and
-are for development: `--console-debug-tools` keeps the debug decomp's
-developer tools in (the profiler, the AI, render and collision debug, the
-stack walker), which the build leaves out by default, and `--console-players
-32` (or 64) makes the network tables hold more than the Xbox's 16 players, for
-tests a stock console's memory can't hold.
+### Options for the build
+
+`configure.py` options for the original Xbox build, all console-neutral in
+name so other consoles can take them up:
+
+| Option | What it does |
+| --- | --- |
+| `--xbox-d3d8 LIBRARY` | your `d3d8ntpr.lib`; without it there is no `xbox` target |
+| `--oxdk DIR` | OXDK's checkout (default `OXDK_DIR`, or `~/OXDK`) |
+| `--release` | assertions are not checked; a failed one is noted in `debug.txt` and the game goes on |
+| `--console-players {16,32,64}` | the players the network tables hold. 16 is the Xbox's. 32 and 64 are test builds a stock 64 MB console does not hold; they say so on screen at the main menu |
+| `--console-debug-tools` | keeps the debug decomp's developer tools (profiler, AI, render and collision debug, stack walker, libtiff and the bitmap tools), about 0.9 MB, which the build leaves out by default |
+
+`xbox_package.py --devkit-64mb` is the packaging side of the 64 MB target:
+see "Package" above.
+
+### Other consoles
+
+The Xbox 360 (`ninja xbox360`, `--oxdk360`, `--llvm-xenon`), Wii U (`ninja
+wiiu`, `--devkitppc`, `--wut`) and Switch (`ninja switch`, `--devkita64`,
+`--libnx`) targets are scaffolding: each builds a stub that logs a line and
+exits, and none of the game is compiled for them yet. The Xbox 360 needs
+your own 360 SDK as well (docs/consoles.md). A target appears only when
+`configure.py` finds its toolchain.
 
 ## Onto the console
 
@@ -95,5 +121,7 @@ on a development kit.
    too.
 
 The settings in `D:\config.toml` (`bypass_security`, `join`, `trace` and
-the rest) are in the README, "Settings on the console".
-xemu (128 MB, NAT) can run the build too: README, "Testing".
+the rest) are in the README, "Settings on the console", and attach
+`debug.txt` to bug reports. xemu (128 MB, NAT) can run the build too:
+README, "Testing". Questions go to the #warthog-support forum on the
+Discord.
