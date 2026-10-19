@@ -181,7 +181,10 @@ static void note_socket_port(SOCKET socket, int listening)
 
 enum
 {
-	INBOX_DATAGRAMS = 32,
+	/* (the game reads its sockets every frame, at some 30 datagrams a second
+	from a host: 16 hold half a second of them, and a full inbox drops the
+	next as a full socket does) */
+	INBOX_DATAGRAMS = 16,
 	INBOX_DATAGRAM_SIZE = 1400,
 };
 
