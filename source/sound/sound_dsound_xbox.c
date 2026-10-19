@@ -1305,8 +1305,31 @@ enum
 };
 
 static long xbox_sound_log_lines;
+static long xbox_sound_started;
+static long xbox_sound_failures;
 static volatile long xbox_channel_packets[MAXIMUM_SOUND_CHANNELS];
 static boolean xbox_channel_watched[MAXIMUM_SOUND_CHANNELS];
+
+unsigned long xbox_memory_free(void);
+
+/* port: a sound that could not start, said (the first few a map, then
+counted into the map's summary): the name, why, and what memory is left. The
+packet queue runs from DirectSound's callback and the main loop alike, so the
+text is built in place and logged from the main loop's thread only when the
+caller is on it (queued failures are counted and shown by dsound_flush). */
+static void xbox_sound_failed(
+	char const *name,
+	char const *why)
+{
+	xbox_sound_failures++;
+	if (xbox_sound_failures<=8)
+	{
+		error(_error_silent, "sound: could not start %.32s: %s, %lu KB free",
+			name ? name : "?", why, xbox_memory_free()/1024);
+	}
+}
+#else
+#define xbox_sound_failed(name, why) ((void)0)
 #endif
 
 /* ---------- public code */
@@ -1687,6 +1710,19 @@ static void dsound_flush(
 	void)
 {
 	short index;
+
+#ifdef HALO_XBOX_CONSOLE
+	/* port: the map is going: its sounds in one line, and the first few of
+	the next map are logged again (the 24 lines were all spent at the menu) */
+	if (xbox_sound_started || xbox_sound_failures)
+	{
+		error(_error_silent, "sound: %ld started, %ld could not start this map, %lu KB free",
+			xbox_sound_started, xbox_sound_failures, xbox_memory_free()/1024);
+	}
+	xbox_sound_started= 0;
+	xbox_sound_failures= 0;
+	xbox_sound_log_lines= 0;
+#endif
 
 	for (index= 0; index<dsound_globals.actual_channel_count; index++)
 	{
@@ -2692,12 +2728,15 @@ static boolean dsound_channel_queue_packet(
 					}
 					else
 					{
+						xbox_sound_failed(sound->name, result==DSERR_OUTOFMEMORY ?
+							"out of memory queuing a packet" : "packet refused");
 						interrupt_time_error(&result, "couldn't queue sound packet.");
 					}
 				}
 			}
 			else
 			{
+				xbox_sound_failed(channel->playing_permutation->name, "outside the sound cache");
 				sprintf(
 					temporary,
 					/* port: %.32s, the name is the map's 32 characters */
@@ -2710,6 +2749,7 @@ static boolean dsound_channel_queue_packet(
 		}
 		else
 		{
+			xbox_sound_failed(channel->playing_permutation->name, "not in the sound cache");
 			interrupt_time_error(NULL, "trying to queue sound but samples is null.");
 		}
 	}
@@ -2779,6 +2819,7 @@ static void dsound_channel_queue_sound(
 			channel->packet_count= 0;
 
 #ifdef HALO_XBOX_CONSOLE
+			xbox_sound_started++;
 			if (index<MAXIMUM_SOUND_CHANNELS && xbox_sound_log_lines<XBOX_SOUND_LOG_LINES)
 			{
 				xbox_sound_log_lines++;
