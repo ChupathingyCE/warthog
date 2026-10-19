@@ -33,10 +33,11 @@ game state; its limits only make a host take fewer players.
 enum
 {
 	/* a game's machines and players (HALO_PORT_MAXIMUM_NETWORK_MACHINES and
-	_PLAYERS): the original Xbox's game keeps 16 of each (its 64 MB), so its
-	sessions keep no more either */
+	_PLAYERS): the original Xbox's game keeps 16 players and 17 machines (a
+	dedicated host being machine 0; its 64 MB), so its sessions keep no more
+	either */
 #ifdef HALO_XBOX_CONSOLE
-	DELTA_PEER_MAXIMUM_MACHINES = 16,
+	DELTA_PEER_MAXIMUM_MACHINES = 17,
 	DELTA_PEER_MAXIMUM_PLAYERS = 16,
 #else
 	DELTA_PEER_MAXIMUM_MACHINES = 128,

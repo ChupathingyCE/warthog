@@ -73,6 +73,7 @@ int main(int argc, char **argv)
 		expect(config_boolean("console.debug_geometry") == 0, "console.debug_geometry is not false");
 		expect(!strcmp(config_string("console.log_flush"), "buffered"), "console.log_flush is not buffered");
 		expect(!strcmp(config_string("console.join"), ""), "console.join is not empty");
+		expect(!strcmp(config_string("console.delta"), "auto"), "console.delta is not auto");
 		expect_shared();
 		text = file_text();
 		expect(text != NULL, "no config.toml written");
@@ -108,7 +109,7 @@ int main(int argc, char **argv)
 			return 1;
 		fputs("# The layout of this file, for the game: leave it.\nconfig_version = 2\n\n[console]\n"
 			"bypass_security = true\ndebug_geometry = true\nlog_flush = \"every_line\"\n"
-			"simulate_64mb = true\njoin = \"192.168.1.20\"\n", file);
+			"simulate_64mb = true\njoin = \"192.168.1.20\"\ndelta = \"off\"\n", file);
 		fclose(file);
 		expect(config_boolean("console.bypass_security") == 1, "console.bypass_security is not true");
 		expect(config_boolean("console.debug_geometry") == 1, "console.debug_geometry is not true");
@@ -117,6 +118,8 @@ int main(int argc, char **argv)
 		expect(config_boolean("console.simulate_64mb") == 1, "console.simulate_64mb is not true");
 		expect(config_boolean("console.large_caches") == 0, "console.large_caches is not false");
 		expect(!strcmp(config_string("console.join"), "192.168.1.20"), "console.join is not the address");
+		/* (the switch delta_peer_protocol reads: "off" keeps the legacy protocol alone) */
+		expect(!strcmp(config_string("console.delta"), "off"), "console.delta is not off");
 		expect_shared();
 		text = file_text();
 		expect(text && strstr(text, "debug_geometry = true\n") != NULL, "the value written is gone");

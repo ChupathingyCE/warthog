@@ -352,7 +352,8 @@ def generate_xbox_build(n: Writer, sln: Any) -> None:
     # Delta Peer: as internet play's sources, with the console's limits
     # (HALO_XBOX_CONSOLE), the C99 calls its C runtime lacks, and the port's
     # headers (delta.h, halo_port_limits.h) after the SDK's
-    delta_cflags = " ".join([p2p_cflags, "-DHALO_XBOX_CONSOLE", "-DHALO_CONSOLE_DELTA", f'-DHALO_VERSION=\\"{version()}\\"',
+    # (-Os: the console's 64 MB keeps every byte of its code)
+    delta_cflags = " ".join([p2p_cflags, "-Os", "-DHALO_XBOX_CONSOLE", "-DHALO_CONSOLE_DELTA", f'-DHALO_VERSION=\\"{version()}\\"',
                              f"-include {_quote(PORT_DIR / 'p2p' / 'xbox_stdio.h')}",
                              f"-idirafter {_quote(PORT_LINUX_INCLUDE)}"])
     for source in DELTA_SOURCES:
