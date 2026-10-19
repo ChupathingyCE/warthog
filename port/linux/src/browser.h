@@ -195,6 +195,10 @@ void browser_server_name(char *text, int size);
 is more than a few seconds old: those of this machine's network version,
 without this machine's own. Returns their count. */
 int browser_get_games(struct browser_game *games, int maximum_count);
+/* whether a game's map (a scenario's name or path) is a campaign level: a
+co-op game, which no server browser lists (a direct join or an invite still
+reaches it) */
+int browser_map_is_campaign(const char *map);
 /* the public listings (OpenCE's, p2p_lobby.c) followed while a screen of
 listed games is up, for which of them have a password; and the games'
 pings measured (p2p_probe.c) and estimated (browser_ping.c) meanwhile,

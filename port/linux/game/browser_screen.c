@@ -843,6 +843,14 @@ static void fetch_games(
 		csstrncpy(invite, browser_screen.games[browser_screen.selected].invite, sizeof(invite) - 1);
 	invite[sizeof(invite) - 1] = 0;
 	browser_screen.count = (short)browser_get_games(browser_screen.games, BROWSER_MAXIMUM_GAMES);
+	/* (co-op games are not listed here, whatever list they came from; an
+	invite to one still joins) */
+	for (index = other = 0; index < browser_screen.count; index++)
+	{
+		if (!browser_map_is_campaign(browser_screen.games[index].map))
+			browser_screen.games[other++] = browser_screen.games[index];
+	}
+	browser_screen.count = other;
 	/* (insertion: a few dozen games) */
 	for (index = 1; index < browser_screen.count; index++)
 	{

@@ -18,6 +18,9 @@ from xml.sax.saxutils import quoteattr
 PE = "main_menu/settings_select/player_setup/player_profile_edit"
 YES_NO = [("YES", "true"), ("NO", "false")]
 ON_OFF = [("ON", "true"), ("OFF", "false")]
+# (after a screen's helps: shown for Button Layout set to Bumper Jumper, by
+# menu_functions.c's settings_help)
+BUMPER_JUMPER_HELP = ["Jump on the left bumper, so your thumb stays on aim\\n(as in later Halo games)."]
 SENSITIVITIES = [(f"{value:g}", f"{value:g}") for value in (0.1, 0.15, 0.25, 0.4, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2, 2.5, 3, 4)]
 VOLUMES = [(str(step), f"{step / 10:g}") for step in range(11)]
 
@@ -191,7 +194,7 @@ SCREENS = {
              "Level the view while walking.", None),
             ("BUTTON LAYOUT:", "profile.button_preset",
              [("DEFAULT", "0"), ("SWAP TRIGGERS", "1"), ("SWAP A, L TRIGGER", "2"), ("SWAP B, L TRIGGER", "3"),
-              ("SWAP B, R STICK", "4")],
+              ("SWAP B, R STICK", "4"), ("BUMPER JUMPER", "5")],
              "Which of the controller's buttons does what (not\nthe keyboard's: Controls Setup sets those).", None),
             ("STICK LAYOUT:", "profile.joystick_preset",
              [("DEFAULT", "0"), ("SOUTHPAW", "1"), ("LEGACY", "2"), ("LEGACY SOUTHPAW", "3")],
@@ -321,7 +324,8 @@ def _setting_screen(folder: str, spec: dict) -> list:
     extra += _strings(f"{base}/labels", [label for label, *_ in spec["rows"]])
     # (the help of the row whose label is string n is n + 1: the buttons' is 0)
     extra += _strings(f"{base}/help_strings",
-                      [""] + [help_text.replace("\n", "\\n") for _, _, _, help_text, *_ in spec["rows"]])
+                      [""] + [help_text.replace("\n", "\\n") for _, _, _, help_text, *_ in spec["rows"]]
+                      + BUMPER_JUMPER_HELP * any(row[1] == "profile.button_preset" for row in spec["rows"]))
     return _screen(folder, spec, rows, ["port settings help"], [], extra)
 
 

@@ -2173,6 +2173,43 @@ static void add_known(struct browser_game *games, int count)
 	}
 }
 
+/* whether two names are the same, ASCII letters in either case (every
+build has this: the server's and Android's link no SDL string functions) */
+static int browser_ascii_equal(const char *a, const char *b)
+{
+	for (; *a && *b; a++, b++)
+	{
+		char x = *a >= 'A' && *a <= 'Z' ? (char)(*a - 'A' + 'a') : *a;
+		char y = *b >= 'A' && *b <= 'Z' ? (char)(*b - 'A' + 'a') : *b;
+
+		if (x != y)
+			return 0;
+	}
+	return !*a && !*b;
+}
+
+int browser_map_is_campaign(const char *map)
+{
+	static const char *const levels[] = { "a10", "a30", "a50", "b30", "b40", "c10", "c20", "c40", "d20", "d40" };
+	const char *name = map ? map : "";
+	size_t index;
+
+	/* (the path's last part; a Halo PC or HaloMD map, <file>@ce or @md, is not a level) */
+	for (index = 0; name[index]; index++)
+	{
+		if (name[index] == '@')
+			return 0;
+	}
+	while (strpbrk(name, "\\/"))
+		name = strpbrk(name, "\\/") + 1;
+	for (index = 0; index < sizeof(levels) / sizeof(levels[0]); index++)
+	{
+		if (browser_ascii_equal(name, levels[index]))
+			return 1;
+	}
+	return 0;
+}
+
 int browser_get_games(struct browser_game *games, int maximum_count)
 {
 	int count;

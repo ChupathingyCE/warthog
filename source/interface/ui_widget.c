@@ -2674,6 +2674,11 @@ static void widget_instance_give_focus_by_tag(
 	return;
 }
 
+/* a list watched for the player stepping it with left/right (the Xbox-style
+controls screen watches its layout spinner) */
+struct widget_instance *g_list_widget_watched = NULL;
+boolean g_list_widget_watched_stepped = FALSE;
+
 boolean widget_event_function_list_widget_goto_next_item(
 	struct widget_instance *widget,
 	struct event_record *event,
@@ -2688,6 +2693,8 @@ boolean widget_event_function_list_widget_goto_next_item(
 		"c:\\halo\\SOURCE\\interface\\ui_widget.c",
 		1230,
 		widget);
+	if (widget == g_list_widget_watched)
+		g_list_widget_watched_stepped = TRUE;
 	definition = ui_widget_definition_get(widget->definition_tag_index);
 	match_vassert(
 		"c:\\halo\\SOURCE\\interface\\ui_widget.c",
@@ -2840,6 +2847,8 @@ boolean widget_event_function_list_widget_goto_previous_item(
 		"c:\\halo\\SOURCE\\interface\\ui_widget.c",
 		1359,
 		widget);
+	if (widget == g_list_widget_watched)
+		g_list_widget_watched_stepped = TRUE;
 	definition = ui_widget_definition_get(widget->definition_tag_index);
 	match_vassert(
 		"c:\\halo\\SOURCE\\interface\\ui_widget.c",

@@ -1205,6 +1205,40 @@ static void set_local_player_controls_from_player_profile(
 			preferences.game_control_to_xbox_buttons[10] = _gamepad_binary_button_left_thumb;
 			preferences.game_control_to_xbox_buttons[11] = _gamepad_analog_button_b;
 			break;
+
+		case _button_preset_bumper_jumper:
+			/* port: as Halo: The Master Chief Collection's Bumper Jumper.
+			The Xbox's white button is the left bumper and its black button
+			the right (port/linux/src/xinput_sdl.c) */
+			preferences.game_control_to_xbox_buttons[0] = _gamepad_analog_button_white;
+			preferences.game_control_to_xbox_buttons[1] = _gamepad_analog_button_a;
+			preferences.game_control_to_xbox_buttons[2] = _gamepad_analog_button_b;
+			preferences.game_control_to_xbox_buttons[3] = _gamepad_analog_button_y;
+			preferences.game_control_to_xbox_buttons[4] = _gamepad_analog_button_black;
+			preferences.game_control_to_xbox_buttons[5] = _gamepad_analog_button_x;
+			preferences.game_control_to_xbox_buttons[6] = _gamepad_analog_button_left_trigger;
+			preferences.game_control_to_xbox_buttons[7] = _gamepad_analog_button_right_trigger;
+			preferences.game_control_to_xbox_buttons[8] = _gamepad_binary_button_start;
+			preferences.game_control_to_xbox_buttons[9] = _gamepad_binary_button_back;
+			preferences.game_control_to_xbox_buttons[10] = _gamepad_binary_button_left_thumb;
+			preferences.game_control_to_xbox_buttons[11] = _gamepad_binary_button_right_thumb;
+			break;
+
+		default:
+			/* (a preset this build does not know, from a newer profile: the default) */
+			preferences.game_control_to_xbox_buttons[0] = _gamepad_analog_button_a;
+			preferences.game_control_to_xbox_buttons[1] = _gamepad_analog_button_black;
+			preferences.game_control_to_xbox_buttons[2] = _gamepad_analog_button_x;
+			preferences.game_control_to_xbox_buttons[3] = _gamepad_analog_button_y;
+			preferences.game_control_to_xbox_buttons[4] = _gamepad_analog_button_b;
+			preferences.game_control_to_xbox_buttons[5] = _gamepad_analog_button_white;
+			preferences.game_control_to_xbox_buttons[6] = _gamepad_analog_button_left_trigger;
+			preferences.game_control_to_xbox_buttons[7] = _gamepad_analog_button_right_trigger;
+			preferences.game_control_to_xbox_buttons[8] = _gamepad_binary_button_start;
+			preferences.game_control_to_xbox_buttons[9] = _gamepad_binary_button_back;
+			preferences.game_control_to_xbox_buttons[10] = _gamepad_binary_button_left_thumb;
+			preferences.game_control_to_xbox_buttons[11] = _gamepad_binary_button_right_thumb;
+			break;
 	}
 
 	preferences.invert_look = controls->invert_look;
