@@ -889,7 +889,9 @@ boolean game_state_image_accept(
 		if (!valid)
 			return FALSE;
 	}
-	csmemcpy(game_state_globals.base_address, image, size);
+	/* (the console reads straight into the game state: nothing to copy) */
+	if (image != game_state_globals.base_address)
+		csmemcpy(game_state_globals.base_address, image, size);
 	error(_error_silent, "the saved game is taken");
 
 	return TRUE;
