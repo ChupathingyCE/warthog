@@ -32,6 +32,10 @@ telnet_console.h) */
 /* and no high-res text or HUD: the maps' own fonts and bitmaps, as retail */
 #define HALO_CONSOLE_NO_HIRES
 
+/* and no players' names above their heads (hud.c): retail names the player
+under the reticle only */
+#define HALO_CONSOLE_NO_PLAYER_NAMES
+
 /* and no tag schema or validator (port/linux/game/tag_validate.c: 170 KB of
 the image, and already off on a 64 MB console, which has no room for its
 claims): the maps are the Xbox's own */
