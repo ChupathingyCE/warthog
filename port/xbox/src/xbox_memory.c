@@ -41,6 +41,10 @@ xbox_memory_delta_class_of) is built on the host (port/xbox/tests).
 
 #include "../include/xbox_memory.h"
 
+/* XINIT_LIMIT_DEVKIT_MEMORY, in the XBE header's init flags (at 0x124:
+tools/xbox_package.py --devkit-64mb) */
+#define XBE_INIT_LIMIT_DEVKIT_MEMORY 0x00000004UL
+
 int xbox_memory_class_of(unsigned long total_bytes)
 {
 	if (!total_bytes)
@@ -249,6 +253,15 @@ static void memory_read(void)
 		xbox_boot_log("console.simulate_64mb is deprecated and ignored: a devkit gets 64 MB from the XBE's flag "
 			"(tools/xbox_package.py --devkit-64mb)");
 	memory.memory_class = xbox_memory_class_of(memory.total);
+	/* a devkit started with XINIT_LIMIT_DEVKIT_MEMORY (the XBE's init flags,
+	which the kernel keeps in the header at the image's base) still reports
+	its 128 MB in all, but gives the title only a stock console's: it is in
+	the 64 MB class */
+	if ((*(unsigned long const *)0x00010124UL & XBE_INIT_LIMIT_DEVKIT_MEMORY) &&
+		memory.memory_class > _xbox_memory_class_64mb)
+	{
+		memory.memory_class = _xbox_memory_class_64mb;
+	}
 	memory.lowest_free = memory.available;
 	memory.large_caches = config_boolean("console.large_caches");
 
