@@ -103,6 +103,14 @@ typedef char xbox_mm_statistics_size_assert[sizeof(xbox_mm_statistics) == 36 ? 1
 
 LONG __stdcall MmQueryStatistics(xbox_mm_statistics *statistics);
 
+/* the game state (the Xbox's 0x345000; a test build of more than 16 players
+holds the Xbox's pools once for each 16, halo_port_capacity.h) */
+#if defined(HALO_CONSOLE_PLAYERS) && HALO_CONSOLE_PLAYERS > 16
+#define _game_state_size (0x305000 * (HALO_CONSOLE_PLAYERS / 16) + 0x40000)
+#else
+#define _game_state_size 0x345000
+#endif
+
 enum
 {
 	_texture_cache_stock = 0x1600000,
@@ -120,7 +128,7 @@ enum
 	/* what physical_memory_allocate takes besides the texture cache: the
 	game state, the tag cache and the sound cache (physical_memory_map.c's
 	sizes, the Xbox game's) */
-	_other_caches_size = 0x345000 + 0x1600000 + 0x400000,
+	_other_caches_size = _game_state_size + 0x1600000 + 0x400000,
 	/* what must stay free once the caches are made: the Direct3D device
 	(two 640x480 buffers and the depth buffer, 3.5 MB, and its push
 	buffer), and the game's and the system's own allocations */
@@ -222,6 +230,19 @@ static void memory_read(void)
 	(the first message, shown at the main menu) */
 	xbox_boot_log("players: this build holds %d players, not the Xbox's 16: a test build", HALO_CONSOLE_PLAYERS);
 	memory.message = L"Test build: more than 16 players.\r\nNot for a stock 64 MB Xbox.";
+	xbox_boot_log("players: the game state is %lu KB for %d players (the Xbox's 16: 3348 KB)",
+		(unsigned long)_game_state_size >> 10, HALO_CONSOLE_PLAYERS);
+	if (memory.memory_class <= _xbox_memory_class_64mb)
+	{
+		/* its game state does not fit a 64 MB console beside the caches: stop
+		here, in the log, not halted on at the first allocation that does not
+		fit (nothing is on screen this early to say it) */
+		LAUNCH_DATA launch_data = {0};
+
+		xbox_boot_log("players: this build needs a 128 MB console and this one has %lu MB: back to the dashboard",
+			memory.total >> 20);
+		XLaunchNewImageA(NULL, &launch_data);
+	}
 #endif
 	status_read(&memory.total, &memory.available, &memory.source);
 	if (config_boolean("console.simulate_64mb"))

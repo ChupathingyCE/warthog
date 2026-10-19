@@ -134,8 +134,8 @@ enum
 	GAME_STATE_CPU_SIZE = HALO_PORT_GAME_STATE_CPU_SIZE,
 	GAME_STATE_GPU_SIZE = HALO_PORT_GAME_STATE_GPU_SIZE,
 #else
-	GAME_STATE_CPU_SIZE = 0x305000,
-	GAME_STATE_GPU_SIZE = 0x40000,
+	GAME_STATE_CPU_SIZE = HALO_PORT_GAME_STATE_CPU_SIZE,
+	GAME_STATE_GPU_SIZE = HALO_PORT_GAME_STATE_GPU_SIZE,
 #endif
 	GAME_STATE_SIZE = GAME_STATE_CPU_SIZE+GAME_STATE_GPU_SIZE
 };
@@ -1090,7 +1090,7 @@ void game_state_initialize(
 	(halo_port_capacity.h, cache/physical_memory_map.c) */
 	game_state_globals.base_address = game_state_allocate_buffer(HALO_PORT_GAME_STATE_BASE_ADDRESS, GAME_STATE_CPU_SIZE, GAME_STATE_GPU_SIZE);
 #else
-	game_state_globals.base_address = game_state_allocate_buffer(0x80061000, GAME_STATE_CPU_SIZE, 0x40000);
+	game_state_globals.base_address = game_state_allocate_buffer(HALO_PORT_GAME_STATE_BASE_ADDRESS, GAME_STATE_CPU_SIZE, GAME_STATE_GPU_SIZE);
 #endif
 	game_state_create_or_open_file();
 	game_state_globals.header = game_state_malloc("header", NULL, sizeof(*game_state_globals.header));

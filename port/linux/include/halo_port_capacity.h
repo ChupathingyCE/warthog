@@ -33,8 +33,17 @@ layout: saved games of builds before it no longer load. */
 /* the console (port/xbox) keeps the Xbox's game state and pools: its 64 MB
 hold no more (docs/cross-play.md) */
 
+#if defined(HALO_CONSOLE_PLAYERS) && HALO_CONSOLE_PLAYERS > 16
+/* a test build of more than 16 players (configure.py --console-players)
+has the players' tables in its game state, which the Xbox's does not hold:
+the Xbox's pools, once for each 16 players, above the tag cache as the native
+builds put theirs (a 128 MB console; xbox_memory.c refuses a 64 MB one) */
+#define HALO_PORT_GAME_STATE_BASE_ADDRESS 0x81A00000
+#define HALO_PORT_GAME_STATE_CPU_SIZE (0x305000 * (HALO_CONSOLE_PLAYERS / 16))
+#else
 #define HALO_PORT_GAME_STATE_BASE_ADDRESS 0x80061000
 #define HALO_PORT_GAME_STATE_CPU_SIZE 0x305000
+#endif
 #define HALO_PORT_GAME_STATE_GPU_SIZE 0x40000
 #define HALO_PORT_GAME_STATE_SIZE (HALO_PORT_GAME_STATE_CPU_SIZE+HALO_PORT_GAME_STATE_GPU_SIZE)
 
