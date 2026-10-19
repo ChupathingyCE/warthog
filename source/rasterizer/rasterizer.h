@@ -42,7 +42,9 @@ enum
 	particle pool (halo_port_capacity.h) */
 	RASTERIZER_MAXIMUM_DYNAMIC_UNLIT_VERTICES = 4 * HALO_PORT_MAXIMUM_PARTICLES,
 #else
-	RASTERIZER_MAXIMUM_DYNAMIC_UNLIT_VERTICES = 8192,
+	/* (3 x the 4096 of the Xbox's 1024 particles: a busy 16-player match
+	spent 8192 on sprites, the frame's particles drawn in several passes) */
+	RASTERIZER_MAXIMUM_DYNAMIC_UNLIT_VERTICES = 12288,
 #endif
 	RASTERIZER_MAXIMUM_DYNAMIC_LIT_VERTICES = 2,
 	RASTERIZER_MAXIMUM_DYNAMIC_SCREEN_VERTICES = 16384,

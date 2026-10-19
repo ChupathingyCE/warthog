@@ -802,7 +802,11 @@ long _rasterizer_dynamic_vertices_new(
 		}
 		else if (!dynamic_vertices_overflow_warning)
 		{
-			error(_error_silent, "### ERROR too many dynamic vertices requested from rasterizer");
+			error(_error_silent,
+				"### ERROR too many dynamic vertices requested from rasterizer "
+				"(type %d: %ld of %ld used, %ld requested; %ld of %d buffers)",
+				(int)type, (long)group->vertex_count, (long)group->maximum_vertex_count, (long)count,
+				(long)dynamic_vertices.buffer_count, RASTERIZER_MAXIMUM_DYNAMIC_VERTEX_BUFFERS);
 			dynamic_vertices_overflow_warning = TRUE;
 		}
 	}
