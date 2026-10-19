@@ -29,6 +29,9 @@ telnet_console.h) */
 /* and no automated network tests (port/linux/game/network_test.c) */
 #define HALO_CONSOLE_NO_NETWORK_TEST
 
+/* and no high-res text or HUD: the maps' own fonts and bitmaps, as retail */
+#define HALO_CONSOLE_NO_HIRES
+
 /* clang predeclares the MSVC _Interlocked* intrinsics with prototypes that
 conflict with the SDK's; the game never calls them (xdk_win32.h) */
 #define _InterlockedCompareExchange halo_xbox_InterlockedCompareExchange
