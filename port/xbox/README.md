@@ -157,6 +157,9 @@ The console's own, in `[console]`:
 | `delta` | `"auto"` | Delta Peer as a client: joining a game whose host offers it (the desktop builds and the dedicated servers), the console says it is an Xbox, with its memory class, and nothing else, so that the stats site, the scoreboard and the server show Xbox. `"auto"` and `"on"` send it; `"off"` keeps the legacy protocol alone. A host without Delta, or any failure, leaves the game as it was. About 50 KB of the console's memory (all static: its code and 11 KB of data) |
 | `log_flush` | `"buffered"` | when `debug.txt` is written: `"buffered"` keeps the game's lines in memory and writes them once a second, when 8 KB wait, and at once for an assert, an exit or a crash; `"every_line"` writes each line as it comes (slow), for a crash hunt |
 
+
+**Player identity (optional).** A copy is anonymous unless its player puts their identity file at `D:\game_list_player.key` (by FTP, next to `config.toml`): the file the site's profile page exports, the same 32-byte player key a desktop copy keeps in `game_list_player.key`, either as the raw bytes or as 64 hex digits (use the hex form if you transfer in ASCII mode). The console never makes a key and never sends it anywhere: it works out the public player ID (the first 16 bytes of the SHA-256 of `halo-ce-universal player id\n` and the key) and wipes the key. With the file present and `network.share_profile = true`, Delta Peer's HELLO adds the `profile` capability and PROFILE carries the ID, as on a desktop build. Neither the key nor the ID is written to `debug.txt`. Without the file, or with the setting off, nothing changes. The file is the player's identity: it must not be shared.
+
 And the desktop builds' that apply on the console: `display.direct_camera`,
 `audio.music_volume`, `audio.effects_volume`, `game.console_log`,
 `network.online`, `network.tunnel_port`, `network.brokers_file`,

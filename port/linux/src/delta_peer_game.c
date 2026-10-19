@@ -31,6 +31,9 @@ HALO_GAME_BROWSER; network.protocol = "opence" turns all of it off.
 /* (the console's memory class, as log2 of megabytes: port/xbox/src/
 xbox_memory.c) */
 int xbox_memory_delta_class(void);
+/* (port/xbox/include/xbox_player_key.h: the ID of the player key a player
+put at D:\\game_list_player.key, if they did) */
+int xbox_player_id(unsigned char *id);
 #endif
 
 #include <stdio.h>
@@ -196,7 +199,13 @@ static int local_profile(struct delta_wire_profile *profile)
 	return 1;
 #else
 	memset(profile, 0, sizeof(*profile));
+#ifdef HALO_XBOX_CONSOLE
+	/* (only a copy the player gave an identity file, and only when they
+	chose to share their profile: as the desktop builds') */
+	return config_boolean("network.share_profile") && xbox_player_id(profile->player_id);
+#else
 	return 0;
+#endif
 #endif
 }
 
@@ -242,6 +251,14 @@ static int game_capability_disabled(void *context, int capability)
 	(void)context;
 	(void)capability;
 	return 0;
+}
+
+/* the console takes no legacy table: it says so (TABLE_HAVE with
+DELTA_WIRE_TABLE_NONE), and a host does not send it one */
+static delta_u32 game_legacy_table_serial(void *context)
+{
+	(void)context;
+	return DELTA_WIRE_TABLE_NONE;
 }
 #else
 /* the legacy table's kill switch */
@@ -355,7 +372,9 @@ int delta_peer_protocol(void)
 		env.send_datagram = game_send;
 		env.log_line = game_log;
 		env.random_number = game_random;
-#ifndef HALO_XBOX_CONSOLE
+#ifdef HALO_XBOX_CONSOLE
+		env.legacy_table_serial = game_legacy_table_serial;
+#else
 		env.legacy_table_serial = game_legacy_table_serial;
 		env.legacy_table_signed = game_legacy_table_signed;
 		env.legacy_table_offer = game_legacy_table_offer;
@@ -366,8 +385,9 @@ int delta_peer_protocol(void)
 		env.moderation_binding = game_moderation_binding;
 		memset(&local, 0, sizeof(local));
 #ifdef HALO_XBOX_CONSOLE
-		/* (the console says what it is and no more: no profile, maps or
-		moderation) */
+		/* (the console says what it is and no more: no maps or moderation;
+		its profile only if the player gave it an identity and shares it:
+		added below) */
 		local.capabilities = (delta_u32)1 << _delta_capability_platform;
 #else
 		local.capabilities = (delta_u32)1 << _delta_capability_platform | (delta_u32)1 << _delta_capability_profile |
@@ -386,6 +406,10 @@ int delta_peer_protocol(void)
 		snprintf(local.build, sizeof(local.build), "ChupathingyCE %s", updater_version());
 #endif
 		local.has_profile = local_profile(&local.profile);
+#ifdef HALO_XBOX_CONSOLE
+		if (local.has_profile)
+			local.capabilities |= (delta_u32)1 << _delta_capability_profile;
+#endif
 		local.ignore_platform_limits = !config_boolean("network.host_platform_limits");
 		{
 			const char *limits = config_string("network.platform_limits");

@@ -63,6 +63,11 @@ $CC -std=gnu11 -O1 -w -c port/third_party/tomlc17/tomlc17.c -o "$OUT/config/toml
 $CC -std=gnu11 -Wall -Wextra -Werror $SAN -DHALO_XBOX_CONSOLE -Iport/linux/src -Iport/third_party/tomlc17 \
 	port/xbox/tests/config_test.c "$OUT/config/port_config.c" "$OUT/config/tomlc17.o" -o "$OUT/config/config_test"
 (cd "$OUT/config/run" && ../config_test new && ../config_test given)
+# the console's player identity (D:\game_list_player.key)
+$CC -std=c89 -pedantic -Wall -Wextra -Werror $SAN -c $SRC/xbox_player_key.c -o "$OUT/player_key.o"
+$CC -std=gnu11 -Wall -Wextra -Werror $SAN port/xbox/tests/player_key_test.c "$OUT/player_key.o" \
+	-o "$OUT/player_key_test"
+(cd "$OUT" && ./player_key_test)
 # the console's Delta Peer client (HALO_XBOX_CONSOLE: its 16 machines, no table room)
 $CC -std=gnu11 -Wall -Wextra -Werror $SAN -DHALO_XBOX_CONSOLE -Iport/linux/src -Iport/third_party/monocypher \
 	-idirafter port/linux/include port/xbox/tests/delta_console_test.c port/linux/src/delta_peer.c \

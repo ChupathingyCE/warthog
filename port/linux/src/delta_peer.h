@@ -316,7 +316,8 @@ struct delta_peer_host_peer
 };
 
 /* the room for a signed legacy table going out or coming in: the console
-relays none (its game_legacy_table_* hooks are not set: relaying() is false),
+relays none (it sets only the serial hook, to DELTA_WIRE_TABLE_NONE: relaying()
+is false),
 and its 64 MB do not keep 32 KB for one */
 #ifdef HALO_XBOX_CONSOLE
 #define DELTA_PEER_TABLE_BYTES 1

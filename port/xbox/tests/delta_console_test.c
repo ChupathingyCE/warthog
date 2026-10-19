@@ -9,6 +9,10 @@ process, datagrams passed through memory. What it checks:
 
 - the host learns the platform from HELLO: xbox, the memory class, the
   platform capability and no more;
+- the host learns the player ID of a client that was given an identity
+  (PROFILE), and none of an anonymous one;
+- the console says it takes no legacy table, so a host that has a newer
+  one sends it none (and does, when the console says nothing);
 - the client ends up in a Delta session, with the room's limit of players;
 - a host that never answers leaves the client in legacy, no error;
 - 200,000 random datagrams to the client (some with Delta's header) do
@@ -39,14 +43,20 @@ struct datagram
 	int size;
 };
 
+static int tables_sent;
+
 static struct datagram queue[64];
 static int queued;
 static int from_client;
 
 static void send_datagram(void *context, delta_u32 ipv4, unsigned short port, const unsigned char *data, int size)
 {
+	struct delta_wire_header header;
+
 	(void)port;
 	(void)context;
+	if (ipv4 == CLIENT_IP && delta_wire_read_header(data, size, &header) && header.type == _delta_message_table)
+		tables_sent++;
 	if (queued < 64 && size <= DELTA_WIRE_MAXIMUM_DATAGRAM)
 	{
 		queue[queued].to = ipv4;
@@ -73,6 +83,41 @@ static int failures;
 #define CHECK(condition) \
 	do { if (!(condition)) { printf("FAILED: %s (line %d)\n", #condition, __LINE__); failures++; } } while (0)
 
+/* the host's legacy table: serial 5, one byte (never taken by the console) */
+static delta_u32 host_table_serial(void *context)
+{
+	(void)context;
+	return 5;
+}
+
+static int host_table_signed(void *context, unsigned char *buffer, int size)
+{
+	(void)context;
+	/* (this build's table room is one byte: the console relays none) */
+	if (size < 1)
+		return 0;
+	buffer[0] = 0x5A;
+	return 1;
+}
+
+static int host_table_offer(void *context, const unsigned char *table, int size)
+{
+	(void)context;
+	(void)table;
+	(void)size;
+	return 0;
+}
+
+/* what the console says it takes: none */
+static delta_u32 console_table_serial(void *context)
+{
+	(void)context;
+	return DELTA_WIRE_TABLE_NONE;
+}
+
+static const unsigned char test_player_id[DELTA_WIRE_PLAYER_ID_SIZE] =
+	{ 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16 };
+
 static void console_local(struct delta_peer_local *local)
 {
 	memset(local, 0, sizeof(*local));
@@ -83,6 +128,44 @@ static void console_local(struct delta_peer_local *local)
 	local->key.memory_class = 6;
 	local->key.version = DELTA_PLATFORM_KEY_VERSION;
 	snprintf(local->build, sizeof(local->build), "Warthog test");
+}
+
+/* a console given an identity (delta_peer_game.c: the profile capability
+and the ID) */
+static void console_local_identified(struct delta_peer_local *local)
+{
+	console_local(local);
+	local->capabilities |= (delta_u32)1 << _delta_capability_profile;
+	local->has_profile = 1;
+	memcpy(local->profile.player_id, test_player_id, sizeof(test_player_id));
+}
+
+static void deliver(struct delta_peer *peer, delta_u32 address, delta_u32 from, delta_u32 now);
+
+/* a handshake of a client and a host (a desktop's, with a legacy table
+newer than the client's) for 15 seconds */
+static void handshake(struct delta_peer *client, struct delta_peer *host, delta_u32 start)
+{
+	struct delta_peer_game_machine machines[2];
+	signed char seats[DELTA_PEER_MAXIMUM_PLAYERS];
+	delta_u32 now;
+	int index;
+
+	for (index = 0; index < DELTA_PEER_MAXIMUM_PLAYERS; index++)
+		seats[index] = (signed char)(index < 2 ? index : -1);
+	memset(machines, 0, sizeof(machines));
+	machines[0].machine_index = 0;
+	machines[0].local = 1;
+	machines[1].machine_index = 1;
+	machines[1].ipv4 = CLIENT_IP;
+	queued = 0;
+	for (now = start; now < start + 15000; now += 100)
+	{
+		delta_peer_client_frame(client, now, 1, HOST_IP, 4000, 1, 1, seats);
+		deliver(host, HOST_IP, CLIENT_IP, now);
+		delta_peer_host_frame(host, now, machines, 2, seats);
+		deliver(client, CLIENT_IP, HOST_IP, now);
+	}
 }
 
 /* the datagrams the other side queued, taken by one peer */
@@ -151,6 +234,65 @@ int main(void)
 	CHECK(other.capabilities == ((delta_u32)1 << _delta_capability_platform));
 	CHECK(delta_peer_room_limit(&client, _delta_peer_limit_players) <= 16);
 	(void)from_client;
+
+	/* 1b: identity, and the legacy table */
+	{
+		static struct delta_peer identified, desktop;
+		struct delta_peer_env client_env = env, host_env = env;
+
+		host_env.legacy_table_serial = host_table_serial;
+		host_env.legacy_table_signed = host_table_signed;
+		host_env.legacy_table_offer = host_table_offer;
+		client_env.legacy_table_serial = console_table_serial;
+
+		printf("identity and no table\n");
+		console_local_identified(&local);
+		delta_peer_initialize(&identified, &client_env, &local);
+		memset(&local, 0, sizeof(local));
+		local.capabilities = (delta_u32)1 << _delta_capability_platform | (delta_u32)1 << _delta_capability_profile;
+		local.legacy_version = HALO_PORT_NETWORK_VERSION;
+		delta_platform_policy_default(_delta_platform_pc_linux, &local.key);
+		local.key.platform = _delta_platform_pc_linux;
+		local.key.version = DELTA_PLATFORM_KEY_VERSION;
+		delta_peer_initialize(&desktop, &host_env, &local);
+		tables_sent = 0;
+		handshake(&identified, &desktop, 30000);
+		CHECK(identified.client_state == _delta_peer_client_delta);
+		CHECK(desktop.peers[1].has_profile);
+		CHECK(!memcmp(desktop.peers[1].profile.player_id, test_player_id, sizeof(test_player_id)));
+		CHECK(tables_sent == 0);
+
+		/* an anonymous console: no ID reaches the host */
+		console_local(&local);
+		delta_peer_initialize(&identified, &client_env, &local);
+		memset(&local, 0, sizeof(local));
+		local.capabilities = (delta_u32)1 << _delta_capability_platform | (delta_u32)1 << _delta_capability_profile;
+		local.legacy_version = HALO_PORT_NETWORK_VERSION;
+		delta_platform_policy_default(_delta_platform_pc_linux, &local.key);
+		local.key.platform = _delta_platform_pc_linux;
+		local.key.version = DELTA_PLATFORM_KEY_VERSION;
+		delta_peer_initialize(&desktop, &host_env, &local);
+		tables_sent = 0;
+		handshake(&identified, &desktop, 60000);
+		CHECK(!desktop.peers[1].has_profile);
+		CHECK(tables_sent == 0);
+
+		/* the control: a console that says nothing about tables is sent one */
+		console_local(&local);
+		client_env.legacy_table_serial = NULL;
+		delta_peer_initialize(&identified, &client_env, &local);
+		memset(&local, 0, sizeof(local));
+		local.capabilities = (delta_u32)1 << _delta_capability_platform;
+		local.legacy_version = HALO_PORT_NETWORK_VERSION;
+		delta_platform_policy_default(_delta_platform_pc_linux, &local.key);
+		local.key.platform = _delta_platform_pc_linux;
+		local.key.version = DELTA_PLATFORM_KEY_VERSION;
+		delta_peer_initialize(&desktop, &host_env, &local);
+		tables_sent = 0;
+		handshake(&identified, &desktop, 90000);
+		CHECK(tables_sent > 0);
+	}
+	(void)machines;
 
 	/* 2: no host that speaks Delta: legacy, quietly */
 	printf("no answer\n");
