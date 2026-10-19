@@ -43,7 +43,7 @@ One declaration (`network_game_manager.h:45-68`), checked against
 **slot-indexed**: `machines[i]` is the machine in connection slot `i`
 (`machine_index` `i`, else NONE), `players[i]` the player in slot `i`.
 
-| | console (16/16) | PCs (128/128) |
+| | console (17 machines, 16 players) | PCs (128/128) |
 |---|---|---|
 | `player_count` | 0x598 | 0x2314 |
 | `players` | 0x59A | 0x2316 |

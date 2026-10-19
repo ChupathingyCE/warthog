@@ -135,6 +135,20 @@ int main(void)
 	CHECK(player(console, CONSOLE_M, 15)[NETWORK_GAME_LAYOUT_PLAYER_MACHINE_INDEX] == 15);
 	free(record);
 
+	/* the host's direction: this build's own record widened to the network's
+	and folded back, exact (a console host with 16 players and its dedicated slot) */
+	record = pc_record(17, 16);
+	CHECK(fold(record, console) == NETWORK_GAME_LAYOUT_OK);
+	free(record);
+	record = malloc(pc_size);
+	if (!record)
+		abort();
+	CHECK(network_game_layout_convert(console, CONSOLE_M, CONSOLE_P, record, PC, PC, &clamped) == NETWORK_GAME_LAYOUT_OK);
+	CHECK(!clamped);
+	CHECK(network_game_layout_convert(record, PC, PC, back, CONSOLE_M, CONSOLE_P, &clamped) == NETWORK_GAME_LAYOUT_OK);
+	CHECK(!clamped && !memcmp(back, console, console_size));
+	free(record);
+
 	/* refusals */
 	record = pc_record(18, 2);
 	CHECK(fold(record, console) == NETWORK_GAME_LAYOUT_TOO_MANY_MACHINES);
