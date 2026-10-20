@@ -276,6 +276,13 @@ from your copies (section 7). Warthog's own published builds are made only
 with free, legally available tools and libraries; none contains code from
 Microsoft's SDKs.
 
+## Support
+
+Chupathingy is free and always will be. Support through
+[Ko-fi](https://ko-fi.com/milenko) goes to running the site and the servers. If
+there's a specific developer or port you'd like to support, ask them: they may
+not be part of our community.
+
 ## Credits
 
 - The decompilation: [punpckhdq/halo](https://github.com/punpckhdq/halo) and
