@@ -22,6 +22,7 @@ it did before the console had the file.
 
 #include "platform.h"
 #include "port_config.h"
+#include "halo_port_limits.h"
 #include "posix.h"
 
 #include <time.h>
@@ -2992,6 +2993,7 @@ char *config_file_read(const char *path, size_t *size)
 	return config_read_file(path, size);
 }
 
+#ifndef HALO_PORT_CONSOLE_LIMITS
 /* the settings config.toml changes while the game runs, edited by hand
 (Settings writes them through config_write): the volumes, which their
 readers read again when config_changes moves (dsound_sdl.c,
@@ -3083,6 +3085,13 @@ static void config_follow_file(void)
 	toml_free(result);
 	free(text);
 }
+#else
+/* (not on a console: its config.toml is edited off the console, and a look
+at the disk every second is a hitch the console can do without) */
+static void config_follow_file(void)
+{
+}
+#endif
 
 unsigned long config_changes(void)
 {

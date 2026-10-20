@@ -108,9 +108,10 @@ P2P_SOURCES = [
 ]
 # Delta Peer's (docs/delta.md), as the desktop builds compile them: the wire
 # format, a session as a client, and the game's session over the game's
-# sockets (no signed legacy table, no thread: delta.c is not in the console)
+# sockets (no signed legacy table, no thread: delta.c is not in the console),
+# and which wires play together (delta_compat.c)
 DELTA_SOURCES = [LINUX_SRC / "delta_wire.c", LINUX_SRC / "delta_peer.c", LINUX_SRC / "delta_chat.c",
-                 LINUX_SRC / "delta_peer_game.c"]
+                 LINUX_SRC / "delta_peer_game.c", LINUX_SRC / "delta_compat.c"]
 # the settings, D:\config.toml: the desktop builds' port_config.c and its
 # TOML parser (tools/linux_build.py's TOML_DIR)
 CONFIG_SOURCE = LINUX_SRC / "port_config.c"
