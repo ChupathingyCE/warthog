@@ -879,7 +879,7 @@ static const struct config_setting config_settings[] =
 		"For testing text chat (port/linux/game/chat.c): steps of\n"
 		"\"<seconds>:<all|team|server|mute|unmute|localmute|log|close|type>[:<text>]\"\n"
 		"separated by ;, from when this copy joins a game. Empty: none." },
-	{ "debug.audio_probe", _config_string, "\"\"", "HALO_AUDIO_PROBE", _environment_value, _platform_all,
+	{ "debug.audio_probe", _config_string, "\"\"", "HALO_AUDIO_PROBE", _environment_value, _platform_all | _platform_xbox,
 		"A probe file (port/linux/game/audio_probe.c), named as the game names\n"
 		"its files (d:\\ is the game's folder: on the desktop, the data folder):\n"
 		"the game loads its map, plays its sounds at its spots, records what it\n"

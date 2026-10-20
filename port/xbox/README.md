@@ -160,6 +160,15 @@ The console's own, in `[console]`:
 
 **Player identity (optional).** A copy is anonymous unless its player puts their identity file at `D:\game_list_player.key` (by FTP, next to `config.toml`): the file the site's profile page exports, the same 32-byte player key a desktop copy keeps in `game_list_player.key`, either as the raw bytes or as 64 hex digits (use the hex form if you transfer in ASCII mode). The console never makes a key and never sends it anywhere: it works out the public player ID (the first 16 bytes of the SHA-256 of `halo-ce-universal player id\n` and the key) and wipes the key. On a console the file being there is the consent (`network.share_profile` is a desktop setting): Delta Peer's HELLO adds the `profile` capability and PROFILE carries the ID. Once per boot, after the first online game has ended, the console also makes a signed platform claim over plain HTTP to the site (`GET /v1/claim_challenge`, then `POST /v1/claim_signed`, `xbox_claim.c`): it signs the site's one-time challenge with the Ed25519 key derived from the player key (the desktop builds' moderator key), so the key itself is never sent; a failure is one line in `debug.txt`, with no retry. Neither the key, the signature nor the ID is written to `debug.txt`. Without the file nothing is shown and nothing is sent. The file is the player's identity: it must not be shared.
 
+`debug.audio_probe` (in `[debug]`) runs the audio probe
+(`port/linux/game/audio_probe.c`): a probe file's path, such as
+`'D:\audio_probe\retail_maps.txt'` (`tools/audio_probes`). The game plays
+the file's sounds at its spots and records what the console's audio hardware
+plays, its final mix read back from the AC'97 controller's output
+(`src/xbox_audio_capture.c`), as WAVE files beside the probe file, for
+`tools/audio_probe_compare.py`; then it goes back to the main menu. Empty
+(the default): none of it runs.
+
 And the desktop builds' that apply on the console: `display.direct_camera`,
 `audio.music_volume`, `audio.effects_volume`, `game.console_log`,
 `network.online`, `network.tunnel_port`, `network.brokers_file`,

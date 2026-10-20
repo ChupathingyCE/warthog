@@ -29,6 +29,10 @@ telnet_console.h) */
 /* and no automated network tests (port/linux/game/network_test.c) */
 #define HALO_CONSOLE_NO_NETWORK_TEST
 
+/* A console's game never exits: what would quit on the desktop (the audio
+probe's end: port/linux/game/audio_probe.c) goes back to the main menu */
+#define HALO_CONSOLE_NO_EXIT
+
 /* and no high-res text or HUD: the maps' own fonts and bitmaps, as retail */
 #define HALO_CONSOLE_NO_HIRES
 
