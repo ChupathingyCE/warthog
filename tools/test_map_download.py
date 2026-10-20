@@ -35,7 +35,7 @@ ZLIB_SOURCES = ["adler32.c", "crc32.c", "inffast.c", "inflate.c", "inftrees.c", 
 MONOCYPHER = ROOT / "port" / "third_party" / "monocypher"
 TEST = ROOT / "port" / "linux" / "tests" / "map_archive_test.c"
 SANITIZERS = ["-fsanitize=address,undefined", "-fno-sanitize-recover=all"]
-LIMIT = 200 * 1024 * 1024
+LIMIT = 1024 * 1024 * 1024
 
 # a small, well-known community Custom Edition map on the repository, and its
 # header's checksum (what a host advertises as its version). Never one of
@@ -220,7 +220,7 @@ def test_stated_size_over_the_limit(harness, tmp_path):
     archive = make_zip([("testmap.map", make_map())])
     struct.pack_into("<I", archive, central(archive, "testmap.map") + 24, LIMIT + 1)
     output = run(harness, "extract", write(tmp_path, archive), "testmap")
-    assert "MB unpacked (at most 200 MB)" in output and output.endswith("(0 bytes written)")
+    assert "MB unpacked (at most 1024 MB)" in output and output.endswith("(0 bytes written)")
 
 
 def test_unpacking_past_the_stated_size_stops(harness, tmp_path):

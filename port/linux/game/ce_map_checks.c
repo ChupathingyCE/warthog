@@ -530,17 +530,26 @@ static boolean ce_map_check_tags(
 		goto done;
 	}
 	/* (the room left: the models' parts, strips and buffers, then the
-	loaded BSP's buffers) */
-	if (model_bytes > end_free - next_free || bsp_bytes > end_free - next_free - model_bytes)
+	loaded BSP's buffers, below the BSP and then above the tag cache,
+	ce_resources_allocate: less, there, what the first allocation that goes
+	there may leave unused below the BSP, at most a strip of the most
+	triangles) */
 	{
-		unsigned long needed = model_bytes + bsp_bytes;
 		unsigned long room = end_free - next_free;
 
-		ce_refusal_explain("It is too big for the game's tag cache: its models and level need %lu KB more room than "
-			"there is.", (needed - room + 1023) / 1024);
-		ce_refuse("its models and structure BSP buffers need %lu bytes of the tag cache, and %lu bytes "
-			"are free between its tags and its BSP (%lu too few)", needed, room, needed - room);
-		goto done;
+		if (CE_CONVERSION_ROOM > CE_LARGEST_CONVERSION_ALLOCATION)
+			room += CE_CONVERSION_ROOM - CE_LARGEST_CONVERSION_ALLOCATION;
+		if (model_bytes > room || bsp_bytes > room - model_bytes)
+		{
+			unsigned long needed = model_bytes + bsp_bytes;
+
+			ce_refusal_explain("It is too big for the game's tag cache: its models and level need %lu KB more room "
+				"than there is.", (needed - room + 1023) / 1024);
+			ce_refuse("its models and structure BSP buffers need %lu bytes of the tag cache, and %lu bytes "
+				"are free between its tags and its BSP and above the tag cache (%lu too few)", needed, room,
+				needed - room);
+			goto done;
+		}
 	}
 	valid = ce_shaders_check(&tags, instances, tag_count) && ce_hud_check(&tags, instances, tag_count) &&
 		ce_animations_check(&tags, instances, tag_count) && ce_weapons_check(&tags, instances, tag_count);

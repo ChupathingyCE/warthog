@@ -199,8 +199,23 @@ once it is mapped: a Custom Edition map is not opened without it
 (cache_files_windows.c) */
 #define PLATFORM_CE_TAG_CACHE_BASE 0x40440000U
 #define PLATFORM_CE_TAG_CACHE_SIZE 0x01700000U
+/* and right above it, up to the 64-bit build's heap (xbox_heap.c), room for
+what the port makes of a map's models and level (their converted parts,
+strips and buffers: ce_resources.c), which Halo PC kept outside its tag
+cache: used once the room between a map's tags and its BSP runs out.
+Mapped with the tag cache where the address space has room for it;
+platform_ce_conversion_room is its size then, else 0. Never on a console,
+or a build with the console's limits (halo_port_limits.h): the console's
+memory has no room for it */
+#include "halo_port_limits.h"
+#if defined(HALO_PORT_CONSOLE_LIMITS) || defined(HALO_CONSOLE_LIMITS)
+#define PLATFORM_CE_CONVERSION_ROOM_SIZE 0U
+#else
+#define PLATFORM_CE_CONVERSION_ROOM_SIZE 0x004c0000U
+#endif
 #ifdef HALO_CUSTOM_EDITION
 extern int platform_ce_tag_cache_ready;
+extern unsigned int platform_ce_conversion_room;
 #endif
 
 /* the host's page size, which protection works in (4 KB or more) */

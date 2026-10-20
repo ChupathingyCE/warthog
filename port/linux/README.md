@@ -426,7 +426,9 @@ those stay as they are, also if a later version changes the default. To get
 the default values again, delete the file.
 
 The game reads the file once, when it starts: restart the game after you
-edit it. If a key is not correct, or a value has the wrong type, the game
+edit it. The volumes (`audio.volume`, `audio.music_volume`,
+`audio.effects_volume`) are the exception: a change to them saved while the
+game runs applies within a second. If a key is not correct, or a value has the wrong type, the game
 writes the line to the log and uses the default value. If a line has a
 mistake that TOML cannot read, such as a word without quotes (`menus = pc`
 for `menus = "pc"`) or `True` for `true`, the game skips that line, reads

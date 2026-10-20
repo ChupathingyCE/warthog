@@ -6,7 +6,7 @@ uploaded, and each one's GL texture.
 
 Which bitmap is at an address the game knows (from the loaded map's tags:
 port/linux/game/hud_hires_tags.c). Each texture is uploaded from its PNG when
-first drawn and kept: up to 69 of the HUD's, about 225 MB with their mip
+first drawn and kept: up to 84 of the HUD's, about 80 MB with their mip
 levels, though a game draws only some (the scopes' only when zoomed), and
 the titles of the menus shown, about 3 MB each (11 MB for the carnage
 report's, a whole panel). The HUD's PNGs in a map are decoded as it loads,
@@ -439,7 +439,7 @@ void hud_hires_map_loaded(const long *assets, long count)
 #if defined(HALO_SERVER) || defined(HALO_ANDROID)
 	/* (the dedicated server draws nothing; Android, whose memory is the
 	tightest, decodes each when first drawn: holding a map's decoded HUD
-	pictures takes about 130 MB more at once) */
+	pictures takes about 60 MB more at once) */
 	(void)assets;
 	(void)count;
 	return;

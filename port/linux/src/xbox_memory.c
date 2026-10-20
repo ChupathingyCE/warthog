@@ -62,6 +62,7 @@ static BOOL arena_reserved = FALSE;
 static pthread_mutex_t arena_lock = PTHREAD_MUTEX_INITIALIZER;
 #ifdef HALO_CUSTOM_EDITION
 int platform_ce_tag_cache_ready = FALSE;
+unsigned int platform_ce_conversion_room = 0;
 #endif
 #ifdef HALO_64BIT
 
@@ -170,9 +171,21 @@ static void contiguous_arena_reserve(void)
 	break heap grows up from just past it, and the libraries, mmap'd blocks
 	and the stack are at the top below 0xc0000000 or 0xffffffff, growing
 	down. Taken here, before anything else is mapped, never in place of a
-	mapping (MAP_FIXED_NOREPLACE); backed on first touch */
-	result = mmap((void *)PLATFORM_CE_TAG_CACHE_BASE, PLATFORM_CE_TAG_CACHE_SIZE, PROT_READ | PROT_WRITE,
-		MAP_PRIVATE | MAP_ANONYMOUS | MAP_NORESERVE | MAP_FIXED_NOREPLACE, -1, 0);
+	mapping (MAP_FIXED_NOREPLACE); backed on first touch. With the room
+	above it if that is free too, else without */
+	result = mmap((void *)PLATFORM_CE_TAG_CACHE_BASE, PLATFORM_CE_TAG_CACHE_SIZE + PLATFORM_CE_CONVERSION_ROOM_SIZE,
+		PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS | MAP_NORESERVE | MAP_FIXED_NOREPLACE, -1, 0);
+	if (result == (void *)PLATFORM_CE_TAG_CACHE_BASE)
+	{
+		platform_ce_conversion_room = PLATFORM_CE_CONVERSION_ROOM_SIZE;
+	}
+	else
+	{
+		if (result != MAP_FAILED)
+			munmap(result, PLATFORM_CE_TAG_CACHE_SIZE + PLATFORM_CE_CONVERSION_ROOM_SIZE);
+		result = mmap((void *)PLATFORM_CE_TAG_CACHE_BASE, PLATFORM_CE_TAG_CACHE_SIZE, PROT_READ | PROT_WRITE,
+			MAP_PRIVATE | MAP_ANONYMOUS | MAP_NORESERVE | MAP_FIXED_NOREPLACE, -1, 0);
+	}
 	if (result != (void *)PLATFORM_CE_TAG_CACHE_BASE)
 	{
 		if (result != MAP_FAILED)
@@ -195,15 +208,17 @@ static void contiguous_arena_reserve(void)
 		platform_log("cannot commit the Xbox contiguous memory window (%s)", strerror(errno));
 		abort();
 	}
-	/* Custom Edition maps' tag cache (platform.h) */
-	if (mmap(xbox_pointer(PLATFORM_CE_TAG_CACHE_BASE), PLATFORM_CE_TAG_CACHE_SIZE, PROT_READ | PROT_WRITE,
-		MAP_PRIVATE | MAP_ANONYMOUS | MAP_NORESERVE | MAP_FIXED, -1, 0) != xbox_pointer(PLATFORM_CE_TAG_CACHE_BASE))
+	/* Custom Edition maps' tag cache, and the room above it (platform.h) */
+	if (mmap(xbox_pointer(PLATFORM_CE_TAG_CACHE_BASE), PLATFORM_CE_TAG_CACHE_SIZE + PLATFORM_CE_CONVERSION_ROOM_SIZE,
+		PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS | MAP_NORESERVE | MAP_FIXED, -1, 0) !=
+		xbox_pointer(PLATFORM_CE_TAG_CACHE_BASE))
 	{
 		platform_log("cannot commit Custom Edition maps' tag cache (%s)", strerror(errno));
 	}
 	else
 	{
 		platform_ce_tag_cache_ready = TRUE;
+		platform_ce_conversion_room = PLATFORM_CE_CONVERSION_ROOM_SIZE;
 	}
 	arena_reserved = TRUE;
 }

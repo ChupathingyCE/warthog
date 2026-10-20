@@ -5,6 +5,8 @@ This document stays under [CC0 1.0](../LICENSES/CC0-1.0.txt), unlike the rest of
 Chupathingy (GPL-3.0-or-later), so that other clients and servers can speak
 Delta under any license (README, "License").
 
+See also [Delta: compatibility](delta-compatibility.md), the design for how builds play together.
+
 Status (October 13, 2026, for 0.7.4e): in progress. Delta List, Stats, Link
 and Control run under the names in the table below; the legacy number's
 table and its signed loader are built, and the cross-play gate that
@@ -648,6 +650,51 @@ What each side checks, since 0.7.5a:
   since it was set two past the number (30 for 28). The join logs
   "presumed additive", so a report from such a game says so.
 
+### Wire compatibility ranges
+
+Since 0.8.0a a wire is not an island. `DELTA_WIRE_COMPATIBILITY` in
+`delta.h` gives each wire the oldest wire it plays the game with, without a
+desync and without losing what the older wire has: a feature the older wire
+lacks is dropped or unused with it, and content it can't play ends the join
+cleanly. `chupa-32a` plays with `chupa-28a` and newer (OpenCE's 30 to 32 are
+additive: a machine of 29 drops message 90 and ignores the co-op input byte;
+31's keep-alive, stamp window and stream-only messages were already in 29);
+`chupa-29a` plays with `chupa-28a`. A row is written with its release and
+never changed: a build can't learn of a newer one, so a host also says its
+range in its advertisement.
+
+**The advertisement.** A Delta host still writes its major and a wire in the
+old slot (`DELTA_ADVERTISED_WIRE_OFFSET`), but the wire there is its *oldest
+compatible wire that a released client knows* (from
+`DELTA_WIRE_FIRST_ADVERTISED`, `chupa-29a`, the first wire advertised), so a
+released client, which compares the slot for an exact match, joins. After the
+slot, in six reserved bytes that were free (`DELTA_ADVERTISED_RANGE_OFFSET`,
+`DELTA_ADVERTISED_RANGE_SIZE`), come the range bytes:
+
+| Byte | Meaning |
+| --- | --- |
+| 0 | layout version, 1 |
+| 1, 2 | the host's own wire: its number and its letter (32, 'a') |
+| 3, 4 | its oldest compatible wire: number and letter (28, 'a') |
+| 5 | a check: 0xA5 xor the five bytes before |
+
+All zero when absent. OpenCE's machines, and released builds, leave and
+ignore them.
+
+**The client's decision** (`delta_compat_decide`): it joins when the host's
+own wire is in the client's range (the client's oldest to its own), or the
+client's wire is in the host's range; without valid range bytes, when the old
+slot's wire is the client's own (the rule since 0.7.5a). It refuses, naming
+both wires, only when neither holds. A host of another major, or one without
+the slot, is joined by its OpenCE number, as before.
+
+**The cost of one slot.** A released client that checks the slot exactly sees
+the host's oldest compatible wire, `chupa-29a` for a 0.8.0a host: 0.7.5
+players join it, and 0.8.0's (`chupa-32a`, an exact-match client, out for a
+few hours before 0.8.0a) see another wire until they update. 0.8.0a and later
+read the range bytes and join both. The 32 row's first OpenCE build is
+build-244.
+
 ### Following policy
 
 ChupathingyCE has its own code and roadmap. Since October 9, 2026 it takes no
@@ -705,7 +752,7 @@ breaking:
 	X(29, "build-206", additive) /* a Custom Edition map by its own name, its hash's first 32 bits its version in the game record (a client of 29 also takes 28's hashed names and header checksums; wire chupa-29a) */ \
 	X(30, "build-206", additive) /* elevator riders carried by the tick's own movement, a host takes only the across of a client's word on a unit riding an elevator (moving, or stood on at rest), a client discards the height of a correction on its elevator up to 4.0 */ \
 	X(31, "build-206", additive) /* the pregame keep-alive's fourth byte pair sent as zero and the packet table's field lists on their own messages, datagrams stamped more than 450 ticks from the sender's latest dropped, client_ready, client_identity and hit reports taken from a stream alone, a second game on one computer (its own port) */ \
-	X(32, "build-206", additive) /* the host's policy on aiming assist for the mouse and keyboard (message 90), a client's input saying whether its player plays co-op without friendly fire (wire chupa-32a) */
+	X(32, "build-244", additive) /* the host's policy on aiming assist for the mouse and keyboard (message 90), a client's input saying whether its player plays co-op without friendly fire (wire chupa-32a) */
 ```
 
 `tools/test_delta.py` (in CI) checks `halo_port_limits.h` against it: hosts

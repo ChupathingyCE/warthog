@@ -428,7 +428,8 @@ void moderation_screen_process(
 
 			if (button >= _gamepad_binary_button_dpad_up && button <= _gamepad_binary_button_dpad_right)
 				held_press(button);
-			else
+			/* (every other button once a press, as the menus' are) */
+			else if (event.data.button.value == 1)
 				press(button);
 		}
 		else if (event.type == MODERATION_EVENT_LEFT_STICK)

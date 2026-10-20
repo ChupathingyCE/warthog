@@ -1,10 +1,10 @@
-# ChupathingyCE Dedicated Server
+# Chupathingy Dedicated Server
 
 A Halo: Combat Evolved server for Linux. It hosts games by itself, with no
 player of its own, around the clock, from a playlist of maps and game types.
 Its games show on [halo.milenko.org](https://halo.milenko.org), the
-community's game list, and in the in-game Server Browser of ChupathingyCE
-and OpenCE alike. Finished games get carnage reports there.
+community's game list, and in the in-game Server Browser of Chupathingy
+and OpenCE. Finished games get carnage reports there.
 
 It is the game itself (the same code, network protocol and version as the
 ChupathingyCE release it comes with), built as a program of its own with

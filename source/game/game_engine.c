@@ -2500,6 +2500,35 @@ static void drawline(
 	return;
 }
 
+/* port: the carnage report's prompt, kept inside the 4:3 screen. Retail's
+start where the Xbox's buttons fit; the keyboard's keys ("[Space] =pick
+game") and wider buttons ran past the screen's right edge into a wide
+screen's sides. A prompt that would end past POSTGAME_PROMPT_RIGHT starts
+that much further left (measured by drawing it unseen first); one that
+fits is where retail drew it */
+enum
+{
+	POSTGAME_PROMPT_RIGHT = 610
+};
+
+static void postgame_draw_prompt(
+	rectangle2d const *bounds,
+	wchar_t const *prompt,
+	real_argb_color const *color)
+{
+	rectangle2d drawn = *bounds;
+	real_argb_color unseen = *color;
+
+	unseen.alpha = 0.0f;
+	draw_string_set_color(&unseen);
+	draw_string_and_hack_in_icons(&drawn, NULL, NULL, 0, prompt, FALSE);
+	drawn = *bounds;
+	if (draw_string_and_hack_in_icons_end_x > POSTGAME_PROMPT_RIGHT)
+		drawn.x0 = (short)MAX(0, drawn.x0 - (draw_string_and_hack_in_icons_end_x - POSTGAME_PROMPT_RIGHT));
+	draw_string_set_color(color);
+	draw_string_and_hack_in_icons(&drawn, NULL, NULL, 0, prompt, FALSE);
+}
+
 void game_engine_post_rasterize_post_game(
 	void)
 {
@@ -2767,13 +2796,7 @@ void game_engine_post_rasterize_post_game(
 					unicode_string_list_get_string(string_list_index, 0x48);
 			else
 				prompt = L"";
-			draw_string_and_hack_in_icons(
-				&bounds,
-				NULL,
-				NULL,
-				0,
-				prompt,
-				FALSE);
+			postgame_draw_prompt(&bounds, prompt, &prompt_color);
 			return;
 		}
 
@@ -2783,13 +2806,7 @@ void game_engine_post_rasterize_post_game(
 			prompt = unicode_string_list_get_string(string_list_index, 0x49);
 		else
 			prompt = L"";
-		draw_string_and_hack_in_icons(
-			&bounds,
-			NULL,
-			NULL,
-			0,
-			prompt,
-			FALSE);
+		postgame_draw_prompt(&bounds, prompt, &prompt_color);
 	}
 
 	return;

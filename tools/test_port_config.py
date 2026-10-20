@@ -86,6 +86,28 @@ STUB_PLATFORM = """#include <stddef.h>
 void platform_log(const char *format, ...);
 """
 
+STUB_POSIX = """#include <sys/stat.h>
+typedef unsigned long posix_ulong;
+struct posix_file_information
+{
+	posix_ulong flags, size_low, size_high, modification_seconds, modification_nanoseconds,
+		access_seconds, access_nanoseconds, creation_seconds, creation_nanoseconds;
+};
+static int posix_stat(const char *path, struct posix_file_information *information)
+{
+	struct stat st;
+
+	if (stat(path, &st) != 0)
+		return -1;
+	information->flags = 0;
+	information->size_low = (posix_ulong)st.st_size;
+	information->size_high = 0;
+	information->modification_seconds = (posix_ulong)st.st_mtime;
+	information->modification_nanoseconds = 0;
+	return 0;
+}
+"""
+
 STUB_SDL = """#include <stdbool.h>
 #include <stddef.h>
 const char *SDL_GetBasePath(void);
@@ -106,6 +128,7 @@ def build(cc, kind, directory):
 	shutil.copy(ROOT / "port/linux/src/port_config.c", source)
 	shutil.copy(ROOT / "port/linux/src/port_config.h", source)
 	(source / "platform.h").write_text(STUB_PLATFORM)
+	(source / "posix.h").write_text(STUB_POSIX)
 	(source / "SDL3/SDL.h").write_text(STUB_SDL)
 	program = directory / f"port_config_test_{kind}"
 	subprocess.run([cc, "-std=c11", "-D_DEFAULT_SOURCE", "-D_DARWIN_C_SOURCE", "-Wall", "-Werror", "-g",

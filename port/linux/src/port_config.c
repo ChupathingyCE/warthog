@@ -22,6 +22,9 @@ it did before the console had the file.
 
 #include "platform.h"
 #include "port_config.h"
+#include "posix.h"
+
+#include <time.h>
 #include "tomlc17.h"
 
 #ifndef HALO_XBOX_CONSOLE
@@ -2989,8 +2992,101 @@ char *config_file_read(const char *path, size_t *size)
 	return config_read_file(path, size);
 }
 
+/* the settings config.toml changes while the game runs, edited by hand
+(Settings writes them through config_write): the volumes, which their
+readers read again when config_changes moves (dsound_sdl.c,
+sound_manager.c). The rest still take effect from the next start */
+static const char *const config_live_settings[] =
+{
+	"audio.volume",
+	"audio.music_volume",
+	"audio.effects_volume",
+};
+
+enum
+{
+	/* config.toml's time looked at no more often than this (seconds; the
+	C library's clock, which the dedicated server, without SDL, has too) */
+	CONFIG_FOLLOW_INTERVAL_SECONDS = 1
+};
+
+/* config.toml changed on disk since it was last looked at: its live
+settings read again from it (one given by the environment kept), and
+config_changes moved if any is different */
+static void config_follow_file(void)
+{
+	static time_t looked_at;
+	static posix_ulong modified, modified_nanoseconds, modified_size;
+	static int looked;
+	static char path[1024];
+	time_t now = time(NULL);
+	struct posix_file_information info;
+	size_t size = 0;
+	char *text;
+	toml_result_t result;
+	size_t live;
+	int changed = 0;
+
+	if (!config_loaded || (looked && now - looked_at < CONFIG_FOLLOW_INTERVAL_SECONDS))
+		return;
+	looked_at = now;
+	if (!path[0])
+		config_path(path, sizeof(path));
+	if (posix_stat(path, &info) != 0)
+		return;
+	/* (the first look keeps the file as it was read; the size too, for a
+	file system whose times are whole seconds) */
+	if (!looked || (info.modification_seconds == modified &&
+		info.modification_nanoseconds == modified_nanoseconds && info.size_low == modified_size))
+	{
+		looked = 1;
+		modified = info.modification_seconds;
+		modified_nanoseconds = info.modification_nanoseconds;
+		modified_size = info.size_low;
+		return;
+	}
+	modified = info.modification_seconds;
+	modified_nanoseconds = info.modification_nanoseconds;
+	modified_size = info.size_low;
+	text = config_read_file(path, &size);
+	if (!text)
+		return;
+	result = toml_parse(text, (int)size);
+	if (result.ok)
+	{
+		pthread_mutex_lock(&config_lock);
+		for (live = 0; live < sizeof(config_live_settings) / sizeof(config_live_settings[0]); live++)
+		{
+			long index = config_setting_index(config_live_settings[live]);
+			const struct config_setting *setting;
+			struct config_value value;
+
+			if (index < 0)
+				continue;
+			setting = &config_settings[index];
+			if (getenv(setting->environment))
+				continue;
+			memset(&value, 0, sizeof(value));
+			config_set_from_text(&value, setting->type, setting->default_value);
+			config_set_from_file(&value, setting, result.toptab);
+			if (value.real != config_values[index].real)
+			{
+				config_values[index].real = value.real;
+				platform_log("settings: config.toml changed: %s = %g", setting->name, value.real);
+				changed = 1;
+			}
+		}
+		if (changed)
+			config_change_count++;
+		pthread_mutex_unlock(&config_lock);
+	}
+	toml_free(result);
+	free(text);
+}
+
 unsigned long config_changes(void)
 {
+	config_follow_file();
 	return config_change_count;
 }
 
