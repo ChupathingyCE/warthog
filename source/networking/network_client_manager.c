@@ -831,7 +831,7 @@ unsigned int network_game_client_host_network_version(
 }
 
 
-#ifdef HALO_GAME_BROWSER
+#if defined(HALO_GAME_BROWSER) || defined(HALO_CONSOLE_DELTA)
 /* port/linux/src/delta_peer_game.c's */
 int delta_peer_advertised_host_wire(unsigned char const *reserved, int size);
 #endif
@@ -2117,7 +2117,6 @@ boolean network_game_client_initiate_join_game(
 
 		network_game_client_joined_version = advertised_index >= 0 && advertised_index < MAXIMUM_NETWORK_ADVERTISED_GAMES ?
 			network_game_client_advertised_versions[advertised_index].version : 0xFFFF;
-#ifdef HALO_GAME_BROWSER
 		/* (a host of a wire before the policies of version 32 cannot speak
 		them, whatever number it announces) */
 		if (advertised_index >= 0 && advertised_index < MAXIMUM_NETWORK_ADVERTISED_GAMES)
@@ -2128,7 +2127,6 @@ boolean network_game_client_initiate_join_game(
 			if (wire && wire < 32)
 				network_game_client_joined_version = 0xFFFF;
 		}
-#endif
 	}
 	/* (an advertised game's flags; the host's own game, joined through
 	127.0.0.1, is no advertised one) */
