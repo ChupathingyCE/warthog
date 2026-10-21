@@ -23,6 +23,9 @@ matched case-insensitively, like the Xbox's FATX volumes.
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#ifdef HALO_WINDOW_REBASE
+#include <strings.h>
+#endif
 #include <unistd.h>
 #ifdef __APPLE__
 #include <mach-o/dyld.h>
@@ -241,10 +244,48 @@ const char *platform_save_root(void)
 	return root;
 }
 
+#ifdef HALO_WINDOW_REBASE
+/* A saved game is the game state written out raw, pointers and all
+(saved games/game_state_xbox.c): z:\savegame.bin, the checkpoint the game
+reverts to, and savegame.bin in the player's profile folder on u:\, the one
+"save and quit" leaves for the next run. Its pointers are into the window
+where it was written, and its header does not say where that was, so read
+with the window elsewhere it points at memory the process is not using.
+With the window moved (cseries/xbox_address.h) the file is named for the
+window's address, savegame-20000000.bin: a run with the window elsewhere
+does not see it and starts the level over, and a later run at that address
+finds it again. Nothing else the game keeps holds a pointer, and stays where
+it is. With the window at its linked address the name is the game's own.
+Returns xbox_path, or the renamed path in buffer. */
+static const char *window_save_path(const char *xbox_path, char *buffer, unsigned long buffer_size)
+{
+	const char *name = xbox_path;
+	const char *cursor;
+
+	if (PLATFORM_CONTIGUOUS_BASE == 0x80000000UL)
+		return xbox_path;
+	for (cursor = xbox_path; *cursor; cursor++)
+	{
+		if (*cursor == '\\' || *cursor == '/' || *cursor == ':')
+			name = cursor + 1;
+	}
+	if (strcasecmp(name, "savegame.bin"))
+		return xbox_path;
+	snprintf(buffer, buffer_size, "%.*ssavegame-%08lx.bin", (int)(name - xbox_path), xbox_path,
+		(unsigned long)PLATFORM_CONTIGUOUS_BASE);
+	return buffer;
+}
+#endif
+
 void platform_translate_path(const char *xbox_path, char *host_path, unsigned long host_path_size)
 {
 	char resolved[1024];
+#ifdef HALO_WINDOW_REBASE
+	char renamed[1024];
+	const char *cursor = window_save_path(xbox_path, renamed, sizeof(renamed));
+#else
 	const char *cursor = xbox_path;
+#endif
 	unsigned long length;
 
 	snprintf(resolved, sizeof(resolved), "%s", platform_data_root());
