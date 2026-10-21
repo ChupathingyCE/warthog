@@ -19,21 +19,19 @@ concurrency:
   group: port-tests-${{ github.ref }}
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
+# (on macOS, where the port is built: the game's port_config.c, which the
+# settings test compiles, takes its Linux branch on a Linux host)
 jobs:
   host:
-    runs-on: ubuntu-latest
+    runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
         with:
           submodules: true
-      - name: Tools
-        run: sudo apt-get update && sudo apt-get install -y clang ninja-build
       - name: Configure (no console SDK: no console targets)
         run: |
           python3 chupathingyce/configure.py --console-port port/xbox --console-port port/xbox360 \
             --console-port port/wiiu --console-players 32
           test -f build.ninja
       - name: Original Xbox host tests
-        env:
-          CC: clang
         run: sh port/xbox/tests/run.sh
