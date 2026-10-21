@@ -114,7 +114,7 @@ COLD_FLAGS = ["-Os"]
 COLD_SOURCES = (
     "xbox_claim.c", "xbox_claim_run.c", "xbox_config.c", "xbox_coop_name.c", "xbox_direct_join.c",
     "xbox_game_list_fetch.c", "xbox_game_list_parse.c", "xbox_game_list_text.c", "xbox_log_tag.c",
-    "xbox_memory.c", "xbox_player_key.c", "xbox_xlink.c",
+    "xbox_memory.c", "xbox_player_key.c", "xbox_stack.c", "xbox_xlink.c",
     "monocypher.c", "monocypher-ed25519.c", "p2p_crypto.c", "port_config.c", "tomlc17.c",
 )
 SUPPORT_CXX_FLAGS = ["-fno-exceptions", "-fno-rtti", "-fno-threadsafe-statics"]
