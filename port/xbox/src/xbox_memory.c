@@ -292,6 +292,13 @@ static void memory_read(void)
 
 			room &= ~0xFFFFFUL;
 			memory.texture_cache_size = room > _texture_cache_minimum ? room : _texture_cache_minimum;
+#ifdef XBOX_MEMORY_PLAYERS_TEST
+			/* a test build of more than 16 players keeps the smallest: the
+			room is counted in whole megabytes, and a console a few KB over
+			the next would give the cache a megabyte the heap then lacks
+			(the 24 players' netcode takes about 170 KB of it) */
+			memory.texture_cache_size = _texture_cache_minimum;
+#endif
 			memory.texture_cache_reduced = 1;
 		}
 	}
