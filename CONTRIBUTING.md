@@ -8,8 +8,7 @@ pinned here as the `chupathingyce` submodule.
 
 ## Where a change goes
 
-- **Here:** the console's own code (`port/xbox/`, `port/xbox360/`,
-  `port/wiiu/`), its `build.py`, its tests, and the tools in `tools/`
+- **Here:** the console's own code (`port/xbox/`, `port/xbox360/`), its `build.py`, its tests, and the tools in `tools/`
   (packaging, the build stamp, `easy_build.py`).
 - **The game (ChupathingyCE/chupathingyce):** the shared game, network and
   platform code, including the console hooks the shared code has (the

@@ -16,7 +16,6 @@ warthog-xbox/
     chupathingyce/      the game (submodule)
     port/xbox/          the original Xbox port: its sources, build.py, tests
     port/xbox360/       the Xbox 360 port (in development)
-    port/wiiu/          Wii U scaffolding
     tools/              packaging, the build's stamp, easy_build.py
 ```
 
@@ -139,10 +138,9 @@ see "Package" above.
 ### Other consoles
 
 The Xbox 360 (`--console-port port/xbox360`: `ninja xbox360`, with
-`--oxdk360`, `--llvm-xenon` and `--x360-sdk`) and Wii U (`--console-port
-port/wiiu`: `ninja wiiu`, with `--devkitppc` and `--wut`) are scaffolding:
-each builds a stub that logs a line and exits, and none of the game is
-compiled for them yet. The Xbox 360 needs your own 360 SDK as well
+`--oxdk360`, `--llvm-xenon` and `--x360-sdk`) is scaffolding (the Wii U is in [ChupathingyCE/warthog-wiiu](https://github.com/ChupathingyCE/warthog-wiiu)):
+it builds a stub that logs a line and exits, and none of the game is
+compiled for it yet. The Xbox 360 needs your own 360 SDK as well
 (docs/consoles.md); its stub does not link yet (`oxdk_dbgprint`). A target
 appears only when `configure.py` finds its toolchain. `--console-port` can
 be given more than once.

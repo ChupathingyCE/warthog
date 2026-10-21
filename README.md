@@ -28,7 +28,7 @@ and there is no download yet: you build it yourself.
 | --- | --- |
 | Original Xbox | Testing. Up to 32 players. Plays on a stock 64 MB console; 128 MB consoles get extras |
 | Xbox 360 | In development. Scaffolding only: the stub builds, the game is not compiled for it yet |
-| Wii U | Scaffolding only |
+| Wii U | Scaffolding only; moved to [warthog-wiiu](https://github.com/ChupathingyCE/warthog-wiiu) |
 
 **Original Xbox**
 - Network version: 32 (wire `chupa-32a`). Joins hosts of network versions

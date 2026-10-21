@@ -12,18 +12,19 @@ them has run anything on hardware.
 |---|---|---|---|---|
 | Original Xbox | `port/xbox` | `xbox` | clang, lld-link, [OXDK](https://github.com/MrMilenko/OXDK), the user's 5933 XDK | plays: menus, game list, joins PC hosts |
 | Xbox 360 | `port/xbox360` | `xbox360` | [OXDK360](https://github.com/MrMilenko/OXDK360), llvm-xenon, the user's 360 SDK (`XDK_DIR`) | in development; stub configures, does not link yet (`oxdk_dbgprint`) |
-| Wii U | `port/wiiu` | `wiiu` | devkitPPC, wut | planned; stub builds, game not built |
 
 Each port is a `--console-port` of the game's `configure.py`
 (`python3 chupathingyce/configure.py --console-port port/xbox360 ...`;
 docs/building.md). A target exists only when its toolchain is found (the
-Xbox 360's needs the user's SDK as well). The Switch is its own repository,
-[ChupathingyCE/warthog-switch](https://github.com/ChupathingyCE/warthog-switch).
+Xbox 360's needs the user's SDK as well). The Switch and the Wii U are their
+own repositories,
+[ChupathingyCE/warthog-switch](https://github.com/ChupathingyCE/warthog-switch)
+and [ChupathingyCE/warthog-wiiu](https://github.com/ChupathingyCE/warthog-wiiu).
 
 ## What each console needs before it plays
 
-The plan's order: the original Xbox first; the Xbox 360 next, with
-the Wii U alongside (both big-endian, so the byte-order work is shared).
+The plan's order: the original Xbox first; the Xbox 360 next (the Wii U, in its own repository, is big-endian
+too, so the byte-order work is shared).
 For any of them:
 
 1. **The game's sources built for it.** Today only the original Xbox compiles
@@ -64,7 +65,7 @@ Headers in the game (the submodule), included as `port/console/include/...`:
 
 ## Packages
 
-A console's package (the Wii U's `.wuhb`) holds the stub only, never the
+A console's package holds the stub only, never the
 maps: a package is one installable file, easily passed around, and the maps
 are the user's own. They stay a folder beside it.
 
@@ -74,4 +75,3 @@ are the user's own. They stay a folder beside it.
 |---|---|---|
 | Original Xbox | xemu (128 MB, NAT) | devkit, or a modified retail console |
 | Xbox 360 | Xenia | RGH or JTAG console, through a launcher such as Aurora |
-| Wii U | Cemu | Aroma |
