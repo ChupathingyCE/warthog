@@ -195,12 +195,7 @@ void *game_state_allocate_buffer(
 		"c:\\halo\\SOURCE\\saved games\\game_state_xbox.c",
 		58,
 		result);
-#ifdef HALO_64BIT
-	match_assert(
-		"c:\\halo\\SOURCE\\saved games\\game_state_xbox.c",
-		59,
-		xbox_address(result)==address);
-#elif defined(HALO_WINDOW_REBASE)
+#if defined(HALO_64BIT) || defined(HALO_WINDOW_REBASE)
 	match_assert(
 		"c:\\halo\\SOURCE\\saved games\\game_state_xbox.c",
 		59,
