@@ -92,7 +92,8 @@ name so other consoles can take them up:
 | `--oxdk DIR` | OXDK's checkout (default `OXDK_DIR`, or `~/OXDK`) |
 | `--release` | assertions are not checked; a failed one is noted in `debug.txt` and the game goes on |
 | `--console-players {16,32,64}` | the players the network tables hold. 16 is the Xbox's. 32 and 64 are test builds a stock 64 MB console does not hold; they say so on screen at the main menu |
-| `--console-debug-tools` | keeps the debug decomp's developer tools (profiler, AI, render and collision debug, stack walker, libtiff and the bitmap tools), about 0.9 MB, which the build leaves out by default |
+| `--console-debug-tools` | keeps the debug decomp's developer tools (profiler, AI, render and collision debug, the collision log's counting and timing, stack walker, libtiff and the bitmap tools), about 0.9 MB, which the build leaves out by default |
+| `--console-no-debug-asserts` | the release-style build testers get: the debug decomp's asserts compiled out, as the retail game had them, but for the checks of the data arrays, pools, caches, codecs and memory functions; about 412 KB of the image |
 
 `xbox_package.py --devkit-64mb` is the packaging side of the 64 MB target:
 see "Package" above.

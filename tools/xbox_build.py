@@ -55,9 +55,21 @@ GAME_FLAGS = [
     "-fms-compatibility",
     "-fms-compatibility-version=13.10",
     "-O2",
-    # the game keeps EBP frames (MSVC /Oy-): its stack walker follows them
+    # the game keeps EBP frames (MSVC /Oy-): its stack walker follows them,
+    # for the crash reports in debug.txt. A function that calls no other
+    # (the vector math, the small getters) is built without one: three
+    # instructions fewer on each call and a seventh register for its code.
+    # A crash inside one still names it (the processor's address) and the
+    # chain from its caller's caller on; only that caller is not named
     "-fno-omit-frame-pointer",
+    "-momit-leaf-frame-pointer",
     "-fcommon",
+    # each function in a section of its own, so that the linker leaves out
+    # the ones nothing calls (/opt:ref, LINK_FLAGS): the debug decomp has
+    # about 1,400 of them (editor and tool code, unused math), 240 KB of the
+    # image a 64 MB console has back. The data stays as it was, in one
+    # section a unit: the decomp's globals keep their neighbors
+    "-ffunction-sections",
     "-D_XBOX", "-D_X86_", "-D_NTOS_", "-D_MT",
     # the console's own capacity (port/linux/include/halo_port_capacity.h)
     "-DHALO_XBOX_CONSOLE",
@@ -91,12 +103,29 @@ SUPPORT_FLAGS = [
     # a format and its arguments that disagree are errors (the console's C
     # runtime has no %z, %ll, %j or %hh either)
     "-Wformat", "-Werror=format",
+    # (the functions nothing calls left out, as the game's: GAME_FLAGS)
+    "-ffunction-sections",
 ]
+# the platform code that runs at the start, at a join or once a second at
+# most, built for size: the settings' TOML parser and table, the tunnel's key
+# exchange and signatures (Monocypher, p2p_crypto.c), the game list, the
+# claim and the player key. Monocypher alone goes from 83 KB to 18 KB
+COLD_FLAGS = ["-Os"]
+COLD_SOURCES = (
+    "xbox_claim.c", "xbox_claim_run.c", "xbox_config.c", "xbox_coop_name.c", "xbox_direct_join.c",
+    "xbox_game_list_fetch.c", "xbox_game_list_parse.c", "xbox_game_list_text.c", "xbox_log_tag.c",
+    "xbox_memory.c", "xbox_player_key.c", "xbox_stack.c", "xbox_xlink.c",
+    "monocypher.c", "monocypher-ed25519.c", "p2p_crypto.c", "port_config.c", "tomlc17.c",
+)
 SUPPORT_CXX_FLAGS = ["-fno-exceptions", "-fno-rtti", "-fno-threadsafe-statics"]
 
 LINK_FLAGS = [
     "/nologo", "/subsystem:windows", "/fixed:no", "/base:0x00010000", "/stack:1048576",
-    "/machine:x86", "/entry:mainCRTStartup", "/nodefaultlib", "/safeseh:no",
+    "/machine:x86", "/entry:mainCRTStartup",
+    # the functions nothing calls are left out (-ffunction-sections), and no
+    # two that compile the same are folded into one: the game compares
+    # function pointers (hs.c tells a script macro by its parser's)
+    "/opt:ref,noicf", "/nodefaultlib", "/safeseh:no",
     "/merge:.edata=.edataxb", "/errorlimit:0", "--rsp-quoting=posix",
 ]
 # (the SDK's D3DX is built on its own Direct3D; port/xbox/src/xbox_d3dx.c has
@@ -335,7 +364,7 @@ def generate_xbox_build(n: Writer, sln: Any) -> None:
 
     support_cflags = " ".join([*SUPPORT_FLAGS, players_flag, f"-I{_quote(xdk / 'include')}"])
     for source in sorted((PORT_DIR / "src").glob("*.c")):
-        add_object(source, support_cflags)
+        add_object(source, " ".join([support_cflags, *(COLD_FLAGS if source.name in COLD_SOURCES else [])]))
     add_object(stamp_source, support_cflags)
     for source in sorted((PORT_DIR / "src").glob("*.cpp")):
         add_object(source, " ".join([support_cflags, *SUPPORT_CXX_FLAGS]))
@@ -359,7 +388,8 @@ def generate_xbox_build(n: Writer, sln: Any) -> None:
         generated = gen_dir / "p2p" / source.name
         n.build(outputs=generated, rule="xbox_source", inputs=source, implicit=[Path("tools/xbox_sources.py")],
                 variables={"kind": "copy"})
-        add_object(generated, p2p_cflags, sorted((PORT_DIR / "p2p").glob("*.h")))
+        add_object(generated, " ".join([p2p_cflags, *(COLD_FLAGS if source.name in COLD_SOURCES else [])]),
+                   sorted((PORT_DIR / "p2p").glob("*.h")))
 
     # Delta Peer: as internet play's sources, with the console's limits
     # (HALO_XBOX_CONSOLE), the C99 calls its C runtime lacks, and the port's
@@ -376,12 +406,12 @@ def generate_xbox_build(n: Writer, sln: Any) -> None:
 
     # the settings (port/xbox/src/xbox_config.c): port_config.c as it is,
     # copied as internet play's are, with the console's headers first
-    config_cflags = " ".join([p2p_cflags, "-DHALO_XBOX_CONSOLE", f"-I{_quote(TOMLC17_DIR)}"])
+    config_cflags = " ".join([p2p_cflags, *COLD_FLAGS, "-DHALO_XBOX_CONSOLE", f"-I{_quote(TOMLC17_DIR)}"])
     generated = gen_dir / "p2p" / CONFIG_SOURCE.name
     n.build(outputs=generated, rule="xbox_source", inputs=CONFIG_SOURCE, implicit=[Path("tools/xbox_sources.py")],
             variables={"kind": "copy"})
     add_object(generated, config_cflags, sorted((PORT_DIR / "p2p").glob("*.h")))
-    add_object(TOMLC17_DIR / "tomlc17.c", " ".join([*SUPPORT_FLAGS, "-std=gnu11", "-w", "-include",
+    add_object(TOMLC17_DIR / "tomlc17.c", " ".join([*SUPPORT_FLAGS, *COLD_FLAGS, "-std=gnu11", "-w", "-include",
                                                     "port/xbox/include/xbox_c99.h", f"-I{_quote(xdk / 'include')}"]),
                [PORT_DIR / "include" / "xbox_c99.h"])
 

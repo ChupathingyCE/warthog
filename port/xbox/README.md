@@ -37,6 +37,8 @@ ninja xbox
 `configure.py` records the options, so later runs of ninja keep them. If
 OXDK or the Direct3D library is not found, there is no `xbox` target.
 The console-wide options: `--release` (assertions are not checked),
+`--console-no-debug-asserts` (the release-style build testers get: the
+debug decomp's asserts compiled out but for the memory checks),
 `--console-players {16,32,64}` and `--console-debug-tools` (see "Memory");
 `--oxdk DIR` names OXDK's checkout. `docs/building.md` lists them all.
 
@@ -155,6 +157,7 @@ The console's own, in `[console]`:
 | `debug_geometry` | `false` | the debug build's debug geometry (lines and triangles drawn by debug commands): its three 480 KB buffers are made at the start only with it on. For development, on a console with room (a devkit) |
 | `simulate_64mb` | `false` | deprecated and ignored (`debug.txt` says so): a devkit gets 64 MB from the XBE's flag now, `tools/xbox_package.py --devkit-64mb` (see "Memory") |
 | `delta` | `"auto"` | Delta Peer as a client: joining a game whose host offers it (the desktop builds and the dedicated servers), the console says it is an Xbox, with its memory class, and nothing else, so that the stats site, the scoreboard and the server show Xbox. `"auto"` and `"on"` send it; `"off"` keeps the legacy protocol alone. A host without Delta, or any failure, leaves the game as it was. About 50 KB of the console's memory (all static: its code and 11 KB of data) |
+| `perf_log` | `false` | the frame timing log: once a second a `perf:` line in `debug.txt` with the frame time (average and worst), each part of the frame (game ticks, the render's parts, sound, network, present, the wait for the screen), the draws and objects, and a line when the player zooms. For finding what makes a scene slow |
 | `log_flush` | `"buffered"` | when `debug.txt` is written: `"buffered"` keeps the game's lines in memory and writes them once a second, when 8 KB wait, and at once for an assert, an exit or a crash; `"every_line"` writes each line as it comes (slow), for a crash hunt |
 
 
@@ -253,13 +256,30 @@ has. A stock console ignores the flag. (`console.simulate_64mb`, which tried
 to hold the memory above 64 MB from inside the game, cannot take a devkit's
 upper 64 MB and starved the debug kernel; it is replaced by the flag.)
 
+The build leaves out every function nothing calls (each is compiled in a
+section of its own, `-ffunction-sections`, and linked with `/opt:ref`):
+about 1,400 of the debug decomp's, 240 KB. The platform code that runs only
+at the start or at a join (the settings, the tunnel's keys and signatures,
+the game list, the claim) is built for size (`-Os`), another 120 KB. The
+game's own code keeps `-O2` and its EBP frames, which the crash reports
+follow, but for the functions that call no other.
+
+The main thread's stack is the XBE's 1 MB, and the console commits all of
+it. `debug.txt` says how much of it the game has used: a `stack:` line at
+the start and one each time the deepest grows by 16 KB
+(`src/xbox_stack.c`). Some of the debug decomp's AI functions keep 80 to
+160 KB of arrays on the stack, so the size is cut only once a campaign
+mission's and a busy match's lines are known.
+
 The debug decomp's developer tools are not in the console's build unless
 it is configured with `--console-debug-tools` (`HALO_CONSOLE_DEBUG_TOOLS`): the
 profiler, the AI debug displays, the render and collision debug, the stack
 walker, the texture cache listing, libtiff and the bitmap tools. Their code
 is kept, not removed, and what the game calls in them is a stub in the
 console's build; a console command or script that reaches one prints
-"not in this build". About 0.9 MB of the image.
+"not in this build". About 0.9 MB of the image. The collision log, which
+counted and timed every collision test for one of those displays, counts
+nothing without them.
 
 ## XLink Kai
 
