@@ -120,9 +120,9 @@ static const struct config_setting config_settings[] =
 	/* read by the Switch host before the game starts
 	(port/switch/host/host_main.c) */
 	{ "display.renderer", _config_string, "\"gl\"", "HALO_RENDERER", _environment_value, _platform_android,
-		"How the game draws: \"gl\" (OpenGL over Mesa) or \"deko3d\" (the console's\n"
-		"own GPU interface, for a game image built with the deko3d renderer, which\n"
-		"this one is not). Takes effect the next time the game starts." },
+		"How the game draws: \"gl\" (OpenGL over Mesa, halo_guest.elf) or \"deko3d\"\n"
+		"(the console's own GPU interface, halo_guest_dk.elf). Takes effect the\n"
+		"next time the game starts." },
 #endif
 	{ "display.vsync", _config_boolean, "true", "HALO_NO_VSYNC", _environment_set_is_false, _platform_all,
 		"Wait for the display between frames; false draws as fast as possible." },

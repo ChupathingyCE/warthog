@@ -243,6 +243,15 @@ float halo_screen_pixel_scale(void)
 	return screen_scale[1];
 }
 
+#ifdef HALO_SWITCH_CONSOLE
+/* a map has finished loading (scenario_load): the Switch's deko3d renderer
+gives its shaders priority (port/switch/guest/d3d8_dk.c); nothing to do here */
+void d3d8_gl_map_loaded(const char *name)
+{
+	(void)name;
+}
+#endif
+
 /* how many pixels the screen's targets draw to the Xbox's one, the larger
 of the two ways (the screen effects' convolutions: rasterizer_xbox_screen_effect.c) */
 float halo_screen_scale(void)
