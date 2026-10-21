@@ -2666,10 +2666,10 @@ static boolean dsound_channel_queue_packet(
 			if ((byte *)xbox_pointer(channel->playing_permutation->cache_base_address)>=
 					(byte *)physical_memory_get_sound_cache_base_address() &&
 				channel->playing_permutation->samples.size>=0 &&
-				channel->playing_permutation->samples.size<=SOUND_CACHE_SIZE &&
+				channel->playing_permutation->samples.size<=(long)physical_memory_get_sound_cache_size() &&
 				(unsigned long)((byte *)xbox_pointer(channel->playing_permutation->cache_base_address)-
 					(byte *)physical_memory_get_sound_cache_base_address())<=
-					(unsigned long)(SOUND_CACHE_SIZE-channel->playing_permutation->samples.size) &&
+					physical_memory_get_sound_cache_size()-(unsigned long)channel->playing_permutation->samples.size &&
 				channel->sample_offset>=0 &&
 				channel->sample_offset<=channel->playing_permutation->samples.size)
 			{

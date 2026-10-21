@@ -4,9 +4,12 @@ XBOX_MEMORY.H
 The console's memory (xbox_memory.c): a stock Xbox has 64 MB, a devkit and
 most modified consoles 128 MB, a few mods more. Read once at the start from
 the system (GlobalMemoryStatus, else the kernel's MmQueryStatistics),
-logged, and used for what may grow with it. The game's own limits never
-change with it: the network, the game state and the objects stay the
-Xbox's (docs/cross-play.md), so every console plays the same game.
+logged, and used for what may grow with it: 64 MB is the baseline, and a
+console above it has the extras (console_memory_extras,
+port/linux/include/halo_console_memory.h, which this port answers). The
+game's own limits never change with it: the network, the game state and
+the objects stay the Xbox's (docs/cross-play.md), so every console plays
+the same game.
 */
 
 #ifndef __XBOX_MEMORY_H
@@ -29,16 +32,22 @@ enum
 above (pure: the tests build it on the host) */
 int xbox_memory_class_of(unsigned long total_bytes);
 
-/* this console's total memory in bytes, and its class (read once) */
+/* this console's total memory in bytes, and its class (read once): the
+class the game uses, 64 MB on a console held to it (the XBE's 64 MB flag,
+console.memory_class = "64") */
 unsigned long xbox_memory_total(void);
 int xbox_memory_class(void);
 
 /* the texture cache's size (cache/physical_memory_map.c and
 xbox_texture_cache.c), and the highest physical address it may have: the
-Xbox's 22 MB, unless a 128 MB console has console.large_caches, or a 64 MB
-console has too little free for it */
+Xbox's 22 MB, 44 MB on a 128 MB console (64 MB on a 256 MB one), less on a
+64 MB console with too little free for it */
 unsigned long xbox_memory_texture_cache_size(void);
 unsigned long xbox_memory_texture_cache_maximum_address(void);
+/* the sound cache's (physical_memory_map.c, xbox_sound_cache.c): the Xbox's
+4 MB, 8 MB on a console above 64 MB */
+unsigned long xbox_memory_sound_cache_size(void);
+unsigned long xbox_memory_sound_cache_maximum_address(void);
 
 /* whether this console has the class a feature needs; if not, the menus
 show text (wide characters, the error dialog's) once the main menu is up,

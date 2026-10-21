@@ -16,13 +16,18 @@ ROOT = Path(__file__).resolve().parent.parent
 def page_enum():
 	source = (ROOT / "source/cache/xbox_sound_cache.c").read_text()
 	start = source.index("SOUND_CACHE_PAGE_SIZE_BITS =")
-	return source[source.rindex("enum", 0, start):source.index("};", start) + 2]
+	# the enum and the page and sound counts after it, which follow the size
+	# physical_memory_get_sound_cache_size returns (stubbed below as the
+	# header's SOUND_CACHE_SIZE, as on the native builds)
+	end = source.index("\n", source.index("#define SOUND_CACHE_SOUND_COUNT", start))
+	return source[source.rindex("enum", 0, start):end + 1]
 
 
 def run(size):
 	program = f'''
 #include <stdio.h>
 #include "cache/physical_memory_map.h"
+unsigned long physical_memory_get_sound_cache_size(void) {{ return SOUND_CACHE_SIZE; }}
 {page_enum()}
 int main(void)
 {{

@@ -61,7 +61,8 @@ rm -rf "$OUT/config"
 mkdir -p "$OUT/config/run"
 cp port/linux/src/port_config.c "$OUT/config/port_config.c"
 cp port/xbox/tests/config_platform.h "$OUT/config/platform.h"
-cp port/linux/include/halo_port_limits.h port/linux/include/halo_port_capacity.h port/linux/include/halo_port_features.h "$OUT/config/"
+cp port/linux/include/halo_port_limits.h port/linux/include/halo_port_capacity.h \
+	port/linux/include/halo_port_features.h port/linux/include/halo_console_memory.h "$OUT/config/"
 # (the parser itself without the sanitizers: its offsetof by a null pointer
 # is undefined behavior they report, which every compiler takes as meant)
 $CC -std=gnu11 -O1 -w -c port/third_party/tomlc17/tomlc17.c -o "$OUT/config/tomlc17.o"

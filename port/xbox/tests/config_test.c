@@ -73,6 +73,7 @@ int main(int argc, char **argv)
 		expect(!strcmp(config_string("console.log_flush"), "buffered"), "console.log_flush is not buffered");
 		expect(!strcmp(config_string("console.join"), ""), "console.join is not empty");
 		expect(!strcmp(config_string("console.delta"), "auto"), "console.delta is not auto");
+		expect(!strcmp(config_string("console.memory_class"), "auto"), "console.memory_class is not auto");
 		expect_shared();
 		text = file_text();
 		expect(text != NULL, "no config.toml written");
@@ -83,6 +84,7 @@ int main(int argc, char **argv)
 			expect(strstr(text, "# bypass_security = false\n") != NULL, "no bypass_security");
 			expect(strstr(text, "# debug_geometry = false\n") != NULL, "no debug_geometry");
 			expect(strstr(text, "# log_flush = \"buffered\"\n") != NULL, "no log_flush");
+			expect(strstr(text, "# memory_class = \"auto\"\n") != NULL, "no memory_class");
 			expect(strstr(text, "# game_list_server = \"\"\n") != NULL, "no game_list_server");
 			expect(strstr(text, "# online = true\n") != NULL, "no network.online");
 			expect(strstr(text, "fullscreen") == NULL, "a desktop setting written");
@@ -108,7 +110,7 @@ int main(int argc, char **argv)
 			return 1;
 		fputs("# The layout of this file, for the game: leave it.\nconfig_version = 2\n\n[console]\n"
 			"bypass_security = true\ndebug_geometry = true\nlog_flush = \"every_line\"\n"
-			"simulate_64mb = true\njoin = \"192.168.1.20\"\ndelta = \"off\"\n", file);
+			"simulate_64mb = true\njoin = \"192.168.1.20\"\ndelta = \"off\"\nmemory_class = \"64\"\n", file);
 		fclose(file);
 		expect(config_boolean("console.bypass_security") == 1, "console.bypass_security is not true");
 		expect(config_boolean("console.debug_geometry") == 1, "console.debug_geometry is not true");
@@ -116,6 +118,8 @@ int main(int argc, char **argv)
 		/* (deprecated, ignored by the game, still a setting that reads) */
 		expect(config_boolean("console.simulate_64mb") == 1, "console.simulate_64mb is not true");
 		expect(config_boolean("console.large_caches") == 0, "console.large_caches is not false");
+		/* (xbox_memory.c: "64" holds the console to the 64 MB baseline) */
+		expect(!strcmp(config_string("console.memory_class"), "64"), "console.memory_class is not 64");
 		expect(!strcmp(config_string("console.join"), "192.168.1.20"), "console.join is not the address");
 		/* (the switch delta_peer_protocol reads: "off" keeps the legacy protocol alone) */
 		expect(!strcmp(config_string("console.delta"), "off"), "console.delta is not off");

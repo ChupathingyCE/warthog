@@ -66,6 +66,20 @@ unsigned long xbox_memory_texture_cache_maximum_address(void);
 #define TEXTURE_CACHE_SIZE xbox_memory_texture_cache_size()
 #define TEXTURE_CACHE_MAXIMUM_ADDRESS xbox_memory_texture_cache_maximum_address()
 #endif
+#ifndef HALO_XBOX_CONSOLE
+/* (the native builds': physical_memory_map.h, the Xbox's 4 MB unless a
+platform defines its own) */
+#define SOUND_CACHE_MAXIMUM_ADDRESS -1
+#else
+/* port: the console's, by its memory class too (the Xbox's 4 MB, 8 MB on a
+console above the 64 MB baseline, kept in the low 128 MB) */
+unsigned long xbox_memory_sound_cache_size(void);
+unsigned long xbox_memory_sound_cache_maximum_address(void);
+
+#undef SOUND_CACHE_SIZE
+#define SOUND_CACHE_SIZE xbox_memory_sound_cache_size()
+#define SOUND_CACHE_MAXIMUM_ADDRESS xbox_memory_sound_cache_maximum_address()
+#endif
 
 #ifdef HALO_XBOX_CONSOLE
 /* port: each cache logged as it is made, before the game's own log is up
@@ -126,7 +140,7 @@ void physical_memory_allocate(
 #line 55 "c:\\halo\\SOURCE\\cache\\physical_memory_map.c"
 	match_assert(__FILE__, __LINE__, physical_memory_map_globals.texture_cache_base_address);
 
-	physical_memory_map_globals.sound_cache_base_address = XPhysicalAlloc(SOUND_CACHE_SIZE, -1, 0, PAGE_READWRITE);
+	physical_memory_map_globals.sound_cache_base_address = XPhysicalAlloc(SOUND_CACHE_SIZE, SOUND_CACHE_MAXIMUM_ADDRESS, 0, PAGE_READWRITE);
 	PHYSICAL_MEMORY_LOG("sound cache", SOUND_CACHE_SIZE, physical_memory_map_globals.sound_cache_base_address);
 #line 58 "c:\\halo\\SOURCE\\cache\\physical_memory_map.c"
 	match_assert(__FILE__, __LINE__, physical_memory_map_globals.sound_cache_base_address);
@@ -198,6 +212,15 @@ void *physical_memory_get_sound_cache_base_address(
 	void)
 {
 	return physical_memory_map_globals.sound_cache_base_address;
+}
+
+/* port: the sound cache's size in bytes (the Xbox's 0x400000, or more on a
+console above its memory baseline), for the sound cache's pages and the
+sound channels' checks of a sound's place in it */
+unsigned long physical_memory_get_sound_cache_size(
+	void)
+{
+	return SOUND_CACHE_SIZE;
 }
 
 /* ---------- private code */

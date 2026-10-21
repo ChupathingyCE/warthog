@@ -116,13 +116,20 @@ symbols in this file:
 /* ---------- constants */
 
 /* port: the cache's pages (sound_cache_new), named for the size check: as
-many 4k pages as the cache holds (the Xbox's 4 MB, 1024), so a platform's
-smaller cache never has sounds placed past its end */
+many 4 KB pages as the cache holds (physical_memory_get_sound_cache_size: the
+Xbox's 4 MB, 1024; 2048 in 8 MB on a console above its memory baseline, up to
+SOUND_CACHE_MAXIMUM_PAGE_COUNT), so a platform's smaller cache never has
+sounds placed past its end, and the sounds it may hold at once (the Xbox's
+512, twice that in a larger cache) */
 enum
 {
 	SOUND_CACHE_PAGE_SIZE_BITS = 12,
-	SOUND_CACHE_PAGE_COUNT = SOUND_CACHE_SIZE >> SOUND_CACHE_PAGE_SIZE_BITS,
+	SOUND_CACHE_MAXIMUM_PAGE_COUNT = 2048,
+	SOUND_CACHE_SOUNDS = 512,
 };
+
+#define SOUND_CACHE_PAGE_COUNT ((long)(physical_memory_get_sound_cache_size() >> SOUND_CACHE_PAGE_SIZE_BITS))
+#define SOUND_CACHE_SOUND_COUNT (SOUND_CACHE_PAGE_COUNT > 1024 ? 2 * SOUND_CACHE_SOUNDS : SOUND_CACHE_SOUNDS)
 
 /* ---------- macros */
 
@@ -383,7 +390,7 @@ void sound_cache_new(
 {
 	xbox_sound_cache_globals.cache_sounds = data_new(
 		"xbox sound",
-		512,
+		SOUND_CACHE_SOUND_COUNT,
 		sizeof(struct xbox_cache_sound_datum));
 	match_vassert(
 		"c:\\halo\\SOURCE\\cache\\xbox_sound_cache.c",
@@ -394,7 +401,7 @@ void sound_cache_new(
 		"xbox sound cache",
 		SOUND_CACHE_PAGE_COUNT,
 		SOUND_CACHE_PAGE_SIZE_BITS,
-		512,
+		SOUND_CACHE_SOUND_COUNT,
 		sound_cache_delete_block_proc,
 		(lruv_locked_block_proc)sound_cache_locked_block_proc);
 	match_vassert(
@@ -792,8 +799,9 @@ void sound_cache_debug_render(
 {
 	if (debug_sound_cache)
 	{
+		/* (port: the larger cache's pages too, the first 1024 drawn) */
 		short rows = 1024 / 640;
-		byte page_usage[1024];
+		byte page_usage[SOUND_CACHE_MAXIMUM_PAGE_COUNT];
 		long x;
 		real_argb_color const *colors[4];
 

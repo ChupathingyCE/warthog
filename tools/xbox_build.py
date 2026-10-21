@@ -75,6 +75,9 @@ GAME_FLAGS = [
     "-DHALO_XBOX_CONSOLE",
     # Delta Peer as a client (port/linux/src/delta_peer_game.c)
     "-DHALO_CONSOLE_DELTA",
+    # the memory class, 64 MB or more (port/linux/include/halo_console_memory.h,
+    # port/xbox/src/xbox_memory.c)
+    "-DHALO_CONSOLE_MEMORY_CLASS",
     "-w",
     "-Wno-error=incompatible-pointer-types",
     "-Wno-error=incompatible-function-pointer-types",

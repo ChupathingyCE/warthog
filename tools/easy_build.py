@@ -568,7 +568,7 @@ def finish(out: Optional[Path]) -> int:
     say("  1. Copy that whole folder to the Xbox's hard disk, for example to E:\\Games\\Warthog")
     say("     (FTP on a modified console; a devkit's tools work too).")
     say("  2. Start default.xbe from the dashboard.")
-    say("  3. Settings are in config.toml beside default.xbe (join, trace, large_caches and the others);")
+    say("  3. Settings are in config.toml beside default.xbe (join, trace, memory_class and the others);")
     say("     the first start writes every setting, commented out, with its help. Restart after editing.")
     say("  4. The game writes its log to debug.txt in the same folder: attach it to bug reports.")
     say("  5. Questions and reports: the #warthog-support forum on the Discord (discord.gg/chupathingy).")
