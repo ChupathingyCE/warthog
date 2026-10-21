@@ -115,7 +115,7 @@ P2P_SOURCES = [
 # format, a session as a client, and the game's session over the game's
 # sockets (no signed legacy table, no thread: delta.c is not in the console),
 # and which wires play together (delta_compat.c)
-DELTA_SOURCES = [LINUX_SRC / "delta_wire.c", LINUX_SRC / "delta_peer.c", LINUX_SRC / "delta_chat.c",
+DELTA_SOURCES = [LINUX_SRC / "delta_wire.c", LINUX_SRC / "delta_peer.c", LINUX_SRC / "delta_chat.c", LINUX_SRC / "delta_chat_words.c",
                  LINUX_SRC / "delta_peer_game.c", LINUX_SRC / "delta_compat.c"]
 # the settings, D:\config.toml: the desktop builds' port_config.c and its
 # TOML parser (tools/linux_build.py's TOML_DIR)
@@ -131,7 +131,7 @@ ZLIB_DEFINES = ("-DZ_PREFIX", "-Dz_errmsg=z_port_errmsg")
 XBOX_GAME_CXX_SOURCES = [Path("source/main/d3d_intimacy.cpp")]
 # port/linux/game's sources the console builds too
 XBOX_PORT_GAME_SOURCES = [
-    "audio_probe.c", "map_families.c", "network_damage.c", "network_distributed.c", "network_game_layout.c",
+    "audio_probe.c", "chat.c", "map_families.c", "network_damage.c", "network_distributed.c", "network_game_layout.c",
     "network_objects.c", "network_rules.c", "pal_tags.c", "render_interpolation.c",
 ]
 # d3d_intimacy.cpp reads the device as the January library named it; the

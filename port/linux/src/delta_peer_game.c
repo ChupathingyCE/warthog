@@ -398,13 +398,24 @@ int delta_peer_protocol(void)
 		env.moderation_binding = game_moderation_binding;
 		memset(&local, 0, sizeof(local));
 #ifdef HALO_XBOX_CONSOLE
-		/* (the console says what it is and no more: no maps or moderation;
-		its profile only if the player gave it an identity file:
-		added below) */
+		/* (the console says what it is: no maps or moderation; its
+		profile only if the player gave it an identity file: added below) */
 		local.capabilities = (delta_u32)1 << _delta_capability_platform;
+#ifdef HALO_PORT_CHAT
+		/* (and text chat's client: the lines and the host's own,
+		port/linux/game/chat.c) */
+		local.capabilities |= (delta_u32)1 << _delta_capability_chat |
+			(delta_u32)1 << _delta_capability_server_messages;
+#endif
 #else
 		local.capabilities = (delta_u32)1 << _delta_capability_platform | (delta_u32)1 << _delta_capability_profile |
 			(delta_u32)1 << _delta_capability_ce_maps;
+		/* (text chat and the host's own lines: docs/delta.md, Chat) */
+		local.capabilities |= (delta_u32)1 << _delta_capability_chat |
+			(delta_u32)1 << _delta_capability_server_messages;
+		/* (changing teams during a game: a host offers it once its team
+		host is set, team_change.c) */
+		local.capabilities |= (delta_u32)1 << _delta_capability_team_change;
 #endif
 		/* (moderation: a client signs with its player key's moderator key; a
 		host offers it only with the dedicated server's moderation) */

@@ -425,11 +425,7 @@ void halo_screen_anti_alias(short x0, short y0, short x1, short y1)
 
 /* ---------- the keyboard and the desktop's settings: none on the console */
 
-unsigned long halo_keyboard_actions(short controller_index)
-{
-	(void)controller_index;
-	return 0;
-}
+/* (halo_keyboard_actions: port/xbox/game/xbox_chat_keys.c) */
 
 void platform_text_typing(int typing)
 {

@@ -260,7 +260,7 @@ static const struct config_setting config_settings[] =
 	{ "display.pause_controls", _config_boolean, "true", "HALO_PAUSE_CONTROLS", _environment_value, _platform_all,
 		"Show CONTROLS in the pause menu." },
 #endif
-	{ "display.server_messages", _config_boolean, "true", "HALO_SERVER_MESSAGES", _environment_value, _platform_all,
+	{ "display.server_messages", _config_boolean, "true", "HALO_SERVER_MESSAGES", _environment_value, _platform_all | _platform_xbox,
 		"Show the banner for a Delta server's warnings and notices." },
 	{ "display.server_message_text_color", _config_string, "\"\"", "HALO_SERVER_MESSAGE_TEXT_COLOR",
 		_environment_value, _platform_all,
@@ -317,23 +317,23 @@ static const struct config_setting config_settings[] =
 		"input.mouse_sensitivity." },
 
 	/* the keyboard and mouse's own controls (port/linux/src/xinput_sdl.c) */
-	{ "chat.enabled", _config_boolean, "true", "HALO_CHAT", _environment_value, _platform_all,
+	{ "chat.enabled", _config_boolean, "true", "HALO_CHAT", _environment_value, _platform_all | _platform_xbox,
 		"Text chat with Chupathingy players. T talks to everyone, Y to your team." },
-	{ "chat.show", _config_string, "\"all\"", "HALO_CHAT_SHOW", _environment_value, _platform_all,
+	{ "chat.show", _config_string, "\"all\"", "HALO_CHAT_SHOW", _environment_value, _platform_all | _platform_xbox,
 		"Whose chat lines show: \"all\", \"team\" or \"off\"." },
-	{ "chat.filter", _config_string, "\"mask\"", "HALO_CHAT_FILTER", _environment_value, _platform_all,
+	{ "chat.filter", _config_string, "\"mask\"", "HALO_CHAT_FILTER", _environment_value, _platform_all | _platform_xbox,
 		"Blocked words in chat: \"mask\" stars them out, \"hide\" hides the line,\n"
 		"\"show\" shows it." },
 	{ "chat.filter_file", _config_string, "\"chat_filter.txt\"", "HALO_CHAT_FILTER_FILE", _environment_value,
 		_platform_all,
 		"Your own blocked words, one per line, in the save folder. \"whole <word>\"\n"
 		"blocks only the whole word. Lines starting with # are comments." },
-	{ "chat.streamer_mode", _config_boolean, "false", "HALO_CHAT_STREAMER_MODE", _environment_value, _platform_all,
+	{ "chat.streamer_mode", _config_boolean, "false", "HALO_CHAT_STREAMER_MODE", _environment_value, _platform_all | _platform_xbox,
 		"Show other players in chat by team name, and always star out blocked\n"
 		"words." },
 	{ "chat.quick_messages", _config_string,
 		"\"Nice shot|Need backup|On my way|Thanks|Good game|Sorry\"", "HALO_CHAT_QUICK_MESSAGES",
-		_environment_value, _platform_all,
+		_environment_value, _platform_all | _platform_xbox,
 		"Controller quick messages, separated by |. D-pad up picks one, D-pad\n"
 		"down sends it. Empty: none." },
 	{ "controls.move_forward", _config_string, "\"W\"", "HALO_KEY_MOVE_FORWARD", _environment_value, _platform_all,

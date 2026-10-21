@@ -680,10 +680,10 @@ typedef char screenshot_and_framerate_globals_size_assert[
 #ifndef HALO_XBOX_CONSOLE
 void network_test_update(boolean main_menu_loaded, real seconds);
 void audio_probe_update(unsigned char main_menu_loaded, float seconds);
-#ifdef HALO_GAME_BROWSER
-void chat_update(void);
-#endif
 void team_change_update(void);
+#endif
+#ifdef HALO_PORT_CHAT
+void chat_update(void);
 #endif
 
 /* ---------- prototypes */
@@ -3635,12 +3635,14 @@ void main_loop(
 			/* automated system link tests (port/linux/game/network_test.c) */
 			MAIN_STAGE("network_test_update");
 			network_test_update(main_globals.main_menu_scenario_loaded, main_globals.seconds_elapsed);
-#ifdef HALO_GAME_BROWSER
-			/* text chat (port/linux/game/chat.c) */
-			chat_update();
-#endif
 			/* changing teams during a game (port/linux/game/team_change.c) */
 			team_change_update();
+#endif
+#ifdef HALO_PORT_CHAT
+			/* text chat (port/linux/game/chat.c; on a console, its client's
+			part) */
+			MAIN_STAGE("chat_update");
+			chat_update();
 #endif
 			/* the audio probe's scripted recording (port/linux/game/audio_probe.c),
 			on the consoles too */
