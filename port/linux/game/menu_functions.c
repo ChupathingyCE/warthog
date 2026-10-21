@@ -84,6 +84,8 @@ their handlers open opens.
 #include "halo_menus.h"
 /* (internet play's server browser: the platform layer's) */
 #include "../src/p2p.h"
+#include "../src/controller_layout.h"
+#include "networking/network_connection.h"
 #ifdef HALO_GAME_BROWSER
 #include "../src/browser.h"
 #endif
@@ -92,10 +94,24 @@ their handlers open opens.
 #include "halo_server_browser.h"
 /* (the multiplayer maps past the Xbox's: ui_map_list.c) */
 #include "halo_ui_map_list.h"
+#ifdef HALO_GAME_BROWSER
+/* (game type files: the dedicated server's, gametype_files.c) */
+#include "../../../server/src/server_config.h"
+#include "../../../server/src/server_gametype_variant.h"
+#include "../src/gametype_folder.h"
+#include "gametype_files.h"
+#endif
 
 #include <stdlib.h>
 #include <string.h>
 #include <xtl.h>
+#if defined(HALO_GAME_BROWSER) && !defined(HALO_CONSOLE_NO_DELTA_PROFILE)
+#include "halo_profile_screen.h"
+#endif
+
+/* a player's name in the lobby: a Delta profile's (profile_names.c) is
+longer than a game name */
+#define PROFILE_NAME_LENGTH 33
 
 /* the platform layer's (port/linux/src) */
 void platform_log(char const *format, ...);
@@ -117,6 +133,8 @@ void platform_binding_capture_begin(void);
 int platform_binding_capture_poll(int *input);
 void halo_input_name(int input, char *name, size_t size);
 void halo_input_shown_name(char const *binding, char *shown, size_t size);
+int platform_gamepad_count(void);
+int platform_gamepad_describe(int index, char *name, size_t size);
 short pc_menu_string_index(long definition_index);
 #ifdef HALO_64BIT
 /* (declared for the 64-bit build, which takes no implicit declarations; the
@@ -339,6 +357,12 @@ static boolean setting_text(char const *name, char *text, unsigned int size, boo
 {
 	short index;
 
+#if defined(HALO_GAME_BROWSER) && !defined(HALO_CONSOLE_NO_DELTA_PROFILE)
+	/* (Delta Profile's site settings: the profile's own, on the site, while
+	known; no defaults, they belong to the profile) */
+	if (!strncmp(name, "site.", 5))
+		return !default_value && profile_screen_site_setting(name + 5, text, (int)size);
+#endif
 	if (strncmp(name, "profile.", 8))
 	{
 		if (!(default_value ? config_default(name, text, size) : config_text(name, text, size)))
@@ -408,6 +432,11 @@ static boolean setting_write(char const *name, char const *value)
 {
 	short index;
 
+#if defined(HALO_GAME_BROWSER) && !defined(HALO_CONSOLE_NO_DELTA_PROFILE)
+	if (!strncmp(name, "site.", 5))
+		return profile_screen_site_setting_write(name + 5, value);
+#endif
+
 	/* (Video Setup's Frame Rate: 30 draws the game's own frames, with
 	display.interpolation off; the others blend between them) */
 	if (!strcmp(name, "display.max_fps") &&
@@ -442,8 +471,14 @@ static boolean setting_load(struct widget_instance *widget)
 
 	if (spinner_item(widget))
 		return TRUE;
-	if (!setting || !setting_text(setting->setting, current, sizeof(current), FALSE))
+	if (!setting)
 		return FALSE;
+	/* (a value not known now, the site's: not shown, so never written) */
+	if (!setting_text(setting->setting, current, sizeof(current), FALSE))
+	{
+		setting->loaded_index = NONE;
+		return FALSE;
+	}
 	setting->loaded_index = setting_value_index(setting, current);
 	if (setting->loaded_index < (short)widget->parameters.list.number_of_items)
 		widget->parameters.list.selected_index = setting->loaded_index;
@@ -1387,7 +1422,7 @@ static boolean setting_changed_save(struct widget_instance *spinner, struct pc_m
 {
 	short index = spinner->parameters.list.selected_index;
 
-	if (index < 0 || index >= setting->value_count || index == setting->loaded_index)
+	if (index < 0 || index >= setting->value_count || index == setting->loaded_index || setting->loaded_index == NONE)
 		return TRUE;
 	if (!setting_write(setting->setting, setting->values[index]))
 	{
@@ -1563,15 +1598,14 @@ static boolean color_choose(void)
 profile's button settings as the Xbox's Controller Setup shows them */
 
 /* the picture's frames (the bitmap's: tools/port_settings.py's
-BITMAP_FRAMES): Gamepad Setup's row's, as the list numbers its rows
+BITMAP_FRAMES): CONTROLS' row's, as the list numbers its rows
 (player_profile_edit_select_menu_update_extended_description), and after
-the PC version's nine and Privacy's (FRAME_COPIES) the Xbox's five of the
-button settings */
+the seven rows' (FRAME_ORDERS) the Xbox's five of the button settings */
 #define PROFILE_GAMEPAD_FRAME 2
-#define PROFILE_FIRST_LAYOUT_FRAME 10
+#define PROFILE_FIRST_LAYOUT_FRAME 7
 
-/* "port gamepad layout preview" (the picture's own): on Gamepad Setup's
-row, the edited profile's button settings */
+/* "port gamepad layout preview" (the picture's own): on CONTROLS' row, the
+edited profile's button settings */
 static void profile_gamepad_layout(struct widget_instance *picture)
 {
 	struct player_profile *profile = player_ui_get_edit_player_profile();
@@ -1581,8 +1615,8 @@ static void profile_gamepad_layout(struct widget_instance *picture)
 		(frame >= PROFILE_FIRST_LAYOUT_FRAME && frame < PROFILE_FIRST_LAYOUT_FRAME + _button_preset_bumper_jumper))
 	{
 		/* (the Xbox's map has a picture for its five layouts: Bumper Jumper's
-		is the plain gamepad's) */
-		if (profile && profile->controller_settings.button_preset == _button_preset_bumper_jumper)
+		and a custom layout's is the plain gamepad's) */
+		if (profile && profile->controller_settings.button_preset >= _button_preset_bumper_jumper)
 			picture->animation.current_frame_index = PROFILE_GAMEPAD_FRAME;
 		else
 			picture->animation.current_frame_index = (short)(PROFILE_FIRST_LAYOUT_FRAME +
@@ -1592,9 +1626,9 @@ static void profile_gamepad_layout(struct widget_instance *picture)
 }
 
 /* the Chupathingy menus' settings picture (port/assets/menus/chupathingy):
-a frame for each of its eleven rows, then the Xbox's five button settings,
-which Gamepad Setup's row shows for the edited profile */
-#define CHUPATHINGY_FIRST_LAYOUT_FRAME 11
+a frame for each of its eight rows, then the Xbox's five button settings,
+which CONTROLS' row shows for the edited profile */
+#define CHUPATHINGY_FIRST_LAYOUT_FRAME 8
 
 /* "chupathingy settings picture" (the picture's own) */
 static void chupathingy_settings_picture(struct widget_instance *picture)
@@ -1603,7 +1637,7 @@ static void chupathingy_settings_picture(struct widget_instance *picture)
 
 	if (picture->animation.current_frame_index == PROFILE_GAMEPAD_FRAME)
 	{
-		if (profile && profile->controller_settings.button_preset == _button_preset_bumper_jumper)
+		if (profile && profile->controller_settings.button_preset >= _button_preset_bumper_jumper)
 			picture->animation.current_frame_index = PROFILE_GAMEPAD_FRAME;
 		else
 			picture->animation.current_frame_index = (short)(CHUPATHINGY_FIRST_LAYOUT_FRAME +
@@ -1629,7 +1663,26 @@ static struct
 	short first;
 	short chosen;
 	long to_delete;
+	/* the list shown (its rows' A: profile_list_delta_chosen) */
+	struct widget_instance const *list;
 } profile_list;
+
+/* Delta Profile's row, after Create New Profile: the Chupathingy menus', with
+a game list (display.delta_profile) */
+static boolean profile_list_delta_row(void)
+{
+#if defined(HALO_GAME_BROWSER) && !defined(HALO_CONSOLE_NO_DELTA_PROFILE)
+	extern boolean pc_menus_chupathingy(void);
+
+	return pc_menus_chupathingy() && profile_screen_available();
+#else
+	return FALSE;
+#endif
+}
+
+#if defined(HALO_GAME_BROWSER) && !defined(HALO_CONSOLE_NO_DELTA_PROFILE)
+static void profile_delta_card(struct widget_instance *description, boolean delta_row);
+#endif
 
 /* the profiles, read again when they are not those read last */
 static void profile_list_read(boolean always)
@@ -1658,9 +1711,14 @@ static void profile_list_read(boolean always)
 	profile_list.chosen = (short)PIN(profile_list.chosen, 0, profile_list.count);
 }
 
+static short profile_list_items(void)
+{
+	return (short)(profile_list.count + 1 + (profile_list_delta_row() ? 1 : 0));
+}
+
 static short profile_list_rows(void)
 {
-	return (short)MIN(profile_list.count + 1, PROFILE_ROWS);
+	return (short)MIN(profile_list_items(), PROFILE_ROWS);
 }
 
 /* "player profile list initialize": on player 1's profile */
@@ -1679,7 +1737,7 @@ static boolean profile_list_initialize(struct widget_instance *list)
 			profile_list.chosen = index;
 	}
 	profile_list.first = (short)PIN(profile_list.chosen - PROFILE_ROWS / 2, 0,
-		MAX(0, profile_list.count + 1 - PROFILE_ROWS));
+		MAX(0, profile_list_items() - PROFILE_ROWS));
 	focus_row(list, (short)(profile_list.chosen - profile_list.first));
 	return TRUE;
 }
@@ -1693,6 +1751,8 @@ static void profile_row_text(short row, wchar_t *text)
 		ustrncpy(text, profile_list.profiles[item].player_name, MAXIMUM_PLAYER_PROFILE_NAME_LENGTH);
 		text[MAXIMUM_PLAYER_PROFILE_NAME_LENGTH] = 0;
 	}
+	else if (item > profile_list.count)
+		ustrncpy(text, L"DELTA", ROW_TEXT_LENGTH);
 	else
 	{
 		extern boolean pc_menus_chupathingy(void);
@@ -1721,14 +1781,17 @@ static void profile_list_update(struct widget_instance *list)
 	boolean profile;
 
 	profile_list_read(FALSE);
-	item = list_scroll(list, &profile_list.first, (short)(profile_list.count + 1), profile_list_rows());
+	profile_list.list = list;
+	item = list_scroll(list, &profile_list.first, profile_list_items(), profile_list_rows());
 	if (item != NONE)
 		profile_list.chosen = item;
 	rows_update(list, profile_list_rows(), profile_row_text);
 	profile = profile_list.chosen < profile_list.count;
+	/* (the panel's header: the kind of profile, Halo's or Delta's) */
+	text_set(named(description, "kind", 0), profile_list.chosen > profile_list.count ? L"DELTA" : L"HALO PROFILE");
 	text_set(named(description, "player_profile_right_name", 0),
 		profile ? profile_list.profiles[profile_list.chosen].player_name : L"");
-	visible_set(named(description, "empty_profile_slot_text", 0), !profile);
+	visible_set(named(description, "empty_profile_slot_text", 0), !profile && profile_list.chosen == profile_list.count);
 	visible_set(named(description, "qtr_screen_profile_color_pic", 0), profile);
 	visible_set(named(description, "current_level_label", 0), profile);
 	visible_set(named(description, "current_level", 0), profile);
@@ -1758,6 +1821,11 @@ static void profile_list_update(struct widget_instance *list)
 			visible_set(named(description, "skill_level_label", 0), TRUE);
 		}
 	}
+#if defined(HALO_GAME_BROWSER) && !defined(HALO_CONSOLE_NO_DELTA_PROFILE)
+	profile_delta_card(description, profile_list.chosen > profile_list.count);
+	/* (Gearbox's DELTA button, with a game list) */
+	visible_set(named(list, "profile_manager_button_delta", 0), profile_screen_available());
+#endif
 	profile_name_show(description);
 }
 
@@ -1880,7 +1948,7 @@ static boolean coop_player2_choose(short controller)
 	}
 	if (controller == player_ui_get_single_player_local_player_controller(0))
 	{
-		display_error_text_deferred(L"Player 2 chooses their\r\nprofile with their own\r\ncontroller.",
+		display_error_text_deferred(L"Player 2: choose with\r\nyour own controller.",
 			NONE);
 		return campaign_fail();
 	}
@@ -2065,18 +2133,24 @@ static void control_capture_poll(void)
 	controls_screen.capturing_control = NONE;
 	if (result == 1)
 	{
-		char name[CONTROL_NAME_LENGTH];
+		char name[CONTROL_NAME_LENGTH], old[CONTROL_NAME_LENGTH];
 		short other, other_slot;
 
 		halo_input_name(input, name, sizeof(name));
 		if (!*name)
 			return;
+		/* (a key another control has takes this one's old key: swapped, never
+		dropped) */
+		snprintf(old, sizeof(old), "%s", controls_screen.bindings[control][slot]);
 		for (other = 0; other < NUMBEROF(controls); other++)
 		{
 			for (other_slot = 0; other_slot < CONTROL_BINDINGS; other_slot++)
 			{
-				if (!_stricmp(controls_screen.bindings[other][other_slot], name))
-					controls_screen.bindings[other][other_slot][0] = 0;
+				if ((other != control || other_slot != slot) &&
+					!_stricmp(controls_screen.bindings[other][other_slot], name))
+				{
+					snprintf(controls_screen.bindings[other][other_slot], CONTROL_NAME_LENGTH, "%s", old);
+				}
 			}
 		}
 		snprintf(controls_screen.bindings[control][slot], CONTROL_NAME_LENGTH, "%s", name);
@@ -2142,6 +2216,316 @@ static void controls_update(struct widget_instance *list)
 			controls_screen.capturing_control != NONE ? 2 : focused_row ? 1 : 0;
 	}
 }
+
+/* ---------- Controller Buttons (tools/port_settings.py's CONTROLLER_SCREEN):
+the controller's button layout, and each action's button. A on an action
+takes the next button pressed on a controller (Start or Back cancel), shows
+the swap it makes (the action that had that button takes the old one) in
+the two rows and the help, and A confirms it (B cancels). That makes the
+layout Custom: config.toml keeps it (controls.controller_layout), the
+profile names it (button_preset, saved at once: player_ui.c), and the HUD's
+and menus' prompts follow it. While a button is asked for, the menus take
+no input (pc_menu_controller_capture, from ui_widget.c) */
+
+#ifndef HALO_CONSOLE_NO_CONTROLS
+
+#define BUTTON_ROWS 10
+#define HELP_TEXT_LENGTH 192
+
+/* the actions of the rows op_button_1 on */
+static short const button_row_actions[BUTTON_ROWS] =
+{
+	CONTROLLER_ACTION_FIRE, CONTROLLER_ACTION_GRENADE, CONTROLLER_ACTION_MELEE, CONTROLLER_ACTION_JUMP,
+	CONTROLLER_ACTION_ACTION, CONTROLLER_ACTION_SWITCH_WEAPON, CONTROLLER_ACTION_SWITCH_GRENADE,
+	CONTROLLER_ACTION_FLASHLIGHT, CONTROLLER_ACTION_CROUCH, CONTROLLER_ACTION_ZOOM,
+};
+
+/* asking for a button: none; waiting for every button to be let go, then
+for one pressed; for it to be let go, then A or B */
+enum
+{
+	_capture_none,
+	_capture_release,
+	_capture_wait,
+	_capture_confirm_release,
+	_capture_confirm,
+};
+
+static struct
+{
+	short local_player;
+	short button_preset;
+	short joystick_preset;
+	unsigned char layout[CONTROLLER_ACTION_COUNT];
+	int kind;
+	char pad_name[64];
+	short capture;
+	short action;
+	short button;
+	unsigned long capture_time;
+} controller_screen = { 0, 0, 0, { 0 }, -1, "", _capture_none, 0, NONE, 0 };
+
+/* the player's layouts and controller, as they are now */
+static void controller_read(void)
+{
+	player_ui_get_local_player_layouts(controller_screen.local_player, &controller_screen.button_preset,
+		&controller_screen.joystick_preset);
+	controller_layout_preset(controller_screen.button_preset, config_string("controls.controller_layout"),
+		controller_screen.layout);
+	controller_screen.kind = platform_gamepad_describe(-1, controller_screen.pad_name, sizeof(controller_screen.pad_name));
+}
+
+/* "controller screen init" */
+static boolean controller_screen_init(struct widget_instance *widget)
+{
+	struct widget_instance *spinner;
+
+	controller_screen.local_player = widget->local_player_index >= 0 &&
+		widget->local_player_index < MAXIMUM_NUMBER_OF_LOCAL_PLAYERS ? widget->local_player_index : 0;
+	controller_screen.capture = _capture_none;
+	controller_read();
+	spinner = named(screen_of(widget), "layout_spinner", 0);
+	if (spinner && controller_screen.button_preset < spinner->parameters.list.number_of_items)
+		spinner->parameters.list.selected_index = controller_screen.button_preset;
+	/* (debug.menu_open's "...#rebind": MELEE asked for, LT pressed, to look at it) */
+	{
+		static boolean shown;
+		char const *open = config_string("debug.menu_open");
+		size_t length = strlen(open);
+
+		if (!shown && length > 7 && !strcmp(open + length - 7, "#rebind"))
+		{
+			shown = TRUE;
+			controller_screen.action = CONTROLLER_ACTION_MELEE;
+			controller_screen.button = CONTROLLER_BUTTON_LEFT_TRIGGER;
+			controller_screen.capture = _capture_confirm;
+			controller_screen.capture_time = system_milliseconds();
+		}
+	}
+	return TRUE;
+}
+
+/* "controller screen defaults": the default layout (Custom keeps its buttons) */
+static boolean controller_screen_defaults(struct widget_instance *widget)
+{
+	struct widget_instance *spinner = named(screen_of(widget), "layout_spinner", 0);
+
+	player_ui_set_local_player_layouts(controller_screen.local_player, _button_preset_standard,
+		controller_screen.joystick_preset);
+	controller_read();
+	if (spinner)
+		spinner->parameters.list.selected_index = _button_preset_standard;
+	return TRUE;
+}
+
+static short button_row_of(struct widget_instance *widget)
+{
+	for (; widget; widget = widget->parent)
+	{
+		if (!strncmp(widget->name, "op_button_", 10))
+		{
+			short row = (short)(atoi(widget->name + 10) - 1);
+
+			return row >= 0 && row < BUTTON_ROWS ? row : NONE;
+		}
+	}
+	return NONE;
+}
+
+/* "controller begin binding" (A on an action's row) */
+static boolean controller_capture_begin(struct widget_instance *widget)
+{
+	short row = button_row_of(widget);
+
+	if (row == NONE || platform_gamepad_count() <= 0)
+		return FALSE;
+	controller_read();
+	controller_screen.action = button_row_actions[row];
+	controller_screen.button = NONE;
+	controller_screen.capture = _capture_release;
+	controller_screen.capture_time = system_milliseconds();
+	return TRUE;
+}
+
+/* whether any controller's button is down; the first pressed that an
+action can have (or Start or Back), else NONE */
+static boolean controller_buttons_down(short *pressed)
+{
+	boolean down = FALSE;
+	short gamepad, button;
+
+	*pressed = NONE;
+	for (gamepad = 0; gamepad < MAXIMUM_GAMEPADS; gamepad++)
+	{
+		struct gamepad_state const *state = input_has_gamepad(gamepad) ? input_get_gamepad_state(gamepad) : NULL;
+
+		for (button = 0; state && button < NUMBER_OF_GAMEPAD_BUTTONS; button++)
+		{
+			if (!state->buttons[button])
+				continue;
+			down = TRUE;
+			if (*pressed == NONE && (controller_layout_movable_button(button) ||
+				button == CONTROLLER_BUTTON_START || button == CONTROLLER_BUTTON_BACK))
+			{
+				*pressed = button;
+			}
+		}
+	}
+	return down;
+}
+
+/* the swap confirmed: the custom layout written and in force */
+static void controller_capture_apply(void)
+{
+	unsigned char layout[CONTROLLER_ACTION_COUNT];
+	char text[256];
+
+	memcpy(layout, controller_screen.layout, sizeof(layout));
+	controller_layout_assign(layout, controller_screen.action, controller_screen.button);
+	controller_layout_format(layout, text, sizeof(text));
+	if (!config_write("controls.controller_layout", text))
+	{
+		platform_log("menus: could not write controls.controller_layout");
+		return;
+	}
+	platform_log("menus: controls.controller_layout = %s", text);
+	player_ui_set_local_player_layouts(controller_screen.local_player, _button_preset_custom,
+		controller_screen.joystick_preset);
+	player_ui_custom_layout_changed();
+	controller_read();
+}
+
+/* each frame (ui_widget.c's process_ui_widgets): while a button is asked for,
+the controllers' buttons are read here and the menus take nothing; TRUE then */
+boolean pc_menu_controller_capture(void)
+{
+	short pressed;
+	boolean down;
+
+	if (controller_screen.capture == _capture_none)
+		return FALSE;
+	down = controller_buttons_down(&pressed);
+	switch (controller_screen.capture)
+	{
+	case _capture_release:
+		if (!down)
+			controller_screen.capture = _capture_wait;
+		break;
+	case _capture_wait:
+		if (system_milliseconds() - controller_screen.capture_time > 10000 || pressed == CONTROLLER_BUTTON_START ||
+			pressed == CONTROLLER_BUTTON_BACK || (pressed != NONE &&
+			pressed == controller_screen.layout[controller_screen.action]))
+		{
+			controller_screen.capture = _capture_none;
+		}
+		else if (pressed != NONE)
+		{
+			controller_screen.button = pressed;
+			controller_screen.capture = _capture_confirm_release;
+		}
+		break;
+	case _capture_confirm_release:
+		if (!down)
+			controller_screen.capture = _capture_confirm;
+		break;
+	case _capture_confirm:
+		if (pressed == CONTROLLER_BUTTON_A)
+		{
+			controller_screen.capture = _capture_none;
+			controller_capture_apply();
+		}
+		else if (pressed == CONTROLLER_BUTTON_B || pressed == CONTROLLER_BUTTON_START ||
+			pressed == CONTROLLER_BUTTON_BACK)
+		{
+			controller_screen.capture = _capture_none;
+		}
+		break;
+	}
+	/* (the button that ends it is not the menus': they wait for it to be let go) */
+	event_manager_flush();
+	return TRUE;
+}
+
+static void wide_text(wchar_t *text, char const *ascii, size_t count)
+{
+	size_t index;
+
+	for (index = 0; ascii[index] && index + 1 < count; index++)
+		text[index] = (wchar_t)(unsigned char)ascii[index];
+	text[index] = 0;
+}
+
+/* "controller update menu": the layout chosen (the spinner's) put in force,
+each row's button, and the help */
+static void controller_update(struct widget_instance *list)
+{
+	struct widget_instance *screen = screen_of(list);
+	struct widget_instance *spinner = named(screen, "layout_spinner", 0);
+	struct widget_instance *focused = list->focused_child;
+	struct widget_instance *row;
+	short focused_row = button_row_of(focused);
+	short other = NONE;
+	char help[HELP_TEXT_LENGTH];
+	wchar_t text[HELP_TEXT_LENGTH];
+
+	controller_read();
+	if (spinner && controller_screen.capture == _capture_none &&
+		spinner->parameters.list.selected_index != controller_screen.button_preset)
+	{
+		player_ui_set_local_player_layouts(controller_screen.local_player, spinner->parameters.list.selected_index,
+			controller_screen.joystick_preset);
+		controller_read();
+	}
+	if (controller_screen.capture >= _capture_confirm_release)
+		other = (short)controller_layout_action_on(controller_screen.layout, controller_screen.button);
+	for (row = list->child; row; row = row->next)
+	{
+		short index = button_row_of(row);
+		short action, button;
+		char shown[64];
+
+		if (index == NONE)
+			continue;
+		action = button_row_actions[index];
+		button = controller_screen.layout[action];
+		if (controller_screen.capture != _capture_none && action == controller_screen.action)
+		{
+			if (controller_screen.capture < _capture_confirm_release)
+				snprintf(shown, sizeof(shown), "%s", "PRESS A BUTTON");
+			else
+				snprintf(shown, sizeof(shown), "> %s <", controller_layout_button_name(controller_screen.kind,
+					controller_screen.button));
+		}
+		else if (other != NONE && action == other)
+			snprintf(shown, sizeof(shown), "> %s <", controller_layout_button_name(controller_screen.kind,
+				controller_screen.layout[controller_screen.action]));
+		else
+			snprintf(shown, sizeof(shown), "%s", controller_layout_button_name(controller_screen.kind, button));
+		wide_text(text, shown, ROW_TEXT_LENGTH);
+		text_set(named(row, "button_value", 0), text);
+	}
+
+	/* the help line */
+	if (controller_screen.capture == _capture_release || controller_screen.capture == _capture_wait)
+		snprintf(help, sizeof(help), "%s", "Press a button. Start or Back cancels.");
+	else if (controller_screen.capture != _capture_none)
+		snprintf(help, sizeof(help), "%s", "A confirms, B cancels.");
+	else if (focused_row != NONE)
+		snprintf(help, sizeof(help), "%s",
+			controller_screen.kind < 0 ? "Connect a controller to change buttons." : "A changes the button.");
+	else if (focused && named(focused, "layout_spinner", 0))
+	{
+		snprintf(help, sizeof(help), "%s",
+			controller_screen.kind >= 0 ? controller_screen.pad_name : "No controller connected.");
+	}
+	else
+		help[0] = 0;
+	wide_text(text, help, HELP_TEXT_LENGTH);
+	if (list->parameters.list.extended_description)
+		text_set_length(list->parameters.list.extended_description, text, HELP_TEXT_LENGTH);
+}
+
+#endif
 
 /* ---------- Multiplayer (port/assets/menus' PLAN: Create Game > Internet
 or LAN; Join Game > Server Browser (blank, for now), LAN, Direct Link): the
@@ -2233,6 +2617,7 @@ void network_game_server_port_set_cooperative_player_collisions(boolean player_c
 void *global_network_game_client_get(void);
 void *global_network_game_server_get(void);
 boolean network_game_is_splitscreen_local(void);
+boolean network_game_solo_game(void);
 struct advertised_game *network_game_client_get_available_games(void *client);
 boolean network_game_client_advertised_game_is_valid(struct advertised_game *game);
 short network_game_client_get_state(void *client, short *state_data);
@@ -2806,6 +3191,7 @@ help_strings, tools/port_settings.py) */
 #define COOPERATIVE_ENEMIES_MULTIPLIER_HELP 20
 #define COOPERATIVE_PLAYER_COLLISIONS_HELP 21
 #define SERVER_PASSWORD_HELP 23
+#define SERVER_HOST_OPTIONS_HELP 24
 
 /* co-op's EXTRA ENEMIES' choices (port_settings.COOP_ENEMIES_MODES, in this
 order): its amount's row is the choice's */
@@ -2995,6 +3381,13 @@ static void server_settings_update(struct widget_instance *list)
 		p2p_set_hosting_public(public);
 		if (help && list->focused_child == named(list, "op_listing", 0))
 			help->parameters.text_box.string_list_index = (short)(10 + spinner->parameters.list.selected_index);
+	}
+	/* HOST OPTIONS (its own screen: the host's rules of config.toml) */
+	{
+		struct widget_instance *help = list->parameters.list.extended_description;
+
+		if (help && list->focused_child && list->focused_child == named(list, "op_host_options", 0))
+			help->parameters.text_box.string_list_index = SERVER_HOST_OPTIONS_HELP;
 	}
 	/* PASSWORD (a PUBLIC internet game's): its stars, NONE if it has none */
 	row = named(list, "op_password", 0);
@@ -3644,7 +4037,7 @@ static short lobby_browser_rows_place(struct widget_instance *list)
 
 /* ---- the server browser's second source (configure.py --game-browser):
 the games of a game list, network.browser_url (port/linux/src/browser.c;
-halo.milenko.org by default), merged into the listings' as listings of
+stats.chupathingy.org by default), merged into the listings' as listings of
 their own. A game both lists have is shown once, as its listing (the same invite
 token). One on a Halo PC map, which its host lists as <map>@ce (Custom
 Edition) or <map>@md (HaloMD), is marked PC or MD, and joined only where it
@@ -4064,9 +4457,9 @@ static void lobby_browser_update(struct widget_instance *list)
 
 		message = TRUE;
 		if (!config_boolean("network.online"))
-			usnprintf(text, NUMBEROF(text) - 1, L"Internet play is off (Settings)");
+			usnprintf(text, NUMBEROF(text) - 1, L"Turn on Internet Play in Settings.");
 		else if (!config_boolean("network.public_lobby"))
-			usnprintf(text, NUMBEROF(text) - 1, L"The server browser is off (network.public_lobby)");
+			usnprintf(text, NUMBEROF(text) - 1, L"The server browser is off.");
 		else if (lobby_browser.joining)
 		{
 			text_to_wide(lobby_browser.name, name, NUMBEROF(name));
@@ -4376,7 +4769,7 @@ static void browser_update(struct widget_instance *list)
 		else if (!multiplayer.game_count)
 		{
 			usnprintf(text, NUMBEROF(text) - 1, L"%s", multiplayer.mode == _multiplayer_mode_direct_link ?
-				L"Copy an invite link and PASTE LINK, or accept a Discord invite" :
+				L"Copy an invite link, then PASTE LINK." :
 				L"Looking for games on your LAN...");
 		}
 		else
@@ -4539,6 +4932,25 @@ static boolean pause_change_teams(struct widget_instance *widget)
 		return campaign_fail();
 	team_change_ask(widget->local_player_index);
 	return TRUE;
+}
+
+/* "port pause controls" (the pause menu's CONTROLS: menu_tags.c): the
+Gearbox and Chupathingy menus' opens their Controller Buttons (its handler's
+widget); the Xbox's, which have no such screen, the Controls screen over
+the pause menu (controls_screen.c), for the menu's player */
+static boolean controls_open(struct widget_instance *widget)
+{
+#if defined(HALO_GAME_BROWSER) && !defined(HALO_CONSOLE_NO_CONTROLS)
+	extern short pc_menus_set(void);
+	extern void controls_screen_open(short local_player_index, short page);
+
+	if (pc_menus_set() == 0)
+		controls_screen_open(widget->local_player_index, -1);
+	return TRUE;
+#else
+	(void)widget;
+	return FALSE;
+#endif
 }
 
 /* ---- the lobby: the game's players (up to the port's 128), its map and
@@ -4740,7 +5152,7 @@ static void lobby_join_help(struct widget_instance *list)
 		for (controller = 0; controller < MAXIMUM_LOCAL_PLAYERS; controller++)
 		{
 			if (input_has_gamepad(controller) && !lobby_controller_playing(controller))
-				text = L"Another controller: START joins.";
+				text = L"Another controller: press START.";
 		}
 	}
 	text_set(help, text);
@@ -4750,10 +5162,20 @@ static void lobby_row_text(short row, wchar_t *text)
 {
 	struct network_player *player = lobby_players[multiplayer.lobby_first + row];
 	struct network_game *game = network_game_client_get_game(global_network_game_client_get());
-	wchar_t name[NUMBEROF(player->name) + 1];
+	wchar_t name[PROFILE_NAME_LENGTH > NUMBEROF(player->name) + 1 ? PROFILE_NAME_LENGTH : NUMBEROF(player->name) + 1];
 
 	ustrncpy(name, player->name, NUMBEROF(player->name));
 	name[NUMBEROF(player->name)] = 0;
+#if defined(HALO_GAME_BROWSER) && !defined(HALO_CONSOLE_NO_DELTA_PROFILE)
+	/* (a player who shares their Delta profile, by its name: profile_names.c) */
+	if (game && player >= game->players && player < game->players + NUMBEROF(game->players))
+	{
+		wchar_t profile_name[PROFILE_NAME_LENGTH];
+
+		if (profile_names_player((long)(player - game->players), profile_name, PROFILE_NAME_LENGTH))
+			usnprintf(name, NUMBEROF(name), L"%s", profile_name);
+	}
+#endif
 	if (game && game->variant.universal_variant.teams)
 		usnprintf(text, ROW_TEXT_LENGTH - 1, L"%s  (%s)", name, player->team_index ? L"BLUE" : L"RED");
 	else
@@ -4774,7 +5196,7 @@ pc_menu_text_color), while the one who gave it keeps giving it (a widget
 is drawn each frame its screen is up, and a gone widget's place may come to
 hold another) */
 
-#define MAXIMUM_TEXT_COLORS 16
+#define MAXIMUM_TEXT_COLORS 48
 /* a colour given this long ago is forgotten */
 #define TEXT_COLOR_LIFETIME 250
 
@@ -4935,7 +5357,8 @@ static void lobby_update(struct widget_instance *list)
 		gametype[NUMBEROF(gametype) - 1] = 0;
 		usnprintf(text, NUMBEROF(text) - 1, L"%s\r\n%s\r\n%d of %d players\r\n\r\n%s", gametype,
 			engine_names[PIN(game->variant.game_engine_index, 0, 5)], lobby_player_count, game->maximum_players,
-			seconds > 0 ? L"Starting in:" : game->machine_count < 2 ? L"Waiting for players" : L"");
+			seconds > 0 ? L"Starting in:" :
+				game->machine_count < 2 && !network_game_solo_game() ? L"Waiting for players" : L"");
 		text[NUMBEROF(text) - 1] = 0;
 		if (seconds > 0)
 		{
@@ -4947,7 +5370,7 @@ static void lobby_update(struct widget_instance *list)
 		{
 			size_t length = ustrlen(text);
 
-			usnprintf(text + length, NUMBEROF(text) - 1 - length, L"\r\n\r\nInvite link copied:\r\npaste it to friends");
+			usnprintf(text + length, NUMBEROF(text) - 1 - length, L"\r\n\r\nInvite link copied.");
 		}
 		text_set_length(named(description, "lobby_game_data", 0), text, LOBBY_TEXT_LENGTH);
 	}
@@ -5026,9 +5449,8 @@ static void preview_update(struct widget_instance *list)
 		ustrncpy(name, game->game_name, NUMBEROF(game->game_name));
 		name[NUMBEROF(game->game_name)] = 0;
 		/* (the text box does not wrap: lines of up to 28 characters) */
-		usnprintf(text, NUMBEROF(text) - 1, L"%s\r\n\r\nThis game is under way.\r\n\r\n%s", name,
-			game->open ? L"JOIN GAME joins it now;\r\nits players show then." :
-			L"It cannot be joined now:\r\nit is loading, over or full.");
+		usnprintf(text, NUMBEROF(text) - 1, L"%s\r\n\r\nGame in progress.%s", name,
+			game->open ? L"" : L"\r\n\r\nCan't be joined now.");
 		text[NUMBEROF(text) - 1] = 0;
 		preview_players_text(text, NUMBEROF(text));
 	}
@@ -5785,6 +6207,1613 @@ static void gametype_engine_name(struct widget_instance *text_box)
 		text_box->parameters.text_box.string_list_index = strings[PIN(variant->game_engine_index, 0, 5)];
 }
 
+/* ---------- the Chupathingy menus' GAME SETUP and game type editor
+(port/assets/menus/chupathingy/host_setup.xml)
+
+GAME SETUP comes between the Xbox's Select Gametype and its lobby when this
+machine hosts (menu_tags.c points the gametype's choice here): the game's
+name, its most players, its listing and password (Server Setup's, shared
+with it), the internet play port, the game type (left and right choose
+another, Y or A edits it), and the host's rules of config.toml
+(network.team_change and its margin, network.chat_filter,
+network.block_mouse_aim_assist), written as START GAME (A) opens the lobby.
+B leaves them as they were.
+
+The editor shows every setting of the game type, as the dedicated server's
+game type files have them (server/src/server_config.c's table), a page at
+a time (GENERAL, PLAYERS, WEAPONS, VEHICLES, INDICATORS: each page its own
+screen, which the bumpers replace with the next). A saves it: as a file of
+the save folder's gametypes/ and as a saved gametype of its name
+(gametype_files.c), so that every gametype list has it and a dedicated
+server can play the file, and makes it the game's. A setting given its
+base's value is left out of the file, so a game type nobody changed is its
+base's. B leaves it as it was.
+
+The rows are the lists' own (row_0 and on): each frame ("port host
+update") fills them with the rows the screen shows, and their events
+("port host row ...") change the row in their place. */
+
+/* the screens and the lobby START GAME opens (the Xbox's, as the
+gametype's choice did) */
+#define HOST_EDIT_SCREEN "pc\\chupathingy\\host\\edit_general"
+#define HOST_LOBBY_SCREEN "ui\\shell\\main_menu\\multiplayer_type_select\\connected\\pregame\\connected_pregame_screen"
+#define HOST_SETUP_ROWS 11
+#define HOST_EDIT_ROWS 10
+/* a message (a game type not saved) shows this long in place of the help */
+#define HOST_MESSAGE_DURATION 4000
+/* the internet play ports offered (0: the game picks one), and the one set */
+static long const host_ports[] = { 0, 2302, 2303, 2304, 2305, 2306, 2307, 2308, 2309, 2310 };
+static char const *const host_team_changes[] = { "balanced", "allow", "off" };
+
+enum
+{
+	_host_row_name,
+	_host_row_maximum_players,
+	_host_row_public,
+	_host_row_password,
+	_host_row_port,
+	_host_row_game_type,
+	_host_row_team_change,
+	_host_row_team_change_margin,
+	_host_row_chat_filter,
+	_host_row_aim_assist,
+	_host_row_start,
+	NUMBER_OF_HOST_ROWS
+};
+
+static wchar_t const *const host_row_labels[NUMBER_OF_HOST_ROWS] =
+{
+	L"GAME NAME:", L"MAX PLAYERS:", L"PUBLIC LOBBY:", L"PASSWORD:", L"PORT:", L"GAME TYPE:", L"TEAM SWITCHING:",
+	L"TEAM SWITCH MARGIN:", L"CHAT FILTER:", L"MOUSE AIM ASSIST:", L"START GAME",
+};
+
+/* the editor's pages, by their screens' names */
+enum
+{
+	_host_page_general,
+	_host_page_players,
+	_host_page_weapons,
+	_host_page_vehicles,
+	_host_page_indicators,
+	NUMBER_OF_HOST_PAGES,
+	/* (GAME SETUP's) */
+	_host_page_setup = NUMBER_OF_HOST_PAGES
+};
+
+static char const *const host_page_screens[NUMBER_OF_HOST_PAGES] =
+{
+	"edit_general", "edit_players", "edit_weapons", "edit_vehicles", "edit_indicators",
+};
+
+static struct
+{
+	/* the game the choices are for (a new one starts again from config.toml) */
+	void *server;
+	short team_change;
+	short team_change_margin;
+	boolean chat_filter;
+	boolean block_aim_assist;
+	long port;
+	/* the rows shown, in their places */
+	short rows[64];
+	short row_count;
+	short first;
+	short focused;
+	/* a message in place of the help, and when it was given */
+	wchar_t message[128];
+	unsigned long message_time;
+#ifdef HALO_GAME_BROWSER
+	/* the game type being edited, and its base's values */
+	boolean editing;
+	struct server_gametype gametype;
+	int base_cached;
+	struct game_variant base_variant;
+	struct game_variant_options base_options;
+#endif
+} host_setup = { NULL, 0, 1, TRUE, FALSE, 0, { 0 }, 0, 0, 0, { 0 }, 0 };
+
+long config_integer(char const *name);
+
+static short host_page(struct widget_instance *list)
+{
+	short page;
+
+	for (page = 0; list && list->parent && page < NUMBER_OF_HOST_PAGES; page++)
+	{
+		if (!strcmp(list->parent->name, host_page_screens[page]))
+			return page;
+	}
+	return _host_page_setup;
+}
+
+static void host_message(wchar_t const *text)
+{
+	ustrncpy(host_setup.message, text, NUMBEROF(host_setup.message) - 1);
+	host_setup.message[NUMBEROF(host_setup.message) - 1] = 0;
+	host_setup.message_time = system_milliseconds();
+	ui_play_audio_feedback_sound(SOUND_ERROR);
+}
+
+/* a value's text in a spinner of ours (its arrows drawn: it has no strings
+of its own) */
+static void host_value_set(struct widget_instance *spinner, wchar_t const *text)
+{
+	if (!spinner)
+		return;
+	if (!spinner->parameters.list.item_text)
+	{
+		spinner->parameters.list.item_text = ui_widget_realloc(NULL, ROW_TEXT_LENGTH * sizeof(wchar_t), __FILE__,
+			__LINE__);
+	}
+	if (spinner->parameters.list.item_text)
+	{
+		ustrncpy(spinner->parameters.list.item_text, text, ROW_TEXT_LENGTH - 1);
+		spinner->parameters.list.item_text[ROW_TEXT_LENGTH - 1] = 0;
+	}
+}
+
+/* ---- GAME SETUP's rows */
+
+/* the choices of config.toml (each new game: the settings' own) */
+static void host_setup_read(void)
+{
+	char text[32];
+	short index;
+
+	host_setup.team_change = 0;
+	if (config_text("network.team_change", text, sizeof(text)))
+	{
+		for (index = 0; index < NUMBEROF(host_team_changes); index++)
+		{
+			if (!strcmp(text, host_team_changes[index]))
+				host_setup.team_change = index;
+		}
+	}
+	host_setup.team_change_margin = (short)PIN(config_integer("network.team_change_margin"), 0, 16);
+	host_setup.chat_filter = config_boolean("network.chat_filter") != 0;
+	host_setup.block_aim_assist = config_boolean("network.block_mouse_aim_assist") != 0;
+	host_setup.port = PIN(config_integer("network.tunnel_port"), 0, 65535);
+}
+
+/* whether the game is listed (an internet game's choice) */
+static boolean host_listing_shown(void)
+{
+	return config_boolean("network.online") && config_boolean("network.public_lobby");
+}
+
+static void host_setup_rows(void)
+{
+	short row;
+
+	host_setup.row_count = 0;
+	for (row = 0; row < NUMBER_OF_HOST_ROWS; row++)
+	{
+		if ((row == _host_row_public && !host_listing_shown()) ||
+			(row == _host_row_password && (!host_listing_shown() || multiplayer.game_private)) ||
+			(row == _host_row_team_change_margin && host_setup.team_change != 0))
+		{
+			continue;
+		}
+		host_setup.rows[host_setup.row_count++] = row;
+	}
+}
+
+/* the game's gametype: its name and type */
+static void host_game_type_text(wchar_t *text)
+{
+	struct game_variant variant;
+	wchar_t name[NUMBEROF(variant.human_readable_game_description) + 1];
+
+	if (!player_ui_game_variant_specified(&variant))
+	{
+		ustrncpy(text, L"NONE", ROW_TEXT_LENGTH - 1);
+		return;
+	}
+	ustrncpy(name, variant.human_readable_game_description, NUMBEROF(name) - 1);
+	name[NUMBEROF(name) - 1] = 0;
+	usnprintf(text, ROW_TEXT_LENGTH - 1, L"%s", name);
+	text[ROW_TEXT_LENGTH - 1] = 0;
+}
+
+/* a row's value (and whether left and right change it) */
+static boolean host_setup_value(short row, wchar_t *text)
+{
+	char ascii[TEXT_FIELD_LENGTH];
+	short index;
+
+	text[0] = 0;
+	switch (row)
+	{
+	case _host_row_maximum_players:
+		usnprintf(text, ROW_TEXT_LENGTH - 1, L"%d",
+			maximum_players[PIN(multiplayer.maximum_players_index, 0, NUMBEROF(maximum_players) - 1)]);
+		return TRUE;
+	case _host_row_public:
+		ustrncpy(text, multiplayer.game_private ? L"OFF" : L"ON", ROW_TEXT_LENGTH - 1);
+		return TRUE;
+	case _host_row_password:
+		for (index = 0; multiplayer.game_password[index] && index < ROW_TEXT_LENGTH - 1; index++)
+			text[index] = L'*';
+		text[index] = 0;
+		if (!index)
+			ustrncpy(text, L"NONE", ROW_TEXT_LENGTH - 1);
+		return FALSE;
+	case _host_row_port:
+		if (host_setup.port)
+			usnprintf(text, ROW_TEXT_LENGTH - 1, L"%ld", host_setup.port);
+		else
+			ustrncpy(text, L"AUTO", ROW_TEXT_LENGTH - 1);
+		return TRUE;
+	case _host_row_game_type:
+		host_game_type_text(text);
+		return TRUE;
+	case _host_row_team_change:
+		ustrncpy(text, host_setup.team_change == 0 ? L"BALANCED" : host_setup.team_change == 1 ? L"ALLOW" : L"OFF",
+			ROW_TEXT_LENGTH - 1);
+		return TRUE;
+	case _host_row_team_change_margin:
+		usnprintf(text, ROW_TEXT_LENGTH - 1, L"%d", host_setup.team_change_margin);
+		return TRUE;
+	case _host_row_chat_filter:
+		ustrncpy(text, host_setup.chat_filter ? L"ON" : L"OFF", ROW_TEXT_LENGTH - 1);
+		return TRUE;
+	case _host_row_aim_assist:
+		ustrncpy(text, host_setup.block_aim_assist ? L"BLOCKED" : L"ALLOWED", ROW_TEXT_LENGTH - 1);
+		return TRUE;
+	case _host_row_name:
+		wide_to_text(multiplayer.game_name, ascii, sizeof(ascii));
+		for (index = 0; ascii[index] && index < ROW_TEXT_LENGTH - 1; index++)
+			text[index] = (wchar_t)(unsigned char)ascii[index];
+		text[index] = 0;
+		return FALSE;
+	}
+	return FALSE;
+}
+
+static wchar_t const *host_setup_help(short row)
+{
+	switch (row)
+	{
+	case _host_row_name:
+		return L"The game's name in the game list.";
+	case _host_row_maximum_players:
+		return L"The most players allowed in the game.";
+	case _host_row_public:
+		return multiplayer.game_private ? L"Only players with your invite link can join." :
+			L"Anyone can join from Online Games.";
+	case _host_row_password:
+		return L"Required to join from the game list.";
+	case _host_row_port:
+		return L"The UDP port for internet play. Applies on restart.";
+	case _host_row_game_type:
+		return L"Choose the game type. Enter edits it.";
+	case _host_row_team_change:
+		return host_setup.team_change == 0 ? L"Players can change teams within the margin." :
+			host_setup.team_change == 1 ? L"Players can change teams at any time." :
+			L"Players keep the team they joined.";
+	case _host_row_team_change_margin:
+		return L"How uneven the teams can get.";
+	case _host_row_chat_filter:
+		return L"Block chat lines with blocked words.";
+	case _host_row_aim_assist:
+		return host_setup.block_aim_assist ? L"Aim assist is off for mouse players." :
+			L"Each player's own aim assist setting decides.";
+	case _host_row_start:
+		return L"Open the lobby.";
+	}
+	return L"";
+}
+
+static short host_step(short value, short count, short direction)
+{
+	return (short)((value + direction + count) % count);
+}
+
+/* left and right on GAME SETUP's row: TRUE if it changed */
+static boolean host_setup_change(short row, short direction)
+{
+	short index;
+
+	switch (row)
+	{
+	case _host_row_maximum_players:
+		multiplayer.maximum_players_index = (short)PIN(multiplayer.maximum_players_index + direction, 0,
+			NUMBEROF(maximum_players) - 1);
+		return TRUE;
+	case _host_row_public:
+		multiplayer.game_private = !multiplayer.game_private;
+		p2p_set_hosting_public(!multiplayer.game_private);
+		return TRUE;
+	case _host_row_port:
+		for (index = 0; index < NUMBEROF(host_ports) - 1 && host_ports[index] < host_setup.port; index++)
+			;
+		if (host_ports[index] != host_setup.port && direction > 0)
+			index--;
+		host_setup.port = host_ports[host_step(index, NUMBEROF(host_ports), direction)];
+		return TRUE;
+	case _host_row_game_type:
+	{
+		long gametypes[MAXIMUM_GAMETYPES];
+		short last;
+		short count = ui_widget_port_gametypes(gametypes, MAXIMUM_GAMETYPES, &last);
+
+		return count > 0 && ui_widget_port_gametype_choose(gametypes[host_step(last, count, direction)]);
+	}
+	case _host_row_team_change:
+		host_setup.team_change = host_step(host_setup.team_change, NUMBEROF(host_team_changes), direction);
+		return TRUE;
+	case _host_row_team_change_margin:
+		host_setup.team_change_margin = (short)PIN(host_setup.team_change_margin + direction, 0, 16);
+		return TRUE;
+	case _host_row_chat_filter:
+		host_setup.chat_filter = !host_setup.chat_filter;
+		return TRUE;
+	case _host_row_aim_assist:
+		host_setup.block_aim_assist = !host_setup.block_aim_assist;
+		return TRUE;
+	}
+	return FALSE;
+}
+
+static void host_write(char const *name, char const *value)
+{
+	char text[64];
+
+	if (config_text(name, text, sizeof(text)) && !strcmp(text, value))
+		return;
+	if (!config_write(name, value))
+		platform_log("menus: could not write %s to config.toml", name);
+}
+
+/* START GAME: the game's settings, the host's rules written, then the lobby */
+static boolean host_setup_start(struct widget_instance *widget, boolean *widget_deleted)
+{
+	char text[16];
+
+	if (text_field_editing(NULL))
+		text_field_end(TRUE);
+	if (!global_network_game_server_get())
+		return campaign_fail();
+	network_game_server_port_set_settings(multiplayer.game_name,
+		maximum_players[PIN(multiplayer.maximum_players_index, 0, NUMBEROF(maximum_players) - 1)]);
+	p2p_set_hosting_public(host_listing_shown() && !multiplayer.game_private);
+	p2p_set_hosting_password(host_listing_shown() && !multiplayer.game_private ? multiplayer.game_password : NULL);
+	host_write("network.team_change", host_team_changes[PIN(host_setup.team_change, 0, 2)]);
+	snprintf(text, sizeof(text), "%d", host_setup.team_change_margin);
+	host_write("network.team_change_margin", text);
+	host_write("network.chat_filter", host_setup.chat_filter ? "true" : "false");
+	host_write("network.block_mouse_aim_assist", host_setup.block_aim_assist ? "true" : "false");
+	snprintf(text, sizeof(text), "%ld", host_setup.port);
+	host_write("network.tunnel_port", text);
+	ui_play_audio_feedback_sound(SOUND_FORWARD);
+	return ui_widget_port_open(widget, HOST_LOBBY_SCREEN, widget_deleted);
+}
+
+/* X: the host's rules as config.toml has them by default */
+static void host_setup_defaults(void)
+{
+	char text[32];
+	short index;
+
+	host_setup.team_change = 0;
+	if (config_default("network.team_change", text, sizeof(text)))
+	{
+		for (index = 0; index < NUMBEROF(host_team_changes); index++)
+		{
+			if (strstr(text, host_team_changes[index]))
+				host_setup.team_change = index;
+		}
+	}
+	host_setup.team_change_margin = config_default("network.team_change_margin", text, sizeof(text)) ?
+		(short)PIN(atoi(text), 0, 16) : 1;
+	host_setup.chat_filter = !config_default("network.chat_filter", text, sizeof(text)) || !strcmp(text, "true");
+	host_setup.block_aim_assist = config_default("network.block_mouse_aim_assist", text, sizeof(text)) &&
+		!strcmp(text, "true");
+	host_setup.port = config_default("network.tunnel_port", text, sizeof(text)) ? atol(text) : 0;
+	multiplayer.maximum_players_index = HOST_DEFAULT_MAXIMUM_PLAYERS_INDEX;
+	multiplayer.game_private = !config_boolean("network.host_public");
+	p2p_set_hosting_public(!multiplayer.game_private);
+}
+
+/* ---- the game type editor's rows */
+
+#ifdef HALO_GAME_BROWSER
+
+/* each page's settings, in order (those of another game engine's, and those
+of no use with the others' choices, are not shown: host_edit_shown) */
+static short const host_page_fields[NUMBER_OF_HOST_PAGES][24] =
+{
+	{
+		SERVER_GAMETYPE_NAME, SERVER_GAMETYPE_BASE, SERVER_GAMETYPE_SCORE_LIMIT, SERVER_GAMETYPE_TIME_LIMIT,
+		SERVER_GAMETYPE_TEAMS, SERVER_GAMETYPE_FRIENDLY_FIRE, SERVER_GAMETYPE_FRIENDLY_FIRE_PENALTY,
+		SERVER_GAMETYPE_AUTO_BALANCE, SERVER_GAMETYPE_CTF_ASSAULT, SERVER_GAMETYPE_CTF_SINGLE_FLAG_TIME,
+		SERVER_GAMETYPE_CTF_FLAG_MUST_RESET, SERVER_GAMETYPE_CTF_FLAG_AT_HOME_TO_SCORE,
+		SERVER_GAMETYPE_CTF_RESET_ON_CAPTURE, SERVER_GAMETYPE_SLAYER_DEATH_BONUS, SERVER_GAMETYPE_SLAYER_KILL_PENALTY,
+		SERVER_GAMETYPE_SLAYER_KILL_IN_ORDER, SERVER_GAMETYPE_KING_MOVING_HILL, SERVER_GAMETYPE_ODDBALL_BALL_TYPE,
+		SERVER_GAMETYPE_ODDBALL_BALLS, SERVER_GAMETYPE_ODDBALL_RANDOM_START, SERVER_GAMETYPE_ODDBALL_SPAWN_DELAY,
+		SERVER_GAMETYPE_ODDBALL_SPEED_WITH_BALL, SERVER_GAMETYPE_ODDBALL_TRAIT_WITH_BALL, NONE
+	},
+	{
+		SERVER_GAMETYPE_LIVES, SERVER_GAMETYPE_HEALTH, SERVER_GAMETYPE_SHIELDS, SERVER_GAMETYPE_RESPAWN_TIME,
+		SERVER_GAMETYPE_RESPAWN_GROWTH, SERVER_GAMETYPE_SUICIDE_PENALTY, SERVER_GAMETYPE_ODD_MAN_OUT,
+		SERVER_GAMETYPE_INVISIBLE, NONE
+	},
+	{
+		SERVER_GAMETYPE_WEAPON_SET, SERVER_GAMETYPE_LOADOUT, SERVER_GAMETYPE_PRIMARY_WEAPON,
+		SERVER_GAMETYPE_SECONDARY_WEAPON, SERVER_GAMETYPE_STARTING_EQUIPMENT, SERVER_GAMETYPE_MAP_WEAPONS,
+		SERVER_GAMETYPE_INFINITE_GRENADES, NONE
+	},
+	{
+		SERVER_GAMETYPE_VEHICLE_RESPAWN, SERVER_GAMETYPE_RED_VEHICLES, SERVER_GAMETYPE_RED_WARTHOG,
+		SERVER_GAMETYPE_RED_GHOST, SERVER_GAMETYPE_RED_SCORPION, SERVER_GAMETYPE_RED_ROCKET_WARTHOG,
+		SERVER_GAMETYPE_RED_BANSHEE, SERVER_GAMETYPE_RED_GUN_TURRET, SERVER_GAMETYPE_BLUE_VEHICLES,
+		SERVER_GAMETYPE_BLUE_WARTHOG, SERVER_GAMETYPE_BLUE_GHOST, SERVER_GAMETYPE_BLUE_SCORPION,
+		SERVER_GAMETYPE_BLUE_ROCKET_WARTHOG, SERVER_GAMETYPE_BLUE_BANSHEE, SERVER_GAMETYPE_BLUE_GUN_TURRET, NONE
+	},
+	{
+		SERVER_GAMETYPE_OBJECTIVES, SERVER_GAMETYPE_PLAYERS_ON_RADAR, SERVER_GAMETYPE_FRIENDS_ON_SCREEN, NONE
+	},
+};
+
+/* (GENERAL's last, past its room in the table above) */
+static short const host_general_more[] = { SERVER_GAMETYPE_ODDBALL_TRAIT_WITHOUT_BALL, SERVER_GAMETYPE_RACE_TYPE,
+	SERVER_GAMETYPE_RACE_TEAM_SCORING };
+
+/* the base's values, for the settings the game type does not give */
+static void host_edit_base(void)
+{
+	int base = PIN(host_setup.gametype.values[SERVER_GAMETYPE_BASE], 0, server_builtin_count - 1);
+
+	if (host_setup.base_cached == base + 1)
+		return;
+	game_engine_get_variant_by_name(&host_setup.base_variant, server_builtins[base].name);
+	game_variant_options_default(&host_setup.base_variant, &host_setup.base_options);
+	host_setup.base_cached = base + 1;
+}
+
+static int host_edit_engine(void)
+{
+	return server_builtins[PIN(host_setup.gametype.values[SERVER_GAMETYPE_BASE], 0, server_builtin_count - 1)].engine;
+}
+
+/* a setting's value: the game type's, else its base's */
+static long host_edit_value(short field)
+{
+	if (host_setup.gametype.set[field])
+		return host_setup.gametype.values[field];
+	host_edit_base();
+	return server_gametype_variant_value(field, &host_setup.base_variant, &host_setup.base_options);
+}
+
+static boolean host_edit_shown(short field)
+{
+	int engine = server_gametype_fields[field].engine;
+	boolean teams = host_edit_engine() == SERVER_ENGINE_CTF || host_edit_value(SERVER_GAMETYPE_TEAMS);
+
+	if (engine && engine != host_edit_engine())
+		return FALSE;
+	switch (field)
+	{
+	case SERVER_GAMETYPE_FRIENDLY_FIRE:
+	case SERVER_GAMETYPE_FRIENDLY_FIRE_PENALTY:
+	case SERVER_GAMETYPE_AUTO_BALANCE:
+	case SERVER_GAMETYPE_BLUE_VEHICLES:
+		return teams;
+	case SERVER_GAMETYPE_PRIMARY_WEAPON:
+	case SERVER_GAMETYPE_SECONDARY_WEAPON:
+		return host_edit_value(SERVER_GAMETYPE_LOADOUT) == _loadout_custom;
+	}
+	if (field >= SERVER_GAMETYPE_RED_WARTHOG && field <= SERVER_GAMETYPE_RED_GUN_TURRET)
+		return host_edit_value(SERVER_GAMETYPE_RED_VEHICLES) == SERVER_VEHICLES_CUSTOM;
+	if (field >= SERVER_GAMETYPE_BLUE_WARTHOG && field <= SERVER_GAMETYPE_BLUE_GUN_TURRET)
+		return teams && host_edit_value(SERVER_GAMETYPE_BLUE_VEHICLES) == SERVER_VEHICLES_CUSTOM;
+	return TRUE;
+}
+
+static void host_edit_rows(short page)
+{
+	short index;
+
+	host_setup.row_count = 0;
+	for (index = 0; host_page_fields[page][index] != NONE && index < NUMBEROF(host_page_fields[page]); index++)
+	{
+		if (host_edit_shown(host_page_fields[page][index]))
+			host_setup.rows[host_setup.row_count++] = host_page_fields[page][index];
+	}
+	for (index = 0; page == _host_page_general && index < NUMBEROF(host_general_more); index++)
+	{
+		if (host_edit_shown(host_general_more[index]))
+			host_setup.rows[host_setup.row_count++] = host_general_more[index];
+	}
+}
+
+/* (labels shorter than the table's, where its are long) */
+static wchar_t const *host_edit_label(short field, wchar_t *text)
+{
+	char const *label = server_gametype_fields[field].label;
+	short length = 0;
+
+	switch (field)
+	{
+	case SERVER_GAMETYPE_NAME: return L"NAME:";
+	case SERVER_GAMETYPE_BASE: return L"BASE GAME TYPE:";
+	case SERVER_GAMETYPE_SCORE_LIMIT:
+		return host_edit_engine() == SERVER_ENGINE_CTF ? L"CAPTURES TO WIN:" :
+			host_edit_engine() == SERVER_ENGINE_RACE ? L"LAPS TO WIN:" :
+			host_edit_engine() == SERVER_ENGINE_SLAYER ? L"KILLS TO WIN:" : L"MINUTES TO WIN:";
+	case SERVER_GAMETYPE_PLAYERS_ON_RADAR: return L"PLAYERS ON TRACKER:";
+	case SERVER_GAMETYPE_OBJECTIVES: return L"OBJECTIVES:";
+	case SERVER_GAMETYPE_RED_VEHICLES: return host_edit_value(SERVER_GAMETYPE_TEAMS) ? L"RED VEHICLES:" : L"VEHICLES:";
+	case SERVER_GAMETYPE_BLUE_VEHICLES: return L"BLUE VEHICLES:";
+	}
+	for (; label && *label && length < ROW_TEXT_LENGTH - 2; label++)
+	{
+		if (*label != '\'')
+			text[length++] = (wchar_t)(*label >= 'a' && *label <= 'z' ? *label - 'a' + 'A' : *label);
+	}
+	text[length++] = L':';
+	text[length] = 0;
+	return text;
+}
+
+/* a setting's value as shown (and whether left and right change it) */
+static boolean host_edit_value_text(short field, wchar_t *text)
+{
+	struct server_gametype_field const *description = &server_gametype_fields[field];
+	long value = host_edit_value(field);
+	short index, length = 0;
+
+	text[0] = 0;
+	if (field == SERVER_GAMETYPE_NAME)
+	{
+		for (index = 0; host_setup.gametype.title[index] && index < ROW_TEXT_LENGTH - 1; index++)
+			text[index] = (wchar_t)(unsigned char)host_setup.gametype.title[index];
+		text[index] = 0;
+		return FALSE;
+	}
+	switch (description->kind)
+	{
+	case SERVER_FIELD_BOOLEAN:
+		ustrncpy(text, value ? L"ON" : L"OFF", ROW_TEXT_LENGTH - 1);
+		break;
+	case SERVER_FIELD_CHOICE:
+		for (index = 0; index < description->choice_count; index++)
+		{
+			char const *name = description->choices[index].name;
+
+			if (description->choices[index].value != value)
+				continue;
+			for (; *name && length < ROW_TEXT_LENGTH - 1; name++)
+				text[length++] = *name == '_' ? L' ' : (wchar_t)(*name >= 'a' && *name <= 'z' ? *name - 'a' + 'A' : *name);
+			text[length] = 0;
+		}
+		break;
+	default:
+		if (!value && field == SERVER_GAMETYPE_LIVES)
+			ustrncpy(text, L"UNLIMITED", ROW_TEXT_LENGTH - 1);
+		else if (!value && field == SERVER_GAMETYPE_TIME_LIMIT)
+			ustrncpy(text, L"NONE", ROW_TEXT_LENGTH - 1);
+		else if (!value && field == SERVER_GAMETYPE_VEHICLE_RESPAWN)
+			ustrncpy(text, L"NEVER", ROW_TEXT_LENGTH - 1);
+		else if (!value && field == SERVER_GAMETYPE_CTF_SINGLE_FLAG_TIME)
+			ustrncpy(text, L"OFF", ROW_TEXT_LENGTH - 1);
+		else if (description->unit && !strcmp(description->unit, "percent"))
+			usnprintf(text, ROW_TEXT_LENGTH - 1, L"%ld%%", value);
+		else if (description->unit && !strncmp(description->unit, "seconds", 7))
+			usnprintf(text, ROW_TEXT_LENGTH - 1, L"%ld SEC", value);
+		else if (description->unit && !strncmp(description->unit, "minutes", 7))
+			usnprintf(text, ROW_TEXT_LENGTH - 1, L"%ld MIN", value);
+		else
+			usnprintf(text, ROW_TEXT_LENGTH - 1, L"%ld", value);
+		break;
+	}
+	/* (capture the flag is played in teams) */
+	return !(field == SERVER_GAMETYPE_TEAMS && host_edit_engine() == SERVER_ENGINE_CTF);
+}
+
+static void host_edit_help(short field, wchar_t *text, short size)
+{
+	static struct
+	{
+		short field;
+		wchar_t const *help;
+	} const helps[] =
+	{
+		{ SERVER_GAMETYPE_NAME, L"The game type's name, up to 11 characters." },
+		{ SERVER_GAMETYPE_BASE, L"The built-in game type it starts from." },
+		{ SERVER_GAMETYPE_SCORE_LIMIT, L"The score that wins the game, up to 9999." },
+		{ SERVER_GAMETYPE_TIME_LIMIT, L"How long the game lasts." },
+		{ SERVER_GAMETYPE_TEAMS, L"Red against blue, or everyone for themselves." },
+		{ SERVER_GAMETYPE_LIVES, L"Lives per player." },
+		{ SERVER_GAMETYPE_SHIELDS, L"No shields: one headshot kills." },
+		{ SERVER_GAMETYPE_LOADOUT, L"The starting weapons." },
+		{ SERVER_GAMETYPE_PRIMARY_WEAPON, L"Everyone spawns with this weapon." },
+		{ SERVER_GAMETYPE_SECONDARY_WEAPON, L"Everyone spawns with this second weapon." },
+		{ SERVER_GAMETYPE_MAP_WEAPONS, L"Weapons placed on the map." },
+		{ SERVER_GAMETYPE_RED_VEHICLES, L"Red's vehicles." },
+		{ SERVER_GAMETYPE_BLUE_VEHICLES, L"Blue's vehicles." },
+		{ SERVER_GAMETYPE_PLAYERS_ON_RADAR, L"Which players the motion tracker shows." },
+	};
+	struct server_gametype_field const *description = &server_gametype_fields[field];
+	short index;
+
+	text[0] = 0;
+	for (index = 0; index < NUMBEROF(helps); index++)
+	{
+		if (helps[index].field == field)
+			ustrncpy(text, helps[index].help, size - 1);
+	}
+	if (!text[0])
+	{
+		short length = 0;
+		char const *part;
+
+		for (part = description->label; part && *part && length < size - 1; part++)
+			text[length++] = (wchar_t)*part;
+		for (part = description->unit ? ": " : ""; *part && length < size - 1; part++)
+			text[length++] = (wchar_t)*part;
+		for (part = description->unit ? description->unit : ""; *part && length < size - 1; part++)
+			text[length++] = (wchar_t)*part;
+		if (length < size - 1)
+			text[length++] = L'.';
+		text[length] = 0;
+	}
+}
+
+/* the next value of a setting left (-1) or right (1) */
+static long host_edit_step(short field, long value, short direction)
+{
+	struct server_gametype_field const *description = &server_gametype_fields[field];
+	long size = direction > 0 ? value : value - 1;
+	long step = 1;
+	short index;
+
+	switch (description->kind)
+	{
+	case SERVER_FIELD_BOOLEAN:
+		return !value;
+	case SERVER_FIELD_CHOICE:
+		for (index = 0; index < description->choice_count && description->choices[index].value != value; index++)
+			;
+		index = index >= description->choice_count ? 0 : host_step(index, (short)description->choice_count, direction);
+		return description->choices[index].value;
+	}
+	if (field == SERVER_GAMETYPE_HEALTH)
+		step = 25;
+	else if (field == SERVER_GAMETYPE_SCORE_LIMIT)
+		step = size < 10 ? 1 : size < 50 ? 5 : size < 200 ? 10 : size < 1000 ? 50 : 500;
+	else if (field == SERVER_GAMETYPE_TIME_LIMIT)
+		step = size < 10 ? 1 : size < 60 ? 5 : size < 240 ? 30 : 60;
+	else if (description->unit && !strncmp(description->unit, "seconds", 7))
+		step = size < 10 ? 1 : size < 60 ? 5 : size < 300 ? 30 : 300;
+	else if (field == SERVER_GAMETYPE_LIVES)
+		step = size < 10 ? 1 : 5;
+	/* (on the steps' marks, then by them) */
+	value = direction > 0 ? (value / step + 1) * step : ((value + step - 1) / step - 1) * step;
+	return PIN(value, description->minimum, description->maximum);
+}
+
+/* a setting given a value: left out where it is the base's */
+static void host_edit_set(short field, long value)
+{
+	struct server_gametype *gametype = &host_setup.gametype;
+	short other;
+
+	gametype->values[field] = (int)value;
+	gametype->set[field] = TRUE;
+	if (field == SERVER_GAMETYPE_BASE)
+	{
+		/* (another base: the other engines' settings go, and capture the
+		flag's teams) */
+		for (other = 0; other < SERVER_GAMETYPE_FIELDS; other++)
+		{
+			if (server_gametype_fields[other].engine && server_gametype_fields[other].engine != host_edit_engine())
+				gametype->set[other] = FALSE;
+		}
+		if (host_edit_engine() == SERVER_ENGINE_CTF)
+			gametype->set[SERVER_GAMETYPE_TEAMS] = FALSE;
+		return;
+	}
+	gametype->set[field] = FALSE;
+	if (host_edit_value(field) != value)
+		gametype->set[field] = TRUE;
+}
+
+/* the game's gametype edited: as a file of it has it */
+static void host_edit_begin(void)
+{
+	struct game_variant variant;
+	struct game_variant_options options;
+	char title[SERVER_GAMETYPE_TITLE_SIZE];
+	short index;
+
+	/* (none chosen, as when the screen is opened on its own: the one used
+	last, else Slayer) */
+	if (!player_ui_game_variant_specified(&variant))
+	{
+		long gametypes[MAXIMUM_GAMETYPES];
+		short last;
+
+		if (ui_widget_port_gametypes(gametypes, MAXIMUM_GAMETYPES, &last) > 0)
+			ui_widget_port_gametype_choose(gametypes[last]);
+	}
+	if (!player_ui_game_variant_specified(&variant))
+	{
+		game_engine_get_variant_by_name(&variant, "slayer");
+		game_variant_options_default(&variant, &options);
+	}
+	else
+		options = *player_ui_get_game_variant_options();
+	for (index = 0; index < SERVER_GAMETYPE_TITLE_SIZE - 1 && variant.human_readable_game_description[index]; index++)
+	{
+		wchar_t character = variant.human_readable_game_description[index];
+
+		title[index] = character >= 0x20 && character <= 0x7E ? (char)character : '?';
+	}
+	title[index] = 0;
+	server_gametype_variant_capture(&variant, &options, title, &host_setup.gametype);
+	host_setup.base_cached = 0;
+	host_setup.editing = TRUE;
+}
+
+static void host_title_done(char const *text)
+{
+	short length = 0;
+
+	for (; *text && length < SERVER_GAMETYPE_TITLE_SIZE - 1; text++)
+	{
+		if (*text >= 0x20 && *text <= 0x7E)
+			host_setup.gametype.title[length++] = *text;
+	}
+	host_setup.gametype.title[length] = 0;
+	host_setup.gametype.set[SERVER_GAMETYPE_NAME] = length > 0;
+}
+
+/* whether a built-in gametype has the name (saving it would make another of
+the same name) */
+static boolean host_title_built_in(char const *title)
+{
+	long gametypes[MAXIMUM_GAMETYPES];
+	short last;
+	short count = ui_widget_port_gametypes(gametypes, MAXIMUM_GAMETYPES, &last);
+	short index;
+
+	for (index = 0; index < count; index++)
+	{
+		wchar_t name[MAX_GAMENAME];
+		char shown[SERVER_GAMETYPE_TITLE_SIZE];
+
+		if (!((unsigned long)gametypes[index] & PLAYLIST_READ_ONLY_BIT) ||
+			!playlist_profile_get_display_name(gametypes[index], name))
+		{
+			continue;
+		}
+		wide_to_text(name, shown, sizeof(shown));
+		if (!_stricmp(shown, title))
+			return TRUE;
+	}
+	return FALSE;
+}
+
+/* SAVE: the file and the saved gametype, made the game's */
+static boolean host_edit_save(struct widget_instance *widget, boolean *widget_deleted)
+{
+	struct game_variant variant;
+	struct game_variant_options options;
+	short index;
+
+	if (text_field_editing(NULL))
+		text_field_end(TRUE);
+	if (!host_setup.gametype.title[0])
+	{
+		host_message(L"Name the game type first.");
+		return FALSE;
+	}
+	if (host_title_built_in(host_setup.gametype.title))
+	{
+		host_message(L"A built-in game type has that name.");
+		return FALSE;
+	}
+	if (gametype_files_save(&host_setup.gametype, NULL, 0) == NONE)
+	{
+		host_message(L"Could not save the game type. See debug.txt.");
+		return FALSE;
+	}
+	server_gametype_variant_build(&host_setup.gametype, &variant, &options);
+	for (index = 0; index < NUMBEROF(variant.human_readable_game_description) - 1 && host_setup.gametype.title[index];
+		index++)
+	{
+		variant.human_readable_game_description[index] = (wchar_t)(unsigned char)host_setup.gametype.title[index];
+	}
+	for (; index < NUMBEROF(variant.human_readable_game_description); index++)
+		variant.human_readable_game_description[index] = 0;
+	ui_widget_port_game_variant_set(&variant, &options);
+	host_setup.editing = FALSE;
+	ui_play_audio_feedback_sound(SOUND_FORWARD);
+	ui_widget_port_go_back(widget);
+	*widget_deleted = TRUE;
+	return TRUE;
+}
+
+#endif
+
+/* ---- the lists */
+
+/* "port host init" (a list's creation): GAME SETUP's choices for a new
+game; the game's gametype for the editor */
+static boolean host_initialize(struct widget_instance *list)
+{
+	void *server = global_network_game_server_get();
+	short page = host_page(list);
+
+	host_setup.first = 0;
+	host_setup.focused = 0;
+	host_setup.message[0] = 0;
+	if (page == _host_page_setup)
+	{
+		if (server != host_setup.server || !server)
+		{
+			host_setup.server = server;
+			host_setup_read();
+			multiplayer.game_private = !config_boolean("network.host_public");
+			multiplayer.game_password[0] = 0;
+			if (!multiplayer.game_name[0] && player_ui_get_active_player_profile_index(0) != NONE)
+			{
+				struct player_profile profile;
+
+				player_ui_get_active_player_profile(0, &profile);
+				ustrncpy(multiplayer.game_name, profile.player_name, NUMBEROF(multiplayer.game_name) - 1);
+			}
+		}
+		/* (none chosen, as when the screen is opened on its own: the one used
+		last) */
+		{
+			struct game_variant variant;
+
+			if (!player_ui_game_variant_specified(&variant))
+			{
+				long gametypes[MAXIMUM_GAMETYPES];
+				short last;
+
+				if (ui_widget_port_gametypes(gametypes, MAXIMUM_GAMETYPES, &last) > 0)
+					ui_widget_port_gametype_choose(gametypes[last]);
+			}
+		}
+		return TRUE;
+	}
+#ifdef HALO_GAME_BROWSER
+	if (!host_setup.editing)
+		host_edit_begin();
+	return TRUE;
+#else
+	return campaign_fail();
+#endif
+}
+
+/* the row in a row widget's place (its list's nth), else NONE */
+static short host_row_of(struct widget_instance *row)
+{
+	short slot = sibling_index(row);
+
+	return slot >= 0 && host_setup.first + slot < host_setup.row_count ? host_setup.rows[host_setup.first + slot] :
+		NONE;
+}
+
+/* "port host update": the rows shown, scrolled to the focus, the help of the
+one with it */
+static void host_update(struct widget_instance *list)
+{
+	struct widget_instance *help = list->parameters.list.extended_description;
+	struct widget_instance *row;
+	short page = host_page(list);
+	short slots = page == _host_page_setup ? HOST_SETUP_ROWS : HOST_EDIT_ROWS;
+	short slot, focused = NONE;
+	wchar_t text[ROW_TEXT_LENGTH * 3];
+
+	if (page == _host_page_setup)
+		host_setup_rows();
+#ifdef HALO_GAME_BROWSER
+	else
+		host_edit_rows(page);
+#endif
+	/* (the focus at an edge scrolls the rows a row; wrapped round, to the
+	other end) */
+	for (row = list->child, slot = 0; row; row = row->next, slot++)
+	{
+		if (row == list->focused_child)
+			focused = slot;
+	}
+	if (focused != NONE && host_setup.row_count > slots)
+	{
+		if (focused == 0 && host_setup.focused == slots - 1)
+			host_setup.first = 0;
+		else if (focused == slots - 1 && host_setup.focused == 0)
+			host_setup.first = (short)(host_setup.row_count - slots);
+		else if (focused == slots - 1 && host_setup.first + slots < host_setup.row_count)
+		{
+			host_setup.first++;
+			focus_row(list, --focused);
+		}
+		else if (focused == 0 && host_setup.first > 0)
+		{
+			host_setup.first--;
+			focus_row(list, ++focused);
+		}
+	}
+	host_setup.first = (short)PIN(host_setup.first, 0, MAX(0, host_setup.row_count - slots));
+	if (focused != NONE && focused >= host_setup.row_count - host_setup.first)
+		focus_row(list, focused = (short)MAX(0, host_setup.row_count - host_setup.first - 1));
+	host_setup.focused = focused;
+	text[0] = 0;
+	for (row = list->child, slot = 0; row; row = row->next, slot++)
+	{
+		short shown = host_setup.first + slot < host_setup.row_count ? host_setup.rows[host_setup.first + slot] : NONE;
+		boolean arrows = FALSE;
+		wchar_t value[ROW_TEXT_LENGTH];
+		wchar_t label[ROW_TEXT_LENGTH];
+
+		row->visible = shown != NONE;
+		if (shown == NONE)
+			continue;
+		value[0] = 0;
+		if (page == _host_page_setup)
+		{
+			text_set(named(row, "label", 0), host_row_labels[shown]);
+			arrows = host_setup_value(shown, value);
+			if (row == list->focused_child)
+				ustrncpy(text, host_setup_help(shown), NUMBEROF(text) - 1);
+		}
+#ifdef HALO_GAME_BROWSER
+		else
+		{
+			text_set(named(row, "label", 0), host_edit_label(shown, label));
+			arrows = host_edit_value_text(shown, value);
+			if (row == list->focused_child)
+				host_edit_help(shown, text, NUMBEROF(text));
+		}
+#endif
+		visible_set(named(row, "value", 0), arrows);
+		visible_set(named(row, "shown", 0), !arrows);
+		if (arrows)
+			host_value_set(named(row, "value", 0), value);
+		else if ((page == _host_page_setup && shown == _host_row_name) ||
+			(page != _host_page_setup && shown == SERVER_GAMETYPE_NAME) || shown == _host_row_password)
+		{
+			char ascii[TEXT_FIELD_LENGTH];
+
+			wide_to_text(value, ascii, sizeof(ascii));
+			text_field_show(named(row, "shown", 0), ascii, text_field_editing(row));
+		}
+		else
+			text_set(named(row, "shown", 0), value);
+	}
+	if (host_setup.message[0] && system_milliseconds() - host_setup.message_time < HOST_MESSAGE_DURATION)
+		ustrncpy(text, host_setup.message, NUMBEROF(text) - 1);
+	text[NUMBEROF(text) - 1] = 0;
+	if (help)
+		text_set_length(help, text, NUMBEROF(text));
+}
+
+static void host_name_done(char const *text)
+{
+	game_name_done(text);
+}
+
+/* "port host row a": a name or password edited, the game type edited, else
+START GAME (the editor's: SAVE) */
+static boolean host_row_a(struct widget_instance *row, boolean *widget_deleted)
+{
+	short shown = host_row_of(row);
+	boolean setup = host_page(row->parent) == _host_page_setup;
+	char text[TEXT_FIELD_LENGTH];
+
+	if (shown == NONE)
+		return FALSE;
+	if (text_field_editing(row))
+	{
+		text_field_end(TRUE);
+		return TRUE;
+	}
+	if (setup && shown == _host_row_name)
+	{
+		wide_to_text(multiplayer.game_name, text, sizeof(text));
+		text_field_begin(row, text, NUMBEROF(multiplayer.game_name) - 1, host_name_done);
+		return TRUE;
+	}
+	if (setup && shown == _host_row_password)
+	{
+		text_field_begin_masked(row, multiplayer.game_password, PASSWORD_LENGTH, server_password_done);
+		return TRUE;
+	}
+#ifdef HALO_GAME_BROWSER
+	if (setup && shown == _host_row_game_type)
+	{
+		host_setup.editing = FALSE;
+		return ui_widget_port_open(row, HOST_EDIT_SCREEN, widget_deleted);
+	}
+	if (!setup && shown == SERVER_GAMETYPE_NAME)
+	{
+		text_field_begin(row, host_setup.gametype.title, SERVER_GAMETYPE_TITLE_SIZE - 1, host_title_done);
+		return TRUE;
+	}
+	if (!setup)
+		return host_edit_save(row, widget_deleted);
+#endif
+	return host_setup_start(row, widget_deleted);
+}
+
+/* "port host row left" and "right" */
+static boolean host_row_change(struct widget_instance *row, short direction)
+{
+	short shown = host_row_of(row);
+	boolean changed = FALSE;
+
+	if (shown == NONE || text_field_editing(NULL))
+		return TRUE;
+	if (host_page(row->parent) == _host_page_setup)
+		changed = host_setup_change(shown, direction);
+#ifdef HALO_GAME_BROWSER
+	else
+	{
+		wchar_t value[ROW_TEXT_LENGTH];
+
+		if (shown != SERVER_GAMETYPE_NAME && host_edit_value_text(shown, value))
+		{
+			host_edit_set(shown, host_edit_step(shown, host_edit_value(shown), direction));
+			changed = TRUE;
+		}
+	}
+#endif
+	if (changed)
+		ui_play_audio_feedback_sound(SOUND_FORWARD);
+	return TRUE;
+}
+
+/* "port host defaults" (X): GAME SETUP's host rules, or the page's settings
+as the base has them */
+static boolean host_defaults(struct widget_instance *list)
+{
+	short page = host_page(list);
+
+	if (page == _host_page_setup)
+		host_setup_defaults();
+#ifdef HALO_GAME_BROWSER
+	else
+	{
+		short index;
+
+		for (index = 0; host_page_fields[page][index] != NONE && index < NUMBEROF(host_page_fields[page]); index++)
+		{
+			if (host_page_fields[page][index] != SERVER_GAMETYPE_NAME &&
+				host_page_fields[page][index] != SERVER_GAMETYPE_BASE)
+			{
+				host_setup.gametype.set[host_page_fields[page][index]] = FALSE;
+			}
+		}
+		for (index = 0; page == _host_page_general && index < NUMBEROF(host_general_more); index++)
+			host_setup.gametype.set[host_general_more[index]] = FALSE;
+	}
+#endif
+	ui_play_audio_feedback_sound(SOUND_FORWARD);
+	return TRUE;
+}
+
+/* "port host edit" (GAME SETUP's Y) */
+static boolean host_edit(struct widget_instance *widget, boolean *widget_deleted)
+{
+#ifdef HALO_GAME_BROWSER
+	if (text_field_editing(NULL))
+		text_field_end(TRUE);
+	host_setup.editing = FALSE;
+	return ui_widget_port_open(widget, HOST_EDIT_SCREEN, widget_deleted);
+#else
+	(void)widget;
+	(void)widget_deleted;
+	return campaign_fail();
+#endif
+}
+
+/* "port host back" (B): a field's edit cancelled, else back (the editor's
+changes left) */
+static boolean host_back(struct widget_instance *widget, boolean *widget_deleted)
+{
+	if (text_field_editing(NULL))
+	{
+		text_field_end(FALSE);
+		return TRUE;
+	}
+#ifdef HALO_GAME_BROWSER
+	host_setup.editing = FALSE;
+#endif
+	ui_play_audio_feedback_sound(SOUND_BACK);
+	ui_widget_port_go_back(widget);
+	*widget_deleted = TRUE;
+	return TRUE;
+}
+
+/* ---------- Delta Profile (port/linux/game/profile_screen.c): the
+Chupathingy menus' screen of it (chupathingy/delta_profile.xml), filled
+with what profile_screen.c says of each section; Profiles' DELTA
+row and its summary, and a Halo profile's "Delta:" line; Gearbox's Select
+Profile's DELTA button, which opens the screen of code */
+
+#define DELTA_PROFILE_SCREEN_NAME "pc\\chupathingy\\delta_profile\\screen"
+#define DELTA_PRIVACY_SCREEN_NAME "pc\\chupathingy\\settings\\delta_privacy_setup_screen"
+#define DELTA_SIDE_LINES 2
+#define DELTA_STATS 6
+#define DELTA_LINES 16
+#define DELTA_SUMMARY_ROWS 5
+/* the clan's emblem on the panel (640 by 480) */
+#define DELTA_EMBLEM_X 294.0f
+#define DELTA_EMBLEM_Y 116.0f
+#define DELTA_EMBLEM_SIZE 60.0f
+/* the help's lines are broken at this many characters */
+#define DELTA_HELP_WIDTH 40
+#define DELTA_HELP_LENGTH 256
+
+#if defined(HALO_GAME_BROWSER) && !defined(HALO_CONSOLE_NO_DELTA_PROFILE)
+
+void browser_screen_open(void);
+
+static struct
+{
+	/* Online Games' Start opened it: back there when it closes */
+	boolean from_online_games;
+	short section;
+} delta_menus;
+
+static void utf8_wide_text(char const *text, wchar_t *wide, long size)
+{
+	unsigned char const *cursor = (unsigned char const *)text;
+	long used = 0;
+
+	while (*cursor && used < size - 1)
+	{
+		unsigned int character;
+
+		if (*cursor < 0x80)
+			character = *cursor++;
+		else if ((*cursor & 0xE0) == 0xC0 && cursor[1])
+		{
+			character = ((cursor[0] & 0x1Fu) << 6) | (cursor[1] & 0x3Fu);
+			cursor += 2;
+		}
+		else if ((*cursor & 0xF0) == 0xE0 && cursor[1] && cursor[2])
+		{
+			character = ((cursor[0] & 0x0Fu) << 12) | ((cursor[1] & 0x3Fu) << 6) | (cursor[2] & 0x3Fu);
+			cursor += 3;
+		}
+		else
+		{
+			character = '?';
+			cursor++;
+			while ((*cursor & 0xC0) == 0x80)
+				cursor++;
+		}
+		wide[used++] = (wchar_t)(character == '\t' ? ' ' : character);
+	}
+	wide[used] = 0;
+}
+
+/* a widget's text from UTF-8 (NULL or empty: none) */
+static void delta_text(struct widget_instance *widget, char const *text)
+{
+	wchar_t wide[ROW_TEXT_LENGTH];
+
+	utf8_wide_text(text ? text : "", wide, ROW_TEXT_LENGTH);
+	text_set(widget, wide);
+}
+
+/* a line's label and value (a tab between them; none: the label alone) */
+static void delta_split(char *text, char const **label, char const **value)
+{
+	char *tab = strchr(text, '\t');
+
+	*label = text;
+	*value = "";
+	if (tab)
+	{
+		*tab = 0;
+		*value = tab + 1;
+	}
+}
+
+/* text broken into lines of DELTA_HELP_WIDTH characters at most, at spaces,
+appended to help */
+static void delta_help_append_width(char *help, char const *text, long width)
+{
+	long used = (long)strlen(help);
+
+	if (used && used < DELTA_HELP_LENGTH - 2)
+	{
+		help[used++] = '\n';
+		help[used] = 0;
+	}
+	while (*text && used < DELTA_HELP_LENGTH - 2)
+	{
+		long length = (long)strlen(text), take = length, at;
+
+		if (length > width)
+		{
+			for (take = width; take > 0 && text[take] != ' '; take--)
+				;
+			if (!take)
+				take = width;
+		}
+		for (at = 0; at < take && used < DELTA_HELP_LENGTH - 2; at++)
+			help[used++] = text[at];
+		text += take;
+		while (*text == ' ')
+			text++;
+		if (*text && used < DELTA_HELP_LENGTH - 2)
+			help[used++] = '\n';
+		help[used] = 0;
+	}
+}
+
+static void delta_help_append(char *help, char const *text)
+{
+	delta_help_append_width(help, text, DELTA_HELP_WIDTH);
+}
+
+/* the widget named prefix and a number ("line_label_" 3) */
+static struct widget_instance *delta_named(struct widget_instance *widget, char const *prefix, short number)
+{
+	char name[64];
+
+	snprintf(name, sizeof(name), "%s%d", prefix, number);
+	return named(widget, name, 0);
+}
+
+/* text cut to at most limit characters (UTF-8), ending "..." when cut */
+static void delta_fit(char const *text, long limit, char *fitted, long size)
+{
+	long characters = 0, at = 0, cut = 0;
+
+	while (text[at])
+	{
+		if (((unsigned char)text[at] & 0xC0) != 0x80)
+		{
+			if (characters == limit - 3)
+				cut = at;
+			characters++;
+		}
+		at++;
+	}
+	if (characters <= limit || limit <= 3)
+	{
+		snprintf(fitted, (size_t)size, "%s", text);
+		return;
+	}
+	while (cut > 0 && text[cut - 1] == ' ')
+		cut--;
+	snprintf(fitted, (size_t)size, "%.*s...", (int)cut, text);
+}
+
+/* a widget's text, cut to fit limit characters */
+static void delta_text_fit(struct widget_instance *widget, char const *text, long limit)
+{
+	char fitted[256];
+
+	delta_fit(text ? text : "", limit, fitted, sizeof(fitted));
+	delta_text(widget, fitted);
+}
+
+/* how many characters UTF-8 text has */
+static long delta_length(char const *text)
+{
+	long count = 0;
+
+	for (; *text; text++)
+		count += ((unsigned char)*text & 0xC0) != 0x80;
+	return count;
+}
+
+/* Profiles' panel: the DELTA row's summary (its Spartan, name and
+rows), or a Halo profile's "Delta:" line */
+static void profile_delta_card(struct widget_instance *description, boolean delta_row)
+{
+	struct profile_line lines[8];
+	char delta_line[96];
+	short count = 0, index, slot = 0;
+	boolean line_shown = !delta_row && profile_list.chosen < profile_list.count &&
+		profile_screen_delta_line(delta_line, sizeof(delta_line));
+	struct widget_instance *widget;
+
+	if (!description)
+		return;
+	visible_set(named(description, "delta_line", 0), line_shown);
+	if (line_shown)
+		delta_text(named(description, "delta_line", 0), delta_line);
+	if ((widget = named(description, "help", 0)) != NULL)
+		widget->parameters.text_box.string_list_index = 0;
+	visible_set(named(description, "help", 0), !delta_row);
+	visible_set(named(description, "player_profile_right_name", 0), !delta_row);
+	visible_set(named(description, "player_profile_right_data", 0), !delta_row);
+	if (delta_row)
+	{
+		struct player_profile active;
+
+		count = profile_screen_summary(lines, NUMBEROF(lines));
+		/* (the Spartan of player 1's profile) */
+		visible_set(named(description, "qtr_screen_profile_color_pic", 0), TRUE);
+		if (player_ui_get_active_player_profile_index(0) != NONE &&
+			(widget = named(description, "qtr_screen_profile_color_pic", 0)) != NULL)
+		{
+			player_ui_get_active_player_profile(0, &active);
+			widget->animation.current_frame_index = (short)PIN(active.primary_color_index, 0, COLOR_COUNT - 1);
+		}
+	}
+	visible_set(named(description, "delta_title", 0), delta_row);
+	if (!delta_row)
+		count = 0;
+	for (index = 0; index < count; index++)
+	{
+		char const *label, *value;
+
+		if (lines[index].style == _profile_line_title)
+		{
+			delta_text_fit(named(description, "delta_title", 0), lines[index].text, 15);
+			continue;
+		}
+		if (slot >= DELTA_SUMMARY_ROWS)
+			break;
+		delta_split(lines[index].text, &label, &value);
+		delta_text_fit(delta_named(description, "delta_label_", slot), label, value[0] ? 14 : 24);
+		delta_text_fit(delta_named(description, "delta_value_", slot), value, 10);
+		slot++;
+	}
+	for (index = 0; index < DELTA_SUMMARY_ROWS; index++)
+	{
+		visible_set(delta_named(description, "delta_label_", index), index < slot);
+		visible_set(delta_named(description, "delta_value_", index), index < slot);
+	}
+}
+
+
+/* ---- the screen (chupathingy/delta_profile.xml) */
+
+static void delta_section_text(short row, wchar_t *text)
+{
+	utf8_wide_text(profile_screen_section_name(row), text, ROW_TEXT_LENGTH);
+}
+
+/* a slot of the panel: its label, a recent game's place, and its value at
+the right; the label quiet (grey), a warning (amber) or text (white) */
+static void delta_slot(struct widget_instance *description, short slot, char const *label, char const *place,
+	char const *value, short style)
+{
+	struct widget_instance *widget = delta_named(description, "line_label_", slot);
+	long value_length = delta_length(value);
+
+	/* (the label's room: the panel's 40 characters, less the value's and
+	the place's) */
+	delta_text_fit(widget, label, place[0] ? 20 : value[0] ? MAX(12, 38 - value_length) : 40);
+	delta_text_fit(delta_named(description, "line_place_", slot), place, 11);
+	delta_text_fit(delta_named(description, "line_value_", slot), value, place[0] ? 6 : 20);
+	if (style == _profile_line_dim)
+		text_color_set(widget, 0.56f, 0.65f, 0.78f);
+	else if (style == _profile_line_warn)
+		text_color_set(widget, 0.94f, 0.63f, 0.44f);
+	else if (style == _profile_line_text || style == _profile_line_title)
+		text_color_set(widget, 1.0f, 1.0f, 1.0f);
+	else
+		text_color_set(widget, 0.157f, 0.588f, 1.0f);
+}
+
+/* the panel's slots from slot on, filled with lines: a label and its value
+in one slot, a recent game's map, place and kills-deaths in theirs, text
+broken over as many slots as it takes. The next slot */
+static short delta_fill_lines(struct widget_instance *description, short slot, struct profile_line *lines, short count)
+{
+	short index;
+
+	for (index = 0; index < count && slot < DELTA_LINES; index++)
+	{
+		struct profile_line *line = &lines[index];
+		char const *label, *value;
+
+		if (line->style == _profile_line_game || line->style == _profile_line_head)
+		{
+			/* (map, type, place, kills-deaths: the type left out here) */
+			char *columns[4] = { line->text, "", "", "" };
+			short column;
+
+			for (column = 1; column < 4; column++)
+			{
+				char *tab = strchr(columns[column - 1], '\t');
+
+				if (!tab)
+					break;
+				*tab = 0;
+				columns[column] = tab + 1;
+			}
+			delta_slot(description, slot++, columns[0], columns[2], columns[3], line->style);
+			continue;
+		}
+		if (line->style == _profile_line_tile)
+			continue;
+		delta_split(line->text, &label, &value);
+		if (value[0] || delta_length(label) <= 40)
+		{
+			delta_slot(description, slot++, label, "", value, line->style);
+			continue;
+		}
+		{
+			/* (over as many slots as it takes) */
+			char wrapped[DELTA_HELP_LENGTH] = "";
+			char *each, *next;
+
+			delta_help_append(wrapped, label);
+			for (each = wrapped; each && *each && slot < DELTA_LINES; each = next)
+			{
+				next = strchr(each, '\n');
+				if (next)
+					*next++ = 0;
+				delta_slot(description, slot++, each, "", "", line->style);
+			}
+		}
+	}
+	return slot;
+}
+
+/* "port delta profile update" (the sections' list's): the sections, and
+the one chosen in the panel */
+static void delta_profile_update(struct widget_instance *list)
+{
+	struct widget_instance *description = list->parameters.list.extended_description;
+	struct profile_line lines[24];
+	short section = focused_row(list), count, index, side = 0, slot = 0, first = 0, stat = 0;
+	boolean beside, clan;
+	struct widget_instance *row;
+
+	rows_update(list, profile_screen_section_count(), delta_section_text);
+	/* (Linked Copies and Roles greyed while there is no profile to show) */
+	for (row = list->child, index = 0; row && index < profile_screen_section_count(); row = row->next, index++)
+	{
+		if (!profile_screen_section_open(index))
+			text_color_set(named(row, "list_item_text", 0), 0.34f, 0.41f, 0.54f);
+	}
+	if (section == NONE)
+		section = delta_menus.section;
+	delta_menus.section = section;
+	if (!description)
+		return;
+	count = profile_screen_panel_lines(section, lines, NUMBEROF(lines));
+	delta_text(named(description, "kind", 0), profile_screen_section_name(section));
+	/* the overview of a profile: the Spartan; beside it the name, handle,
+	badges and record; the recent games under them */
+	beside = section == 0 && count > 1 && lines[0].style == _profile_line_title && lines[1].style == _profile_line_sub;
+	visible_set(named(description, "qtr_screen_profile_color_pic", 0), beside);
+	visible_set(named(description, "title", 0), beside);
+	/* the clan: its emblem (drawn over the panel: profile_screen.c), its
+	name, tag and motto beside it, its members under them */
+	clan = section == PROFILE_SCREEN_SECTION_CLAN && count > 1 && lines[0].style == _profile_line_title &&
+		lines[1].style == _profile_line_sub;
+	visible_set(named(description, "clan_title", 0), clan);
+	if (!clan)
+		profile_screen_card_emblem(0.0f, 0.0f, 0.0f);
+	for (index = 0; index < DELTA_SIDE_LINES; index++)
+		visible_set(delta_named(description, "clan_side_", index), clan);
+	if (clan)
+	{
+		short side_line = 0;
+
+		delta_text_fit(named(description, "clan_title", 0), lines[0].text, 20);
+		for (first = 1; first < count && (lines[first].style == _profile_line_sub || lines[first].style == _profile_line_badges);
+			first++)
+		{
+			if (side_line < DELTA_SIDE_LINES)
+				delta_text_fit(delta_named(description, "clan_side_", side_line++), lines[first].text, 33);
+		}
+		for (index = side_line; index < DELTA_SIDE_LINES; index++)
+			delta_text(delta_named(description, "clan_side_", index), "");
+		profile_screen_card_emblem(DELTA_EMBLEM_X, DELTA_EMBLEM_Y, DELTA_EMBLEM_SIZE);
+		/* (the members under the emblem) */
+		slot = 4;
+	}
+	if (beside)
+	{
+		struct player_profile active;
+		struct widget_instance *picture = named(description, "qtr_screen_profile_color_pic", 0);
+
+		if (picture && player_ui_get_active_player_profile_index(0) != NONE)
+		{
+			player_ui_get_active_player_profile(0, &active);
+			picture->animation.current_frame_index = (short)PIN(active.primary_color_index, 0, COLOR_COUNT - 1);
+		}
+		delta_text_fit(named(description, "title", 0), lines[0].text, 15);
+		for (first = 1; first < count && (lines[first].style == _profile_line_sub || lines[first].style == _profile_line_badges ||
+			lines[first].style == _profile_line_tile); first++)
+		{
+			if (lines[first].style == _profile_line_tile)
+			{
+				char const *label, *value;
+
+				if (stat >= DELTA_STATS)
+					continue;
+				delta_split(lines[first].text, &label, &value);
+				delta_text(delta_named(description, "stat_label_", stat), label);
+				delta_text_fit(delta_named(description, "stat_value_", stat), value, 12);
+				stat++;
+			}
+			else if (side < DELTA_SIDE_LINES)
+				delta_text_fit(delta_named(description, "side_", side++), lines[first].text, 25);
+		}
+		/* (the rest under the picture) */
+		slot = 11;
+	}
+	for (index = side; index < DELTA_SIDE_LINES; index++)
+		delta_text(delta_named(description, "side_", index), "");
+	for (index = 0; index < DELTA_STATS; index++)
+	{
+		visible_set(delta_named(description, "stat_label_", index), index < stat);
+		visible_set(delta_named(description, "stat_value_", index), index < stat);
+	}
+	for (index = 0; index < slot; index++)
+		delta_slot(description, index, "", "", "", _profile_line_row);
+	slot = delta_fill_lines(description, slot, lines + first, (short)(count - first));
+	for (index = slot; index < DELTA_LINES; index++)
+		delta_slot(description, index, "", "", "", _profile_line_row);
+}
+
+/* "port delta profile choose" (a section's A): Privacy's page,
+or the section's dialog */
+static boolean delta_profile_choose(struct widget_instance *widget, boolean *widget_deleted)
+{
+	short section = delta_menus.section;
+
+	if (section == PROFILE_SCREEN_SECTION_PRIVACY)
+		return ui_widget_port_open(widget, DELTA_PRIVACY_SCREEN_NAME, widget_deleted);
+	if (!profile_screen_section_open(section) || !profile_screen_section_action(section))
+		ui_play_audio_feedback_sound(SOUND_ERROR);
+	return TRUE;
+}
+
+/* the screen opened from a widget (Profiles' row), else from Online Games
+(its Start: ui_widget_port_open_screen) */
+static boolean delta_profile_open_from(struct widget_instance *widget, boolean *widget_deleted)
+{
+	delta_menus.from_online_games = FALSE;
+	delta_menus.section = 0;
+	profile_screen_refresh();
+	return ui_widget_port_open(widget, DELTA_PROFILE_SCREEN_NAME, widget_deleted);
+}
+
+boolean pc_menu_delta_profile_open(void)
+{
+	extern boolean ui_widget_port_open_screen(char const *name);
+
+	delta_menus.section = 0;
+	profile_screen_refresh();
+	if (!ui_widget_port_open_screen(DELTA_PROFILE_SCREEN_NAME))
+		return FALSE;
+	delta_menus.from_online_games = TRUE;
+	return TRUE;
+}
+
+/* "port delta profile back": back, to Online Games if it opened it */
+static void delta_profile_back(struct widget_instance *widget, boolean *widget_deleted)
+{
+	profile_screen_card_emblem(0.0f, 0.0f, 0.0f);
+	ui_widget_port_go_back(widget);
+	*widget_deleted = TRUE;
+	if (delta_menus.from_online_games)
+	{
+		delta_menus.from_online_games = FALSE;
+		browser_screen_open();
+	}
+}
+
+/* whether the A was on Profiles' DELTA row */
+static boolean profile_list_delta_chosen(struct widget_instance const *widget)
+{
+	return widget->parent && widget->parent == profile_list.list && profile_list_delta_row() &&
+		profile_list.chosen == profile_list.count + 1;
+}
+
+#endif
+
 /* ---------- public code */
 
 boolean pc_menu_event_function_invoke(
@@ -5874,6 +7903,30 @@ boolean pc_menu_event_function_invoke(
 		{
 			text_field_end(FALSE);
 		}
+		else if (!strcmp(name, "port host init"))
+		{
+			return host_initialize(widget);
+		}
+		else if (!strcmp(name, "port host row a"))
+		{
+			return host_row_a(widget, widget_deleted);
+		}
+		else if (!strcmp(name, "port host row left") || !strcmp(name, "port host row right"))
+		{
+			return host_row_change(widget, (short)(!strcmp(name, "port host row left") ? -1 : 1));
+		}
+		else if (!strcmp(name, "port host defaults"))
+		{
+			return host_defaults(widget);
+		}
+		else if (!strcmp(name, "port host edit"))
+		{
+			return host_edit(widget, widget_deleted);
+		}
+		else if (!strcmp(name, "port host back"))
+		{
+			return host_back(widget, widget_deleted);
+		}
 		else if (!strcmp(name, "port setup edit"))
 		{
 			return gametype_setup_edit();
@@ -5928,6 +7981,24 @@ boolean pc_menu_event_function_invoke(
 		{
 			return pause_change_teams(widget);
 		}
+		else if (!strcmp(name, "port pause controls"))
+		{
+			return controls_open(widget);
+		}
+#ifndef HALO_CONSOLE_NO_CONTROLS
+		else if (!strcmp(name, "controller screen init"))
+		{
+			return controller_screen_init(widget);
+		}
+		else if (!strcmp(name, "controller screen defaults"))
+		{
+			return controller_screen_defaults(widget);
+		}
+		else if (!strcmp(name, "controller begin binding"))
+		{
+			return controller_capture_begin(widget);
+		}
+#endif
 		else if (!strcmp(name, "player profile save changes"))
 		{
 			return profile_save_changes(widget, widget_deleted);
@@ -6000,8 +8071,37 @@ boolean pc_menu_event_function_invoke(
 		}
 		else if (!strcmp(name, "single prev cl item activated"))
 		{
+#if defined(HALO_GAME_BROWSER) && !defined(HALO_CONSOLE_NO_DELTA_PROFILE)
+			/* (Profiles' DELTA row: Delta Profile's screen) */
+			if (profile_list_delta_chosen(widget))
+				return delta_profile_open_from(widget, widget_deleted);
+#endif
 			item_activated(widget, event_controller(widget, event), widget_deleted);
 		}
+#if defined(HALO_GAME_BROWSER) && !defined(HALO_CONSOLE_NO_DELTA_PROFILE)
+		else if (!strcmp(name, "port delta profile choose"))
+		{
+			return delta_profile_choose(widget, widget_deleted);
+		}
+		else if (!strcmp(name, "port delta profile back"))
+		{
+			delta_profile_back(widget, widget_deleted);
+		}
+		else if (!strcmp(name, "port delta profile refresh"))
+		{
+			profile_screen_refresh();
+		}
+		else if (!strcmp(name, "port delta profile copies"))
+		{
+			if (delta_menus.section == 1)
+				profile_screen_section_action(1);
+		}
+		else if (!strcmp(name, "port delta profile open"))
+		{
+			if (profile_screen_available())
+				profile_screen_open(FALSE);
+		}
+#endif
 		else if (!strcmp(name, "port settings save"))
 		{
 			settings_each(screen_of(widget), setting_changed_save);
@@ -6189,14 +8289,24 @@ void pc_menu_game_data_function_invoke(
 	}
 	else if (!strcmp(name, "controls update menu"))
 		controls_update(widget);
+#ifndef HALO_CONSOLE_NO_CONTROLS
+	else if (!strcmp(name, "controller update menu"))
+		controller_update(widget);
+#endif
 	else if (!strcmp(name, "color picker update"))
 		color_list_update(widget);
 	else if (!strcmp(name, "3wide player profile list update"))
 		profile_list_update(widget);
+#if defined(HALO_GAME_BROWSER) && !defined(HALO_CONSOLE_NO_DELTA_PROFILE)
+	else if (!strcmp(name, "port delta profile update"))
+		delta_profile_update(widget);
+#endif
 	else if (!strcmp(name, "load game list update"))
 		saved_game_list_update(widget);
 	else if (!strcmp(name, "port gamepad layout preview"))
 		profile_gamepad_layout(widget);
 	else if (!strcmp(name, "chupathingy settings picture"))
 		chupathingy_settings_picture(widget);
+	else if (!strcmp(name, "port host update"))
+		host_update(widget);
 }

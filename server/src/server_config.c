@@ -80,11 +80,13 @@ static const struct server_choice friendly_fire_choices[] =
 };
 
 /* (the vehicle sets: game_engine.c's, then a vehicle alone each, as the
-gametype editor's presets; custom: the counts) */
+gametype editor's presets; pc: every one the map places, as Halo PC places
+them; custom: the counts) */
 static const struct server_choice vehicle_choices[] =
 {
 	{ "default", 0 }, { "none", 1 }, { "warthog", 2 }, { "ghost", 3 }, { "scorpion", 4 },
-	{ "rocket_warthog", 5 }, { "banshee", 6 }, { "gun_turret", 7 }, { "custom", SERVER_VEHICLES_CUSTOM },
+	{ "rocket_warthog", 5 }, { "banshee", 6 }, { "gun_turret", 7 }, { "pc", SERVER_VEHICLES_PC },
+	{ "custom", SERVER_VEHICLES_CUSTOM },
 };
 
 /* (game_engine_oddball.c's) */
@@ -216,6 +218,8 @@ const struct server_setting server_settings_table[SERVER_SETTINGS] =
 		"Players changing teams during a game: 0 off, 1 balanced, 2 allow" },
 	{ "team_change_margin", SERVER_FIELD_INTEGER, 0, SERVER_SETTINGS_MAXIMUM_TEAM_CHANGE_MARGIN,
 		"HALO_DEDICATED_TEAM_CHANGE_MARGIN", "Most players one team may have over the other after a change (balanced)" },
+	{ "playlist_shuffle", SERVER_FIELD_BOOLEAN, 0, 1, "HALO_DEDICATED_PLAYLIST_SHUFFLE",
+		"The playlist's order shuffled each time it starts over" },
 };
 
 /* ---------- private code */
@@ -832,7 +836,7 @@ static int gametype_key(void *context, int line, const char *key, const struct t
 
 	if (field < 0)
 	{
-		set_error(error, error_size, line, "no setting %s (server/docs/gametypes.md)%s", key, NULL);
+		set_error(error, error_size, line, "no setting %s (server/docs/playlists.md)%s", key, NULL);
 		return 0;
 	}
 	if (gametype->set[field])
@@ -976,7 +980,7 @@ int server_gametype_format(const struct server_gametype *gametype, const char *n
 	if (!size)
 		return -1;
 	out[0] = 0;
-	if (!append(out, size, &length, "# %s: a game type (server/docs/gametypes.md), written by the server.\n", name,
+	if (!append(out, size, &length, "# %s: a game type (server/docs/playlists.md, Game type files).\n", name,
 		NULL))
 	{
 		return -1;

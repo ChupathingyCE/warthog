@@ -684,6 +684,10 @@ struct widget_instance;
 #ifdef HALO_CUSTOM_EDITION
 #include "halo_ui_map_list.h"
 #endif
+#ifndef HALO_CONSOLE_NO_CONTROLS
+/* port: Controller Buttons asking for a button (menu_functions.c) */
+boolean pc_menu_controller_capture(void);
+#endif
 #if defined(HALO_GAME_BROWSER) || defined(HALO_XBOX_CONSOLE)
 /* the in-game server browser (port/linux/game/browser_screen.c; the
 console's, port/xbox/game/xbox_browser_screen.c): a screen of code over the
@@ -700,12 +704,27 @@ void moderation_screen_process(void);
 void moderation_screen_render(void);
 /* the menus' pointer, while it is up (its own taps and clicks) */
 void browser_screen_pointer(struct halo_ui_pointer const *pointer);
+#ifndef HALO_CONSOLE_NO_CONTROLS
+/* port: the Controls screen (port/linux/game/controls_screen.c) */
+boolean controls_screen_active(void);
+void controls_screen_update(boolean menu_open);
+void controls_screen_process(void);
+void controls_screen_render(void);
+void controls_screen_pointer(struct halo_ui_pointer const *pointer);
+#endif
+#ifndef HALO_CONSOLE_NO_DELTA_PROFILE
+/* port: Delta Profile (port/linux/game/profile_screen.c): its screen of code
+over the Xbox's and Gearbox's menus, and its dialogs over any */
+#include "halo_profile_screen.h"
+#endif
 /* port: the question before joining a clipboard's invite
 (port/linux/game/invite_prompt.c) */
 boolean invite_prompt_active(void);
 void invite_prompt_update(boolean menu_open);
 void invite_prompt_process(void);
 void invite_prompt_pointer(struct halo_ui_pointer const *pointer);
+/* moderation's screen: the same */
+void moderation_screen_pointer(struct halo_ui_pointer const *pointer);
 void invite_prompt_render(void);
 /* (ONLINE GAMES, below: its list moves focus item by item) */
 boolean ui_widget_online_games_list(struct widget_instance *widget);
@@ -1421,6 +1440,14 @@ boolean pc_menu_button_key_cap(
 	short x1,
 	short y1,
 	float alpha);
+/* port: the left edge of the key cap pc_menu_button_key_cap draws in
+these bounds, or x0 when it draws none */
+short pc_menu_button_key_cap_left(
+	long bitmap_tag_index,
+	short x0,
+	short y0,
+	short x1,
+	short y1);
 /* port: the row of the bitmap draw_bitmap_in_rect starts from (a frame the
 menus place, pc_menu_frame_placement): 0 but while one is drawn */
 static short draw_bitmap_texel_y = 0;
@@ -1651,8 +1678,8 @@ static char button_mappings[_icon_custom_1 - _icon_action] =
 	4,		/* use-equipment -> melee */
 	3,		/* rotate-weapons -> switch weapons */
 	1,		/* rotate-grenades -> switch grenades */
-	11,		/* crouch -> zoom */
-	10,		/* zoom -> crouch */
+	10,		/* crouch -> crouch */
+	11,		/* zoom -> zoom */
 	_icon_a_button,		/* accept */
 	_icon_b_button,		/* back */
 	_icon_left_stick,	/* move */
@@ -6009,7 +6036,10 @@ enum ui_mouse_target_kind
 	several items): a click steps the list back by one */
 	_ui_mouse_target_list_back,
 	/* the band right of its last slot: a click steps it forward by one */
-	_ui_mouse_target_list_forward
+	_ui_mouse_target_list_forward,
+	/* a setting's row around its value (ui_mouse_merge_setting_rows): the
+	pointer gives the value the focus, and a click does nothing more */
+	_ui_mouse_target_row
 };
 
 struct ui_mouse_target
@@ -6172,10 +6202,11 @@ static void ui_debug_draw_targets(
 		{
 			/* in the order of enum ui_mouse_target_kind; the band's two sides
 			share orange, which no other kind uses */
-			static pixel32 const colors[] = { 0xc000ff00, 0xc04080ff, 0xc0ffff00, 0xc0ff0000, 0xc0ff8000, 0xc0ff8000 };
+			static pixel32 const colors[] = { 0xc000ff00, 0xc04080ff, 0xc0ffff00, 0xc0ff0000, 0xc0ff8000, 0xc0ff8000,
+				0x8000ffff };
 			short kind = ui_mouse_targets[index].kind;
 
-			ui_debug_draw_outline(&ui_mouse_targets[index].bounds, colors[PIN(kind, 0, 5)]);
+			ui_debug_draw_outline(&ui_mouse_targets[index].bounds, colors[PIN(kind, 0, 6)]);
 		}
 	}
 	ui_debug_draw_mark(&ui_debug_down_mark, 0xffff00ff);
@@ -6287,6 +6318,26 @@ static short ui_mouse_key_button(
 	return NONE;
 }
 
+/* a label or a picture: nothing in it takes an event (a PC list's heading,
+the sort arrows of a column's head) */
+static boolean ui_mouse_widget_is_decoration(
+	struct widget_instance *widget)
+{
+	struct widget_instance *child;
+
+	if (widget_instance_port_is_label(widget))
+		return TRUE;
+	if (widget_instance_can_handle_events(widget))
+		return FALSE;
+	for (child = widget->child; child; child = child->next)
+	{
+		if (!ui_mouse_widget_is_decoration(child))
+			return FALSE;
+	}
+
+	return TRUE;
+}
+
 /* whether the d-pad moves the focus to a widget: an item of a column list,
 or a child its parent tabs through */
 static boolean ui_mouse_widget_is_item(
@@ -6303,6 +6354,10 @@ static boolean ui_mouse_widget_is_item(
 		return FALSE;
 	if (parent->type == _ui_widget_type_column_list)
 	{
+		/* (not a PC list's heading, which the d-pad passes over: "JOIN
+		GAME" above its choices, nor a picture in a column's head) */
+		if (pc_menu_tag(parent->definition_tag_index) && ui_mouse_widget_is_decoration(widget))
+			return FALSE;
 		return !parent->parameters.list.list_items ||
 			index < parent->parameters.list.number_of_items;
 	}
@@ -6477,6 +6532,10 @@ static void ui_mouse_note_target(
 			}
 		}
 		icon_bounds = bounds;
+		/* a key cap drawn for the button ends where the picture ends and can
+		be wider: ENTER's reaches left of it */
+		icon_bounds.x0 = MIN(bounds.x0, pc_menu_button_key_cap_left(
+			definition->background_bitmap.index, bounds.x0, bounds.y0, bounds.x1, bounds.y1));
 		target_label = best_distance < 17 ? label : NULL;
 		target_label_bounds = label_bounds;
 	}
@@ -6527,6 +6586,70 @@ static void ui_mouse_note_target(
 	return;
 }
 
+/* whether a widget has an A of its own (not only its children's) */
+static boolean ui_mouse_widget_handles_a(
+	struct widget_instance *widget)
+{
+	struct ui_widget_definition *definition = ui_widget_definition_get(widget->definition_tag_index);
+	long handler_index;
+
+	for (handler_index = 0; handler_index < definition->event_handlers.count; handler_index++)
+	{
+		struct ui_widget_event_handler_reference *handler =
+			(struct ui_widget_event_handler_reference *)xbox_pointer(definition->event_handlers.address) + handler_index;
+
+		if (handler->event_type == _gamepad_analog_button_a)
+			return TRUE;
+	}
+
+	return FALSE;
+}
+
+/* drops an item that holds other items and has no A of its own (the PC
+menus' button bars, a list of servers): A on it is its focused item's, so a
+click on it between its items pressed whichever of them had the focus
+(REFRESH, DEFAULTS); there is nothing between them to press. A column's
+head that sorts (its own A) and holds its arrows stays. Before
+ui_mouse_fit_button_targets, which would hold legends to it */
+static void ui_mouse_drop_containers(
+	void)
+{
+	long index;
+	long other;
+	long kept = 0;
+
+	for (index = 0; index < ui_mouse_target_count; index++)
+	{
+		struct ui_mouse_target *container = &ui_mouse_targets[index];
+
+		if (container->kind != _ui_mouse_target_item || ui_mouse_widget_handles_a(container->widget))
+			continue;
+		for (other = 0; other < ui_mouse_target_count; other++)
+		{
+			struct ui_mouse_target const *inner = &ui_mouse_targets[other];
+			struct widget_instance *ancestor;
+
+			if (other == index || (inner->kind != _ui_mouse_target_item && inner->kind != _ui_mouse_target_list_slot))
+				continue;
+			for (ancestor = inner->widget->parent; ancestor && ancestor != container->widget; ancestor = ancestor->parent)
+				;
+			if (ancestor)
+				break;
+		}
+		if (other < ui_mouse_target_count)
+			container->kind = NONE;
+	}
+	/* in place, in order: the last target noted wins an overlap */
+	for (index = 0; index < ui_mouse_target_count; index++)
+	{
+		if (ui_mouse_targets[index].kind != NONE)
+			ui_mouse_targets[kept++] = ui_mouse_targets[index];
+	}
+	ui_mouse_target_count = kept;
+
+	return;
+}
+
 /* makes a setting row its value: an item whose only value child is a value
 stops being a target, and the value takes the row's height. A tap anywhere
 else on the row would press A, which on a setting screen is ACCEPT. The
@@ -6566,7 +6689,9 @@ static void ui_mouse_merge_setting_rows(
 		{
 			only_value->bounds.y0 = row->bounds.y0;
 			only_value->bounds.y1 = row->bounds.y1;
-			row->kind = NONE;
+			/* the rest of the row (its label) gives the value the focus */
+			row->kind = _ui_mouse_target_row;
+			row->widget = only_value->widget;
 		}
 	}
 	/* in place, in order: the last target noted wins an overlap */
@@ -7048,11 +7173,11 @@ static void ui_debug_log_click(
 	long frames)
 {
 	/* in the order of enum ui_mouse_target_kind */
-	static char const *const kinds[] = { "item", "value", "list slot", "button", "list back", "list forward" };
+	static char const *const kinds[] = { "item", "value", "list slot", "button", "list back", "list forward", "row" };
 
 	if (target)
 	{
-		char const *kind = kinds[PIN(target->kind, 0, 5)];
+		char const *kind = kinds[PIN(target->kind, 0, 6)];
 		char const *name = tag_get_name(target->widget->definition_tag_index);
 
 		/* a value steps by the side of its split the tap is on, and once
@@ -7073,6 +7198,42 @@ static void ui_debug_log_click(
 	else
 	{
 		platform_log("touch targets: tap at %d,%d hit none after %ld frames", x, y, frames);
+	}
+
+	return;
+}
+
+/* logs the frame's targets once the screen the mouse drives or its targets'
+count change, to read a screen's targets against a screenshot */
+static void ui_debug_log_targets(
+	void)
+{
+	static char const *const kinds[] = { "item", "value", "list slot", "button", "list back", "list forward", "row" };
+	static long last_screen = NONE;
+	static long last_count = NONE;
+	struct widget_instance *screen;
+	struct widget_instance *focus;
+	long index;
+
+	if (!ui_debug_targets_enabled())
+		return;
+	screen = ui_mouse_menu();
+	for (focus = screen; focus && focus->focused_child; focus = focus->focused_child)
+		;
+	if ((screen ? screen->definition_tag_index : NONE) == last_screen && ui_mouse_target_count == last_count)
+		return;
+	last_screen = screen ? screen->definition_tag_index : NONE;
+	last_count = ui_mouse_target_count;
+	platform_log("touch targets: screen %s, %ld targets, focus %s",
+		screen ? tag_get_name(screen->definition_tag_index) : "none", ui_mouse_target_count,
+		focus ? tag_get_name(focus->definition_tag_index) : "none");
+	for (index = 0; index < ui_mouse_target_count; index++)
+	{
+		struct ui_mouse_target const *target = &ui_mouse_targets[index];
+
+		platform_log("touch targets:   %s %s [%d,%d,%d,%d]", kinds[PIN(target->kind, 0, 6)],
+			tag_get_name(target->widget->definition_tag_index),
+			target->bounds.x0, target->bounds.y0, target->bounds.x1, target->bounds.y1);
 	}
 
 	return;
@@ -7138,6 +7299,7 @@ static void ui_widgets_process_mouse(
 	short controller_index = 0;
 	boolean pointer_active;
 	boolean keyboard_active;
+	boolean overlay_active = FALSE;
 
 	ui_debug_frame++;
 	pointer_active = halo_ui_pointer_update(ui_mouse_menus_active(), &pointer) != 0;
@@ -7166,18 +7328,34 @@ static void ui_widgets_process_mouse(
 	}
 #ifdef HALO_GAME_BROWSER
 	/* Online Games takes the pointer itself, as the virtual keyboard does
-	(and the clipboard invite's question, over it) */
+	(and the clipboard invite's question, over it, and moderation's screen);
+	whether one was up is read before it takes the click: a click that
+	closes it (BACK) is not also a click on the menu behind, which drew no
+	targets under it and would have taken the click as its A (ONLINE GAMES,
+	opening it again) */
+	overlay_active = invite_prompt_active() || browser_screen_active() || moderation_screen_active();
+#ifndef HALO_CONSOLE_NO_CONTROLS
+	overlay_active = overlay_active || controls_screen_active();
+#endif
+#ifndef HALO_CONSOLE_NO_DELTA_PROFILE
+	overlay_active = overlay_active || profile_screen_active();
+#endif
 	if (pointer_active && !keyboard_active && invite_prompt_active())
 		invite_prompt_pointer(&pointer);
+#ifndef HALO_CONSOLE_NO_DELTA_PROFILE
+	else if (pointer_active && !keyboard_active && profile_screen_active())
+		profile_screen_pointer(&pointer);
+#endif
 	else if (pointer_active && !keyboard_active && browser_screen_active())
 		browser_screen_pointer(&pointer);
+	else if (pointer_active && !keyboard_active && moderation_screen_active())
+		moderation_screen_pointer(&pointer);
+#ifndef HALO_CONSOLE_NO_CONTROLS
+	else if (pointer_active && !keyboard_active && controls_screen_active())
+		controls_screen_pointer(&pointer);
 #endif
-	if (!pointer_active || keyboard_active
-#ifdef HALO_GAME_BROWSER
-		/* (nor over Online Games: a click left in the queue would pick a game) */
-		|| browser_screen_active() || invite_prompt_active()
 #endif
-		)
+	if (!pointer_active || keyboard_active || overlay_active)
 	{
 		ui_mouse_press_count = 0;
 		ui_mouse_hover_pending = FALSE;
@@ -7251,6 +7429,7 @@ static void ui_widgets_process_mouse(
 				{
 				case _ui_mouse_target_item:
 				case _ui_mouse_target_value:
+				case _ui_mouse_target_row:
 					/* (a selection list's row is chosen by a click, not
 					by passing over it on the way to its buttons) */
 					if (!ui_mouse_selection_row(target->widget))
@@ -7306,6 +7485,9 @@ static void ui_widgets_process_mouse(
 				case _ui_mouse_target_list_slot:
 					ui_mouse_step_list_to_slot(target->widget);
 					ui_mouse_press(_gamepad_analog_button_a);
+					break;
+				case _ui_mouse_target_row:
+					ui_mouse_give_focus(target->widget);
 					break;
 				case _ui_mouse_target_button:
 					ui_mouse_press(target->button_index);
@@ -7722,6 +7904,15 @@ void render_ui_widgets(
 			it, an error dialog still is) */
 			if (should_render && browser_screen_active() && !widget->widget_is_error_dialog)
 				should_render = FALSE;
+#ifndef HALO_CONSOLE_NO_DELTA_PROFILE
+			/* (Delta Profile's screen of code too; its dialogs alone are
+			drawn over the menus) */
+			if (should_render && profile_screen_active() && !profile_screen_dialog_only() &&
+				!widget->widget_is_error_dialog)
+			{
+				should_render = FALSE;
+			}
+#endif
 #endif
 			if (should_render)
 			{
@@ -7779,10 +7970,12 @@ void render_ui_widgets(
 			/* fit the legends while the rows are still targets (merging
 			removes them); widen after merging (the merged values are
 			row-tall) */
+			ui_mouse_drop_containers();
 			ui_mouse_fit_button_targets();
 			ui_mouse_merge_setting_rows();
 			ui_mouse_widen_values();
 			ui_mouse_targets_settled = TRUE;
+			ui_debug_log_targets();
 		}
 #endif
 		if (widget_globals.fade_to_black >= 0.0f &&
@@ -7813,8 +8006,14 @@ void render_ui_widgets(
 #if defined(HALO_GAME_BROWSER) || defined(HALO_XBOX_CONSOLE)
 	if (browser_screen_active())
 		browser_screen_render();
+#ifndef HALO_CONSOLE_NO_DELTA_PROFILE
+	profile_screen_render();
+#endif
 	if (first_players_render)
 	{
+#ifndef HALO_CONSOLE_NO_CONTROLS
+		controls_screen_render();
+#endif
 		moderation_screen_render();
 		invite_prompt_render();
 	}
@@ -8893,6 +9092,12 @@ void process_ui_widgets(
 
 		return;
 	}
+#ifndef HALO_CONSOLE_NO_CONTROLS
+	/* port: a button asked for (Controller Buttons: menu_functions.c), which
+	the menus take nothing during */
+	if (pc_menu_controller_capture())
+		return;
+#endif
 #if defined(HALO_GAME_BROWSER) || defined(HALO_XBOX_CONSOLE)
 #ifdef HALO_GAME_BROWSER
 	/* port: an invite on the clipboard, asked about over the menus */
@@ -8904,12 +9109,30 @@ void process_ui_widgets(
 		return;
 	}
 #endif
+#ifndef HALO_CONSOLE_NO_DELTA_PROFILE
+	if (profile_screen_active())
+	{
+		profile_screen_process();
+
+		return;
+	}
+#endif
 	if (browser_screen_active())
 	{
 		browser_screen_process();
 
 		return;
 	}
+#ifndef HALO_CONSOLE_NO_CONTROLS
+	/* port: the Controls screen, over the pause menu or Settings */
+	controls_screen_update(widget_globals.active_widgets[0] != NULL);
+	if (controls_screen_active())
+	{
+		controls_screen_process();
+
+		return;
+	}
+#endif
 	/* port: moderation's screen, over a menu of a dedicated server's game */
 	moderation_screen_update(widget_globals.active_widgets[0] != NULL);
 	if (moderation_screen_active())
@@ -9069,3 +9292,23 @@ void process_ui_widgets(
 
 	return;
 }
+
+#ifdef HALO_GAME_BROWSER
+/* port: a screen by name over the first player's (Online Games' Start, the
+Chupathingy menus' Delta Profile), as an item of it would open it: back
+returns to it */
+boolean ui_widget_port_open(struct widget_instance *widget, char const *name, boolean *widget_deleted);
+
+boolean ui_widget_port_open_screen(
+	char const *name)
+{
+	struct widget_instance *widget = widget_globals.active_widgets[0];
+	boolean deleted = FALSE;
+
+	if (!widget)
+		return FALSE;
+	while (widget->focused_child)
+		widget = widget->focused_child;
+	return ui_widget_port_open(widget, name, &deleted);
+}
+#endif

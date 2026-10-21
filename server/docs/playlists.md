@@ -3,7 +3,10 @@
 A playlist is a text file in the data folder (usually in `playlists/`) that
 `HALO_DEDICATED` names. One game a line: the map, then the game type. Lines
 starting with `#` are ignored. The server plays them in order and starts
-over after the last.
+over after the last. With `HALO_DEDICATED_PLAYLIST_SHUFFLE=true` (or
+`sv_set playlist_shuffle true`) each pass after the first is in a new random
+order, and the entry just played is never first in the next pass; the
+playlist file is not changed, and `sv_mapcycle` lists the order in play.
 
 ```
 # map            game type
@@ -118,3 +121,16 @@ health = 150
 right is refused when it is saved, and a playlist entry naming one is
 skipped (the log says why). Players need nothing new: the game type is sent
 as the game's own variant.
+
+A side's vehicles (`vehicles.red`, `vehicles.blue`) are a vehicle set,
+`"pc"` (every vehicle the map places, as Halo PC places them) or
+`"custom"` (the counts in `vehicles.red_warthog` and the rest).
+
+The game writes the same files. Every gametype a player saves, in any of
+the menus' editors (the Chupathingy menus' EDIT GAME TYPE, Gearbox's and the
+Xbox's), is also saved as `gametypes/<name>.toml` in their save folder, and
+a file put there shows up in the game's gametype lists the next time the
+main menu loads. So a game type made in the game can be copied into a
+server's `admin/gametypes/` and played there, and one from a server can be
+hosted from the game; both read and play it with the same code
+(`server/src/server_config.c`, `server/src/server_gametype_variant.c`).

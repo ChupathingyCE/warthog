@@ -301,7 +301,8 @@ def test_menu_settings_exist():
         for setting in re.findall(r'setting="([^"]+)"', path.read_text()):
             assert setting in known | profile, f"{path.name}: {setting}"
     controls = set(re.findall(r'"(controls\.[a-z_]+)"', (root / "port/linux/src/xinput_sdl.c").read_text()))
-    assert controls == {name for name in known if name.startswith("controls.")}
+    # (controls.controller_layout is the controller's, not a key's: controller_layout.c)
+    assert controls == {name for name in known if name.startswith("controls.")} - {"controls.controller_layout"}
     assert controls == set(re.findall(r'\{ "(controls\.[a-z_]+)", L"', functions))
 
 
@@ -322,6 +323,25 @@ def test_report_joined_games_stops_claims():
     readme = (root / "port/linux/README.md").read_text()
     row = next(line for line in readme.splitlines() if line.startswith("| `network.report_joined_games`"))
     assert "/v1/claim" in row
+
+
+def test_joined_invite_follows_the_joined_host():
+    """Every join (a listed game, an invite, a direct address, the local
+    network, a server's change of game) goes through
+    network_game_client_initiate_join_game, which tells p2p the host it
+    joins (p2p_joining_host); an invite of another host is forgotten, so a
+    game's report never goes out under a previous game's invite. Hosting
+    has no joined invite."""
+    root = MENUS.parent.parent.parent
+    manager = (root / "source/networking/network_client_manager.c").read_text()
+    join = re.search(r"^boolean network_game_client_initiate_join_game\(.*?^\}", manager, re.M | re.S).group(0)
+    assert "p2p_joining_host(network_game_client_joined_host)" in join
+    p2p = (root / "port/linux/src/p2p.c").read_text()
+    forget = re.search(r"^void p2p_joining_host\(.*?^\}", p2p, re.M | re.S).group(0)
+    assert "p2p_identifier_from_hash(p2p.join_host_hash" in forget
+    assert "memset(p2p.join_host_hash" in forget and "memset(p2p.join_token" in forget
+    joined = re.search(r"^int p2p_joined_invite\(.*?^\}", p2p, re.M | re.S).group(0)
+    assert "!p2p.hosting" in joined
 
 
 def test_report_hosted_games_keeps_listing():

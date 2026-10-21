@@ -4247,12 +4247,16 @@ static boolean player_profile_initialize_controller_settings(
 			option_spinner->parameters.list.selected_index = 4;
 			break;
 		case _button_preset_bumper_jumper:
-			/* (the Xbox's own list has the five layouts of its map: this one is
+		case _button_preset_custom:
+			/* (the Xbox's own list has the five layouts of its map: these are
 			shown in the PC and Chupathingy menus, and here as the default) */
-			option_spinner->parameters.list.selected_index = 5 < option_spinner->parameters.list.number_of_items ? 5 : 0;
+			option_spinner->parameters.list.selected_index =
+				profile->controller_settings.button_preset < option_spinner->parameters.list.number_of_items ?
+					profile->controller_settings.button_preset : 0;
 			/* (shown as the first layout; the stored choice is kept until the
 			player picks another one here) */
-			g_button_preset_kept_index = 5 < option_spinner->parameters.list.number_of_items ? NONE : 0;
+			g_button_preset_kept_index =
+				profile->controller_settings.button_preset < option_spinner->parameters.list.number_of_items ? NONE : 0;
 			g_list_widget_watched = option_spinner;
 			g_list_widget_watched_stepped = FALSE;
 			break;
@@ -4890,7 +4894,7 @@ static boolean player_profile_change_controller_settings(
 		/* (Bumper Jumper shown as the first layout on a list without it: left
 		as it is unless the player stepped the spinner, Default included) */
 		if (g_button_preset_kept_index != NONE &&
-			profile->controller_settings.button_preset == _button_preset_bumper_jumper &&
+			profile->controller_settings.button_preset >= _button_preset_bumper_jumper &&
 			g_list_widget_watched == option_spinner &&
 			!g_list_widget_watched_stepped)
 			return TRUE;
@@ -4902,6 +4906,7 @@ static boolean player_profile_change_controller_settings(
 		case _button_preset_swap_b_and_left_trigger: profile->controller_settings.button_preset = _button_preset_swap_b_and_left_trigger; return TRUE;
 		case _button_preset_swap_b_and_right_thumb: profile->controller_settings.button_preset = _button_preset_swap_b_and_right_thumb; return TRUE;
 		case _button_preset_bumper_jumper: profile->controller_settings.button_preset = _button_preset_bumper_jumper; return TRUE;
+		case _button_preset_custom: profile->controller_settings.button_preset = _button_preset_custom; return TRUE;
 		default: error(2, "unknown button config option selected"); return TRUE;
 		}
 	}
@@ -5924,6 +5929,14 @@ static boolean multiplayer_profile_set_for_game(
 			fclose(file);
 		}
 		player_ui_set_game_variant(&profile);
+		/* port: and its PC options (a custom loadout, the vehicles: as the
+		PC menus' choice gives them, ui_widget_port_gametype_choose) */
+		{
+			struct game_variant_options options;
+
+			if (playlist_profile_get_options(profile_index, &options))
+				player_ui_set_game_variant_options(&options);
+		}
 		if (server)
 			network_game_server_change_game_variant(server, &profile);
 		return TRUE;

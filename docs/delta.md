@@ -16,7 +16,7 @@ advertisement's flag, the handshake with silent fallback, platform keys,
 and the `platform`, `profile`, `ce_maps` and `moderation` capabilities (see
 "Delta Peer"). Delta Stats' event log, server moderators and linking
 servers to the site shipped in 0.7.1b. The site's page for players:
-https://halo.milenko.org/delta
+https://stats.chupathingy.org/delta
 
 Delta is the name for everything ChupathingyCE's machines say to each other
 and to our services beyond the game protocol OpenCE defines. It has one rule
@@ -50,7 +50,7 @@ Delta. Delta works around it (see "The legacy number" below).
       \\  <==================================================>    //
        \\                                                       //
         \\  Delta List / Stats / Link (HTTPS)       Delta List / Stats / Link
-         `------------------->  halo.milenko.org  <-------------'
+         `------------------->  stats.chupathingy.org  <-------------'
                                       ^
                                       | Delta Link (server dials out)
                                       |
@@ -1270,6 +1270,81 @@ Stats' event log records moderation through it.
 - **Players** (exists): Link Profile ties a game install to a site profile
   with a code (`/v1/link`, `/v1/connect`, `/v1/claim`).
 - **Servers** (exists): see Delta Control, The link to the site.
+
+### Delta Profile in the game
+
+The player's own Delta profile, shown in the game
+(`port/linux/game/profile_screen.c`). The game never makes, renames or
+deletes a profile. The password, email, two-step sign-in, export and
+deletion stay on the site, which OPEN ON THE WEB reaches. Linking is per
+copy: every Halo profile on a copy counts for the same Delta profile.
+
+- **Ways in:** the Chupathingy menus' Profiles have a DELTA row
+  below Create New Profile, with a summary in the panel. Gearbox's Select
+  Profile has a DELTA button. In every menu set, Online Games'
+  Start opens it (the web page when `display.delta_profile` is false).
+  A Halo profile's panel shows one quiet line, "Delta: @handle" or
+  "Delta: not linked". With an empty `network.browser_url`, every way in
+  is hidden.
+- **Sections:** OVERVIEW (name, the player's Spartan, badges, record,
+  recent games), LINKED COPIES, ROLES, CLAN, PRIVACY, then LINK
+  PROFILE or UNLINK THIS COPY, and OPEN ON THE WEB. The Chupathingy menus
+  draw them with their own widgets
+  (`port/assets/menus/chupathingy/delta_profile.xml`), and Privacy is one
+  of their settings pages. The Xbox and Gearbox menus get a
+  screen drawn as Online Games is. The dialogs (Link Profile, unlinking,
+  and the pages of the site with a QR code) are the same in all three.
+- **Requests:** the game sends this copy's player key, over HTTPS only,
+  to the game list: `POST /v1/game/profile` (the profile, its copies, roles
+  and privacy), `/v1/game/unlink` (this copy only) and `/v1/game/privacy`
+  (the site's own privacy settings). The site takes 6 requests a minute
+  from a key, so the game asks at most every 10 seconds, and again when the
+  answer is a minute old. Another copy is unlinked on the site
+  (`/profile#copies`), signed in, never with a key alone. The answer is
+  kept in memory only. `debug.txt` says whether it loaded, never what it
+  holds.
+- **Profile names:** in a game on Delta, a player whose copy shares its
+  profile (`network.share_profile`, Delta Peer's `profile` capability)
+  shows by the profile's display name on the scoreboard, the postgame
+  report and the lobby (`port/linux/game/profile_names.c`). The game asks
+  the site for those players' public cards (`POST /v1/game/players`, no
+  key). A machine with more than one player keeps the game names, because
+  a profile belongs to a copy. OpenCE players, players who don't share,
+  and what OpenCE clients see are unchanged. `display.profile_names =
+  false` shows everyone by their game name.
+- **Consoles:** `HALO_CONSOLE_NO_DELTA_PROFILE` leaves all of it out. A
+  console that has the game list keeps Online Games' Link Profile panel.
+
+### Clans
+
+Clans are groups of Delta profiles, kept by the game list (its
+`clans.py`). A clan has a name, a tag of 2 to 8 letters and digits, a
+motto, an emblem and ranked members (leader, officers, members). Making a
+clan, inviting, ranks, kicking, handing the clan to another member and
+the emblem are on the site (`/profile#clan`, `/clans/TAG`).
+
+- **In the game:** Delta Profile's CLAN section shows the profile's clan:
+  its emblem, name, tag, member count and motto, then its members by rank
+  (the first nine, then how many more). With no clan it lists the clans
+  that invited the profile. Its A opens a dialog: SHOW MY TAG and LEAVE
+  CLAN, or the invites (A joins, X declines). A leader leaves once another
+  member leads, or when alone (the clan goes with them).
+- **The emblem:** a background shape in one color and a foreground shape in
+  two, from Halo's 18 armor colors. The pieces are the site's
+  (`GET /v1/clans/emblem`); `port/linux/src/clan_emblem_table.h` is made
+  from them by `tools/clan_emblem_table.py`, and `clan_emblem.c` draws
+  them the way the site does.
+- **Requests:** `/v1/game/profile` carries `clan` and `clan_invites`, and
+  its privacy `show_clan_tag`; `POST /v1/game/clan` (the player key, an
+  action: `accept`, `decline` or `leave`) answers with the same two.
+- **Tags in games:** a player who shares their profile and shows their tag
+  is "[TAG] Name" on the scoreboard, the postgame report and the lobby, the
+  name cut to fit with "...". The public card (`/v1/game/players`) carries
+  the tag only while its owner shows it. OpenCE players and clients see
+  nothing new.
+- **Privacy:** SHOW CLAN TAG (Delta Profile's Privacy, and the clan dialog)
+  is the site's own setting. Members who hide their service record are left
+  out of the member lists others see, counted as hidden.
 
 ## How it meets everything else
 

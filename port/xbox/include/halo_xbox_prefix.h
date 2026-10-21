@@ -45,6 +45,16 @@ the image, and already off on a 64 MB console, which has no room for its
 claims): the maps are the Xbox's own */
 #define HALO_CONSOLE_NO_TAG_VALIDATE
 
+/* and, for now, none of the desktop's other extras that a console leaves out
+(port/linux/include/halo_port_features.h): Discord and the updater, the
+object functions drawn between ticks (384 KB), the Controls screen and Delta
+Profile in the game */
+#define HALO_CONSOLE_NO_DISCORD
+#define HALO_CONSOLE_NO_UPDATER
+#define HALO_CONSOLE_NO_SMOOTH_FUNCTIONS
+#define HALO_CONSOLE_NO_CONTROLS
+#define HALO_CONSOLE_NO_DELTA_PROFILE
+
 /* The frame timing log, console.perf_log (port/linux/include/
 halo_perf_log.h, port/xbox/game/xbox_perf_log.c) */
 #define HALO_PERF_LOG

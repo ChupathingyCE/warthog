@@ -66,7 +66,6 @@ unsigned long xbox_memory_texture_cache_maximum_address(void);
 #define TEXTURE_CACHE_SIZE xbox_memory_texture_cache_size()
 #define TEXTURE_CACHE_MAXIMUM_ADDRESS xbox_memory_texture_cache_maximum_address()
 #endif
-#define SOUND_CACHE_SIZE 0x400000
 
 #ifdef HALO_XBOX_CONSOLE
 /* port: each cache logged as it is made, before the game's own log is up

@@ -576,7 +576,7 @@ static void client_map(void)
 			(unsigned long)((((unsigned long long)mine.size_high << 32) | mine.size_low) >> 20),
 			(unsigned long)((((unsigned long long)theirs.size_high << 32) | theirs.size_low) >> 20));
 		snprintf(message, sizeof(message),
-			"Your %s map %.63s.map is not the host's: the two files differ. Replace the one in %s with the host's.",
+			"Your %s map %.63s.map differs from the host's. Replace the one in %s with the host's.",
 			map_family_badge(theirs.family), theirs.name, map_family_folder(theirs.family));
 		for (index = 0; message[index] && index < (int)(sizeof(text) / sizeof(text[0])) - 1; index++)
 			text[index] = (unsigned short)(unsigned char)message[index];
@@ -791,6 +791,26 @@ int delta_peer_machine_profile(int machine_index, unsigned char *player_id, delt
 	if (revision)
 		*revision = machine.profile.revision;
 	return 1;
+}
+
+/* the profile a player's machine shares, while that machine has this one
+player alone (a machine's profile is its copy's: split screen players on it
+show by their game names) */
+int delta_peer_player_profile(int player_index, unsigned char *player_id)
+{
+	int machine, index, players = 0;
+
+	if (!delta_game.ready || player_index < 0 || player_index >= DELTA_PEER_MAXIMUM_PLAYERS)
+		return 0;
+	machine = delta_game.peer.player_machines[player_index];
+	if (machine < 0)
+		return 0;
+	for (index = 0; index < DELTA_PEER_MAXIMUM_PLAYERS; index++)
+	{
+		if (delta_game.peer.player_machines[index] == machine)
+			players++;
+	}
+	return players == 1 && delta_peer_machine_profile(machine, player_id, NULL);
 }
 
 int delta_peer_game_room_has(int capability)
