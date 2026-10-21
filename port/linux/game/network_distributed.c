@@ -4391,8 +4391,9 @@ void network_distributed_handle_message(
 				text[index] = '?';
 		}
 		console_warning("%s", text);
-#ifdef HALO_SWITCH_CONSOLE
-		/* (on the Switch, debug.txt is on the card, and each line written
+#ifdef HALO_CONSOLE_LOG_THROTTLE
+		/* (where the log is slow to write: on the Switch, the first,
+		debug.txt is on the card, and each line written
 		waits for it on the game thread: a server's map vote, a screen of
 		notices a second padded with blank ones, took frames to 2.5 s. Its
 		blank lines are not written, and at most three a second, the rest

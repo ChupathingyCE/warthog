@@ -700,9 +700,9 @@ static BOOL read_at(struct platform_file *file, LPVOID buffer, DWORD count, LPDW
 	faulting. Guest memory is therefore filled through a bounce buffer: the
 	copy faults like any other write, at the moment the data really lands,
 	so a texture uploaded while the read is in flight is refreshed. */
-#ifdef HALO_SWITCH_CONSOLE
-	/* The console will not write-protect guest memory (the Switch host's
-	host_mman.c), so there is no watch for a bounce to keep honest, and the
+#ifdef HALO_CONSOLE_NO_WRITE_WATCH
+	/* The console will not write-protect guest memory (the first, the
+	Switch: its host's host_mman.c), so there is no watch for a bounce to keep honest, and the
 	staging buffer was a 128 KB malloc and free per read - each one a map and
 	an unmap in the host - that made loading a map crawl. */
 	BOOL bounce = FALSE;
@@ -747,7 +747,7 @@ static BOOL read_at(struct platform_file *file, LPVOID buffer, DWORD count, LPDW
 		total += (DWORD)result;
 	}
 	free(staging);
-#ifdef HALO_SWITCH_CONSOLE
+#ifdef HALO_CONSOLE_NO_WRITE_WATCH
 	/* read straight into guest memory, past the write watch (above): if it
 	was texture memory, its textures are drawn again from it */
 	if (total && platform_is_contiguous(buffer))

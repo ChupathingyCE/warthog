@@ -243,9 +243,10 @@ float halo_screen_pixel_scale(void)
 	return screen_scale[1];
 }
 
-#ifdef HALO_SWITCH_CONSOLE
-/* a map has finished loading (scenario_load): the Switch's deko3d renderer
-gives its shaders priority (port/switch/guest/d3d8_dk.c); nothing to do here */
+#ifdef HALO_CONSOLE_MAP_LOAD_HOOKS
+/* a map has finished loading (scenario_load): a console's renderer gives
+its shaders priority (the first, the Switch's deko3d renderer:
+port/switch/guest/d3d8_dk.c); nothing to do here */
 void d3d8_gl_map_loaded(const char *name)
 {
 	(void)name;

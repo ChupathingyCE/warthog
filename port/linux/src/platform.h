@@ -228,8 +228,8 @@ void *platform_contiguous_alloc(unsigned long size, unsigned long alignment,
 	unsigned long physical_address, DWORD protect);
 void platform_contiguous_free(void *address);
 BOOL platform_is_contiguous(const void *address);
-#ifdef HALO_SWITCH_CONSOLE
-/* the length of the contiguous block starting at address, or 0 (the Switch's
+#if defined(HALO_CONSOLE_GPU_RESOURCE_HOOKS) || defined(HALO_CONSOLE_NO_WRITE_WATCH)
+/* the length of the contiguous block starting at address, or 0 (a console's
 resource locks, d3d8_resources.c) */
 unsigned long platform_contiguous_block_size(const void *address);
 #endif

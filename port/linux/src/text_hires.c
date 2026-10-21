@@ -296,7 +296,7 @@ unsigned int text_hires_atlas_texture(unsigned long data)
 	return atlas_texture;
 }
 
-#ifdef HALO_SWITCH_CONSOLE
+#ifdef HALO_CONSOLE_HOST_ART
 const unsigned char *text_hires_atlas_rows(unsigned long data, long *size, int all, long *top, long *bottom)
 {
 	if (!data || data != placeholder_data || !atlas)

@@ -53,7 +53,7 @@ void terminal_draw(
 	void);
 boolean terminal_update(void);
 void terminal_printf(real_argb_color const *color, char const *format, ...);
-#ifdef HALO_SWITCH_CONSOLE
+#ifdef HALO_CONSOLE_STATUS_LINE
 /* port: one line kept on screen while it is called again, its text
 replaced: a state that lasts, such as the shader cache's compile
 (port/switch/guest/dk_shaders.c). When the calls stop, it fades as any

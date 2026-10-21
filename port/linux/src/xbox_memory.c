@@ -416,7 +416,7 @@ void *platform_contiguous_alloc(unsigned long size, unsigned long alignment,
 	return address;
 }
 
-#ifdef HALO_SWITCH_CONSOLE
+#if defined(HALO_CONSOLE_GPU_RESOURCE_HOOKS) || defined(HALO_CONSOLE_NO_WRITE_WATCH)
 /* the length of the block address is the start of, or 0 */
 unsigned long platform_contiguous_block_size(const void *address)
 {

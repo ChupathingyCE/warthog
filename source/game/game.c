@@ -824,8 +824,8 @@ void game_precache_new_map(
 		if (blocking)
 		{
 			struct game_runtime_globals_prefix *globals = game_globals;
-#ifdef HALO_SWITCH_CONSOLE
-			/* port: the Switch's renderer (port/switch/guest/dk_shaders.c) */
+#ifdef HALO_CONSOLE_MAP_LOAD_HOOKS
+			/* port: the console's renderer (the Switch's: port/switch/guest/dk_shaders.c) */
 			extern int d3d8_gl_map_waiting(void);
 			extern float d3d8_gl_map_progress(void);
 #endif
@@ -839,7 +839,7 @@ void game_precache_new_map(
 					cache_files_precache_is_copying_map(map_name));
 			ui_widget_load_progress_widget();
 			progress_bar_begin(global_scenario_index != NONE);
-#ifdef HALO_SWITCH_CONSOLE
+#ifdef HALO_CONSOLE_MAP_LOAD_HOOKS
 			/* port: the map's shaders are compiled under the loading screen,
 			which stays up for them once the map is read, for ten seconds at
 			most from here (port/switch/guest/dk_shaders.c) */
@@ -853,7 +853,7 @@ void game_precache_new_map(
 			{
 				map_status = cache_files_precache_map_status(
 					&game_globals->loading_progress);
-#ifdef HALO_SWITCH_CONSOLE
+#ifdef HALO_CONSOLE_MAP_LOAD_HOOKS
 				/* port: the loading screen's progress is half the map's copy and half its shaders
 				(port/switch/guest/dk_shaders.c), never going back, so that its light sweeps across the whole
 				time it is up and not across the copy alone, then dark through the shaders' wait */
@@ -877,7 +877,7 @@ void game_precache_new_map(
 				main_rasterizer_throttle();
 				main_present_frame();
 			}
-#ifdef HALO_SWITCH_CONSOLE
+#ifdef HALO_CONSOLE_MAP_LOAD_HOOKS
 			while (!map_status || (map_status == _cached_map_file_success && d3d8_gl_map_waiting()));
 #else
 			while (!map_status);

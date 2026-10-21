@@ -385,9 +385,9 @@ void terminal_printf(
 	return;
 }
 
-#ifdef HALO_SWITCH_CONSOLE
+#ifdef HALO_CONSOLE_STATUS_LINE
 /* port: the status line, while it is on screen (terminal_status_printf):
-the Switch's shader cache says how its compile is going */
+a console's shader cache says how its compile is going (the Switch's) */
 static long terminal_status_line_index = NONE;
 
 void terminal_status_printf(
