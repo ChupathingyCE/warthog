@@ -93,6 +93,7 @@ other copyrighted game data, and we don't link to them.
 | Join a game on your network | **Multiplayer → System Link**, as on the disc. PC hosts on your network show up too. |
 | Join one host directly | Put its LAN address (`join = "192.168.1.20"`) or its invite link in `config.toml`'s `[console]`; System Link joins the address, ONLINE GAMES' **Y** the invite. |
 | See your stats | Not yet on the console. |
+| Chat with PC players | In a game whose host runs Chupathingy, **D-pad up** picks a quick line and **D-pad down** sends it. A USB keyboard on a controller port works too: **T** talks to everyone, **Y** to your team, **H** shows the recent lines. |
 
 What to know:
 
@@ -134,9 +135,10 @@ join = "192.168.1.20"
 | `log_flush` | When `debug.txt` is written: `"buffered"` (the default) writes the game's lines together, once a second and at once for a crash; `"every_line"` writes each as it comes (slow), for a crash hunt. |
 | `simulate_64mb` | Deprecated and ignored (`debug.txt` says so). A devkit gets 64 MB from the executable's own flag now: `tools/xbox_package.py --devkit-64mb`. |
 
-A few of the PC builds' settings work on the console too (music and effects
-volume, `network.online`, `network.brokers_file` and the other network
-ones); `port/xbox/README.md` lists them.
+Many of the PC builds' settings work on the console too (field of view,
+the follow camera, chat, the scoreboard's layout, music and effects volume,
+the network ones); `port/xbox/README.md` lists them, and
+`port/xbox/FEATURES.md` shows which PC features the console has.
 
 `brokers.txt` beside `default.xbe` still lists the signalling servers
 internet play uses, one `host:port` a line, if the built-in ones can't be

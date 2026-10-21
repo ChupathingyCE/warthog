@@ -176,9 +176,19 @@ type, gain, obstruction and occlusion). The folder must be there. 0 (the
 default): none.
 
 And the desktop builds' that apply on the console: `display.direct_camera`,
-`audio.music_volume`, `audio.effects_volume`, `game.console_log`,
-`network.online`, `network.tunnel_port`, `network.brokers_file`,
-and `network.stun_servers`.
+`display.field_of_view`, `display.viewmodel_field_of_view`,
+`display.match_timer`, `display.version_watermark`, `display.follow_camera`,
+`display.follow_camera_after`, `display.powerup_timers`,
+`display.scoreboard_team_layout`, `display.scoreboard_background`,
+`display.scoreboard_background_color`, `display.show_quit_players`,
+`display.server_messages`, `chat.enabled`, `chat.show`, `chat.filter`,
+`chat.streamer_mode`, `chat.quick_messages`, `audio.music_volume`,
+`audio.effects_volume`, `game.console_log`, `game.unlock_all_levels`,
+`game.start_with_one_player`, `network.online`, `network.tunnel_port`,
+`network.brokers_file`, and `network.stun_servers`. A wider field of view
+draws more of the map each frame: on a stock console, keep the Xbox's 70 if
+a busy map slows down. `FEATURES.md` lists the desktop's features and where
+each stands on the console.
 Another setting the shared code reads is empty, 0 or false on the console,
 as before it had the file.
 
