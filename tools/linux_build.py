@@ -734,7 +734,10 @@ def generate_linux_build(n: Writer, sln: Any) -> None:
                 rule="linux_cc",
                 inputs=tool,
                 implicit=sysroot_inputs,
-                variables={"cflags": " ".join([posix_cflags, f"-I{ZLIB_DIR}", *ZLIB_DEFINES, posix_extra])},
+                # (and the build's own defines, --window-rebase's: the game's
+                # objects it links were compiled with them)
+                variables={"cflags": " ".join([posix_cflags, f"-I{ZLIB_DIR}", *ZLIB_DEFINES, posix_extra,
+                                               *units.extra_flags])},
             )
             tool_objects = [tool_object, obj_dir / (game_dir / "tag_validate.o"),
                             *(obj_dir / source.with_suffix(".o") for source in sorted(game_dir.glob("tag_schema*.c"))),
