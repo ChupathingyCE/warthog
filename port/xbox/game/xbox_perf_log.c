@@ -6,7 +6,11 @@ on with console.perf_log = true in config.toml. Times are read from the
 processor's time stamp counter, whose rate each second's line measures
 against the system's millisecond clock (an upgraded processor runs it
 faster than 733 MHz). The line goes through the game's log (errors.c), which
-keeps it in memory and writes debug.txt once a second.
+keeps it in memory and writes debug.txt once a second. A second line
+splits the render finer (its start, each view's setup, the lens flares, the
+HUD's screen effect, its end, and what is left), with the waits on the
+graphics chip and the disc. With console.perf_gpu_sync the game waits for the
+graphics chip at each part's end, so a part's time includes the chip's.
 */
 
 #include "cseries.h"
@@ -20,7 +24,12 @@ keeps it in memory and writes debug.txt once a second.
 
 int config_boolean(const char *name);
 
+/* the Xbox Direct3D library's (d3d8.lib): returns once the graphics chip
+has done everything it was given */
+void __stdcall D3DDevice_BlockUntilIdle(void);
+
 int halo_perf_log_on = FALSE;
+static int perf_gpu_sync = FALSE;
 unsigned long halo_perf_counters[NUMBER_OF_HALO_PERF_COUNTERS];
 
 /* ---------- the clock */
@@ -57,6 +66,9 @@ static struct
 
 void halo_perf_begin(int phase)
 {
+	/* (the last frame's drawing is not the render's) */
+	if (perf_gpu_sync && phase == _halo_perf_render)
+		D3DDevice_BlockUntilIdle();
 	perf.phase_start[phase] = perf_now();
 }
 
@@ -67,7 +79,11 @@ void halo_perf_end(int phase)
 
 void halo_perf_render_part(int phase)
 {
-	__int64 now = perf_now();
+	__int64 now;
+
+	if (perf_gpu_sync && perf.render_part != NONE)
+		D3DDevice_BlockUntilIdle();
+	now = perf_now();
 
 	if (perf.render_part != NONE)
 		perf.phase_total[perf.render_part] += now - perf.render_part_start;
@@ -148,6 +164,44 @@ static void perf_second_log(unsigned long milliseconds, __int64 now)
 		(double)halo_perf_counters[_halo_perf_models] / frame_count,
 		(double)halo_perf_counters[_halo_perf_models_high_lod] / frame_count,
 		perf.zoom_level + 1);
+
+	{
+		static int const render_parts[] =
+		{
+			_halo_perf_render_world,
+			_halo_perf_render_objects,
+			_halo_perf_render_transparent,
+			_halo_perf_render_effects,
+			_halo_perf_render_hud,
+			_halo_perf_render_begin,
+			_halo_perf_render_setup,
+			_halo_perf_render_lens_flares,
+			_halo_perf_render_screen_effect,
+			_halo_perf_render_end
+		};
+		__int64 other = perf.phase_total[_halo_perf_render] - perf.phase_total[_halo_perf_render_sound];
+		int index;
+
+		/* (the render less its sound and its parts: the views' cameras,
+		main_game_render's own work) */
+		for (index = 0; index < (int)NUMBEROF(render_parts); index++)
+			other -= perf.phase_total[render_parts[index]];
+		error(_error_log,
+			"perf: render detail%s: begin %.1f setup %.1f lens flares %.1f screen effect %.1f (%.1f passes) "
+			"end %.1f sound %.1f other %.1f; occlusion wait %.1f, texture wait %.1f (%.1f loads a frame)",
+			perf_gpu_sync ? " (gpu sync)" : "",
+			perf_milliseconds(perf.phase_total[_halo_perf_render_begin], frames),
+			perf_milliseconds(perf.phase_total[_halo_perf_render_setup], frames),
+			perf_milliseconds(perf.phase_total[_halo_perf_render_lens_flares], frames),
+			perf_milliseconds(perf.phase_total[_halo_perf_render_screen_effect], frames),
+			(double)halo_perf_counters[_halo_perf_screen_effect_passes] / frame_count,
+			perf_milliseconds(perf.phase_total[_halo_perf_render_end], frames),
+			perf_milliseconds(perf.phase_total[_halo_perf_render_sound], frames),
+			perf_milliseconds(other, frames),
+			perf_milliseconds(perf.phase_total[_halo_perf_occlusion_wait], frames),
+			perf_milliseconds(perf.phase_total[_halo_perf_texture_wait], frames),
+			(double)halo_perf_counters[_halo_perf_texture_loads] / frame_count);
+	}
 }
 
 static void perf_second_start(unsigned long milliseconds, __int64 now)
@@ -172,6 +226,7 @@ void halo_perf_frame(void)
 	{
 		known = config_boolean("console.perf_log") ? 1 : 0;
 		halo_perf_log_on = known;
+		perf_gpu_sync = known && config_boolean("console.perf_gpu_sync");
 		perf.render_part = NONE;
 		perf.zoom_level = NONE;
 		perf.ticks_per_millisecond = 733333.0;
