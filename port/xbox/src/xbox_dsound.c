@@ -184,9 +184,15 @@ HRESULT WINAPI halo_xbox_IDirectSound_SetMixBinHeadroom(
 }
 
 /* The game carries the January SDK's effects image (reverb and crosstalk
-DSP code), built for that SDK's DirectSound; this library's image format is
-not known to match, so no image is downloaded and the game plays without
-reverb. The game only checks the result. */
+DSP code). The image is not only reverb: a 3D voice's HRTF writes the
+crosstalk mix bins, which only the image's crosstalk effect plays on to the
+speakers, so with no image every 3D sound (weapons, grenades, footsteps) is
+silent and only 2D sounds are heard (the devkit's capture, 2026-10-21). The
+game's own image is downloaded, at the game's effect indices; whether this
+library takes it is logged. The game only checks the result, so a refusal
+leaves it running as before, without the image. */
+void platform_log(const char *format, ...);
+
 HRESULT WINAPI halo_xbox_IDirectSound_DownloadEffectsImage(
 	LPDIRECTSOUND direct_sound,
 	LPCVOID image,
@@ -194,16 +200,20 @@ HRESULT WINAPI halo_xbox_IDirectSound_DownloadEffectsImage(
 	LPCDSEFFECTIMAGELOC location,
 	LPDSEFFECTIMAGEDESC *description)
 {
-	(void)direct_sound;
-	(void)image;
-	(void)image_size;
-	(void)location;
+	HRESULT result;
+
 	if (description)
 	{
 		*description= NULL;
 	}
+	result= IDirectSound_DownloadEffectsImage(direct_sound, image, image_size, (LPDSEFFECTIMAGELOC)location,
+		description);
+	platform_log("sound: the game's effects image (%lu bytes, reverb %lu, crosstalk %lu) %s (%08lx)",
+		(unsigned long)image_size, location ? location->dwI3DL2ReverbIndex : 0UL,
+		location ? location->dwCrosstalkIndex : 0UL, SUCCEEDED(result) ? "downloaded" : "refused",
+		(unsigned long)result);
 
-	return DS_OK;
+	return SUCCEEDED(result) ? result : DS_OK;
 }
 
 /* ---------- the stream helper */
