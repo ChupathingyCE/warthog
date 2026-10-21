@@ -108,5 +108,16 @@ the console's own (HALO_XBOX_CONSOLE) */
 /* the desktop builds' mouse in the menus, which the console has none of
 (port/xbox/src/xbox_port.c) */
 #include "port/linux/include/halo_ui_pointer.h"
+/* The port's functions the shared sources call, declared for them as the
+native builds' prefix does. Without it a call was compiled as an undeclared
+function's, returning an int: a float result (halo_screen_scale,
+render_interpolation_ticks_since, ...) was read from the wrong register and
+left on the processor's floating-point stack. The screen effects took that
+for a large screen and drew their convolution in six times the passes
+(rasterizer_xbox_screen_effect.c): a menu's full-screen warp at 3 frames a
+second, the zoom's at 20 */
+#include "port/linux/include/halo_linux_source_fixups.h"
+/* (and the audio probe's, whose seconds went as a double: main.c) */
+#include "port/linux/game/audio_probe.h"
 
 #endif
