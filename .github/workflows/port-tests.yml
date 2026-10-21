@@ -28,7 +28,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           submodules: true
-      - name: Configure (no console SDK: no console targets)
+      - name: Configure, without any console SDK
         run: |
           python3 chupathingyce/configure.py --console-port port/xbox --console-port port/xbox360 \
             --console-port port/wiiu --console-players 32
