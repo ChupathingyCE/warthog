@@ -3606,8 +3606,6 @@ void main_loop(
 			/* automated system link tests (port/linux/game/network_test.c) */
 			MAIN_STAGE("network_test_update");
 			network_test_update(main_globals.main_menu_scenario_loaded, main_globals.seconds_elapsed);
-			/* the audio probe's scripted recording (port/linux/game/audio_probe.c) */
-			audio_probe_update(main_globals.main_menu_scenario_loaded, main_globals.seconds_elapsed);
 #ifdef HALO_GAME_BROWSER
 			/* text chat (port/linux/game/chat.c) */
 			chat_update();
@@ -3615,6 +3613,10 @@ void main_loop(
 			/* changing teams during a game (port/linux/game/team_change.c) */
 			team_change_update();
 #endif
+			/* the audio probe's scripted recording (port/linux/game/audio_probe.c),
+			on the consoles too */
+			MAIN_STAGE("audio_probe_update");
+			audio_probe_update(main_globals.main_menu_scenario_loaded, main_globals.seconds_elapsed);
 			HALO_PERF_BEGIN(_halo_perf_network);
 			connection = main_globals.connection;
 			if (connection==_game_connection_network_client)
