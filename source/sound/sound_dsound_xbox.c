@@ -2838,6 +2838,9 @@ static void dsound_channel_queue_sound(
 			channel->sample_offset= 0;
 			channel->packet_count= 0;
 
+			/* port: logged by the audio capture of real play (port/linux/game/audio_probe.c) */
+			audio_probe_sound_started(index, channel->type_flags, sound->name, sound->samples.size,
+				channel->gain, channel->obstruction, channel->occlusion, channel->spatialized);
 #ifdef HALO_XBOX_CONSOLE
 			xbox_sound_started++;
 			if (index<MAXIMUM_SOUND_CHANNELS && xbox_sound_log_lines<XBOX_SOUND_LOG_LINES)
