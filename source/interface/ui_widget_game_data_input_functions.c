@@ -2406,11 +2406,14 @@ static void game_options_menu_update_text_desc(
 static void game_options_menu_update_pic_desc(
 	struct widget_instance *widget)
 {
+	/* port: the picture hidden for an extra item without one */
+	static struct widget_instance *hidden_picture = NULL;
 	struct widget_instance *column;
 	struct widget_instance *extended_description;
 	struct widget_instance *spinner_list;
 	struct ui_widget_definition *definition;
 	long description_index;
+	boolean pictured = TRUE;
 
 	match_vassert(
 		"c:\\halo\\SOURCE\\interface\\ui_widget_game_data_input_functions.c",
@@ -2452,7 +2455,11 @@ static void game_options_menu_update_pic_desc(
 
 			if (column == widget->focused_child)
 			{
-				/* port: an extra item shows its spinner's last picture of its own */
+				/* port: an extra item shows its spinner's last picture of its
+				own, or none where the picture has no frame for it (Bumper
+				Jumper: ui_widget.c) */
+				pictured = ui_widget_spinner_item_pictured(spinner_list,
+					spinner_list->parameters.list.selected_list_item_index);
 				description_index += MIN(spinner_list->parameters.list.selected_list_item_index,
 					ui_widget_spinner_own_item_count(spinner_list) - 1);
 				break;
@@ -2464,6 +2471,12 @@ static void game_options_menu_update_pic_desc(
 	}
 
 	extended_description->animation.current_frame_index = (short)description_index;
+	/* (hidden only while such an item is chosen, and shown again after) */
+	if (!pictured || extended_description == hidden_picture)
+	{
+		widget_instance_set_visibility_recursive(extended_description, pictured);
+		hidden_picture = pictured ? NULL : extended_description;
+	}
 	return;
 }
 

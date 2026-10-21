@@ -1512,6 +1512,8 @@ static boolean ui_check_for_pause_game(
 	void);
 static long spinner_string_list_extra_count(
 	long string_list_index);
+static short spinner_string_list_extra_wider(
+	long string_list_index);
 static wchar_t *spinner_string_list_get_string(
 	long string_list_index,
 	short string_index);
@@ -1519,10 +1521,10 @@ static wchar_t *spinner_string_list_get_string(
 /* ---------- globals */
 
 /* port: text boxes' string list indices from here are the descriptions of
-spinners' extra items (kills_to_win_extra_descriptions), above the Custom
+spinners' extra items (spinner_extras' descriptions), above the Custom
 Edition maps' display indices (custom_edition_maps.c keeps them below 0x7000) */
 #define SPINNER_EXTRA_DESCRIPTION_BASE 0x7000
-/* ... and the pixels a spinner with extra items is wider (for three digits) */
+/* ... and the pixels the kills to win spinner is wider (for three digits) */
 #define SPINNER_EXTRA_WIDTH 12
 
 /* port: the strings a spinner's string list has past the tag's own, as more
@@ -1544,6 +1546,54 @@ static wchar_t const *const kills_to_win_extra_descriptions[] =
 	L"Two hundred and fifty kills to win.",
 	L"Five hundred kills to win. You'll be here a while.",
 };
+
+#ifdef HALO_CONSOLE_NO_CONTROLS
+/* port: a build without the Controls screen (port/linux/game/
+controls_screen.c) offers Bumper Jumper in the profile's own Button
+Layout, after the Xbox's five (player_ui.c sets it; the profile keeps it
+as _button_preset_bumper_jumper, the sixth). The controller picture has
+no frame for it, so it is hidden while the item is chosen */
+static wchar_t const *const button_config_extra_strings[] =
+{
+	L"BUMPER JUMPER",
+};
+
+static wchar_t const *const button_config_extra_descriptions[] =
+{
+	L"Jump with the white button, melee with the\r\nblack, as Bumper Jumper in the Master Chief\r\nCollection.",
+};
+#endif
+
+/* port: the spinners' string lists with extra items, by tag name: their
+strings, their descriptions, how much wider the spinner draws (to the
+left), and whether the list's picture has a frame for them */
+static struct
+{
+	char const *tag_name;
+	wchar_t const *const *strings;
+	wchar_t const *const *descriptions;
+	short count;
+	short wider;
+	boolean pictured;
+} const spinner_extras[] =
+{
+	{
+		"ui\\shell\\main_menu\\settings_select\\multiplayer_setup\\playlist_edit\\slayer_edit\\var_kills_to_win",
+		kills_to_win_extra_strings, kills_to_win_extra_descriptions, NUMBEROF(kills_to_win_extra_strings),
+		SPINNER_EXTRA_WIDTH, TRUE,
+	},
+#ifdef HALO_CONSOLE_NO_CONTROLS
+	{
+		"ui\\shell\\main_menu\\settings_select\\player_setup\\player_profile_edit\\controller_edit\\var_button_config",
+		button_config_extra_strings, button_config_extra_descriptions, NUMBEROF(button_config_extra_strings),
+		0, FALSE,
+	},
+#endif
+};
+
+/* the extra descriptions' text box indices: SPINNER_EXTRA_DESCRIPTION_BASE,
+then each list's in turn, SPINNER_EXTRA_DESCRIPTIONS_EACH apart */
+#define SPINNER_EXTRA_DESCRIPTIONS_EACH 0x20
 
 /* port: an error message of the port's own text (display_error_text_deferred):
 the text waiting for its dialog, then the dialog's text box showing it */
@@ -5624,9 +5674,14 @@ static void widget_instance_render_text_box(
 #endif
 		/* port: the description of a spinner's extra item */
 		if (string_list_index >= SPINNER_EXTRA_DESCRIPTION_BASE &&
-			string_list_index < SPINNER_EXTRA_DESCRIPTION_BASE + (short)NUMBEROF(kills_to_win_extra_descriptions))
+			string_list_index < SPINNER_EXTRA_DESCRIPTION_BASE +
+				(short)NUMBEROF(spinner_extras) * SPINNER_EXTRA_DESCRIPTIONS_EACH)
 		{
-			string = (wchar_t *)kills_to_win_extra_descriptions[string_list_index - SPINNER_EXTRA_DESCRIPTION_BASE];
+			short extra = (short)((string_list_index - SPINNER_EXTRA_DESCRIPTION_BASE) / SPINNER_EXTRA_DESCRIPTIONS_EACH);
+			short item = (short)((string_list_index - SPINNER_EXTRA_DESCRIPTION_BASE) % SPINNER_EXTRA_DESCRIPTIONS_EACH);
+
+			if (item < spinner_extras[extra].count)
+				string = (wchar_t *)spinner_extras[extra].descriptions[item];
 		}
 		length = ustrlen(string);
 		widget->parameters.text_box.text = pool_resize_pointer(
@@ -5827,12 +5882,13 @@ static void widget_instance_render_spinner_list(
 
 		csmemset(&parameters, 0, sizeof(parameters));
 		bounds = definition->list_header_bounds;
-		/* port: a spinner with extra items is wider, to the left, its arrow
-		with it */
-		if (spinner_string_list_extra_count(definition->text_label_string_list.index))
+		/* port: a spinner with extra items may be wider, to the left, its
+		arrow with it */
 		{
-			bounds.x0 -= SPINNER_EXTRA_WIDTH;
-			bounds.x1 -= SPINNER_EXTRA_WIDTH;
+			short wider = spinner_string_list_extra_wider(definition->text_label_string_list.index);
+
+			bounds.x0 -= wider;
+			bounds.x1 -= wider;
 		}
 		bounds.x0 += offset.x;
 		bounds.y0 += offset.y;
@@ -5953,12 +6009,13 @@ static void widget_instance_render_spinner_list(
 				bounds.y1 += offset.y;
 				bounds.x0 += offset.x;
 				bounds.y0 += offset.y;
-				/* port: a spinner with extra items (three digits) is wider, to the
-				left */
-				if (spinner_string_list_extra_count(definition->text_label_string_list.index))
+				/* port: a spinner with extra items (three digits) may be wider, to
+				the left */
 				{
-					bounds.x0 -= SPINNER_EXTRA_WIDTH;
-					clip.x0 -= SPINNER_EXTRA_WIDTH;
+					short wider = spinner_string_list_extra_wider(definition->text_label_string_list.index);
+
+					bounds.x0 -= wider;
+					clip.x0 -= wider;
 				}
 				if (focus)
 				{
@@ -8028,15 +8085,36 @@ void render_ui_widgets(
 /* ---------- private code */
 
 
+/* the spinner_extras entry of a string list, or NONE */
+static short spinner_string_list_extra(
+	long string_list_index)
+{
+	short index;
+
+	if (string_list_index == NONE)
+		return NONE;
+	for (index = 0; index < (short)NUMBEROF(spinner_extras); index++)
+	{
+		if (!csstrcmp(tag_get_name(string_list_index), spinner_extras[index].tag_name))
+			return index;
+	}
+	return NONE;
+}
+
 static long spinner_string_list_extra_count(
 	long string_list_index)
 {
-	if (string_list_index != NONE && !csstrcmp(tag_get_name(string_list_index),
-		"ui\\shell\\main_menu\\settings_select\\multiplayer_setup\\playlist_edit\\slayer_edit\\var_kills_to_win"))
-	{
-		return NUMBEROF(kills_to_win_extra_strings);
-	}
-	return 0;
+	short extra = spinner_string_list_extra(string_list_index);
+
+	return extra == NONE ? 0 : spinner_extras[extra].count;
+}
+
+static short spinner_string_list_extra_wider(
+	long string_list_index)
+{
+	short extra = spinner_string_list_extra(string_list_index);
+
+	return extra == NONE ? 0 : spinner_extras[extra].wider;
 }
 
 /* a spinner's items of its string list's own (the descriptions of a list of
@@ -8056,11 +8134,25 @@ short ui_widget_spinner_extra_description(
 	struct widget_instance *spinner,
 	short item_index)
 {
+	struct ui_widget_definition *definition = ui_widget_definition_get(spinner->definition_tag_index);
+	short extra = spinner_string_list_extra(definition->text_label_string_list.index);
 	short own = ui_widget_spinner_own_item_count(spinner);
 
-	if (item_index < own)
+	if (item_index < own || extra == NONE)
 		return NONE;
-	return (short)(SPINNER_EXTRA_DESCRIPTION_BASE + item_index - own);
+	return (short)(SPINNER_EXTRA_DESCRIPTION_BASE + extra * SPINNER_EXTRA_DESCRIPTIONS_EACH + item_index - own);
+}
+
+/* whether a spinner's item has a picture of its list's own (an extra item
+may have none: the picture is hidden while it is chosen) */
+boolean ui_widget_spinner_item_pictured(
+	struct widget_instance *spinner,
+	short item_index)
+{
+	struct ui_widget_definition *definition = ui_widget_definition_get(spinner->definition_tag_index);
+	short extra = spinner_string_list_extra(definition->text_label_string_list.index);
+
+	return item_index < ui_widget_spinner_own_item_count(spinner) || extra == NONE || spinner_extras[extra].pictured;
 }
 
 /* a string of a string list, or of its extra strings past the tag's own */
@@ -8073,7 +8165,8 @@ static wchar_t *spinner_string_list_get_string(
 	if (string_list && string_index >= string_list->strings.count &&
 		string_index - string_list->strings.count < spinner_string_list_extra_count(string_list_index))
 	{
-		return (wchar_t *)kills_to_win_extra_strings[string_index - string_list->strings.count];
+		return (wchar_t *)spinner_extras[spinner_string_list_extra(string_list_index)].strings[
+			string_index - string_list->strings.count];
 	}
 	return unicode_string_list_get_string(string_list_index, string_index);
 }
