@@ -398,12 +398,20 @@ static int for_this_platform(struct reader *reader, const XML_Char **attributes)
 		{
 			const char *platform = attributes[index + 1];
 
-			if (strcmp(platform, "desktop") && strcmp(platform, "android"))
+			if (strcmp(platform, "desktop") && strcmp(platform, "android")
+#ifdef HALO_SWITCH_CONSOLE
+				&& strcmp(platform, "switch")
+#endif
+				)
 			{
 				reader_error(reader, "platform=\"%s\" is not \"desktop\" or \"android\"", platform);
 				return 1;
 			}
-#ifdef HALO_ANDROID
+			/* (the Switch's game is built as Android's, with
+			HALO_SWITCH_CONSOLE too: "android" is the Android app's) */
+#if defined(HALO_SWITCH_CONSOLE)
+			return !strcmp(platform, "switch");
+#elif defined(HALO_ANDROID)
 			return !strcmp(platform, "android");
 #else
 			return !strcmp(platform, "desktop");

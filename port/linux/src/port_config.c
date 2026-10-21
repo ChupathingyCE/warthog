@@ -116,6 +116,14 @@ static const struct config_setting config_settings[] =
 	{ "display.screen_width", _config_integer, "0", "HALO_SCREEN_WIDTH", _environment_value, _platform_android,
 		"Columns of the 480-line picture: 0 for the display's shape, 640 for the\n"
 		"Xbox's 4:3." },
+#ifdef HALO_SWITCH_CONSOLE
+	/* read by the Switch host before the game starts
+	(port/switch/host/host_main.c) */
+	{ "display.renderer", _config_string, "\"gl\"", "HALO_RENDERER", _environment_value, _platform_android,
+		"How the game draws: \"gl\" (OpenGL over Mesa) or \"deko3d\" (the console's\n"
+		"own GPU interface, for a game image built with the deko3d renderer, which\n"
+		"this one is not). Takes effect the next time the game starts." },
+#endif
 	{ "display.vsync", _config_boolean, "true", "HALO_NO_VSYNC", _environment_set_is_false, _platform_all,
 		"Wait for the display between frames; false draws as fast as possible." },
 	{ "display.max_fps", _config_integer, "0", "HALO_MAX_FPS", _environment_value, _platform_desktop,
@@ -589,6 +597,20 @@ static const struct config_setting config_settings[] =
 	{ "debug.sample_seconds", _config_real, "0.0", "HALO_SAMPLE", _environment_value, _platform_android,
 		"Log where every game thread is this often, in seconds (read by the\n"
 		"app, port/android/host/host_debug.c); 0 never." },
+#ifdef HALO_SWITCH_CONSOLE
+	/* read by the Switch host (port/switch/host/host_main.c, host_dk.c) */
+	{ "debug.profiler", _config_boolean, "false", "HALO_PROFILER", _environment_set_is_true, _platform_android,
+		"Profile the game: sample where its threads are (debug.profile_hz times a\n"
+		"second) and write the counts to the profile folder every 20 s, for\n"
+		"tools/switch_profile.py. Takes effect the next start." },
+	{ "debug.profile_hz", _config_integer, "500", "HALO_PROFILE_HZ", _environment_value, _platform_android,
+		"The profiler's samples a second, when debug.profiler is true." },
+	{ "debug.texture_verify_compressed", _config_boolean, "false", "HALO_TEXTURE_VERIFY_COMPRESSED",
+		_environment_set_is_true, _platform_android,
+		"Read each DXT-compressed texture back out of its image after it is written,\n"
+		"and log where it differs from the game's bytes (port/switch/host/host_dk.c).\n"
+		"Slow: it waits for the GPU each time. Takes effect the next start." },
+#endif
 };
 
 #define NUMBER_OF_CONFIG_SETTINGS (sizeof(config_settings) / sizeof(config_settings[0]))
