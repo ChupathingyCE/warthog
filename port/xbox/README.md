@@ -151,7 +151,8 @@ The console's own, in `[console]`:
 | `game_list_server` | `""` | the list's server (host or address, `:port` optional) when `warthog.milenko.org` does not resolve |
 | `join` | `""` | a host's LAN address (System Link joins it directly) or an invite (ONLINE GAMES' Y joins it) |
 | `trace` | `false` | the bring-up traces: the main loop each second, every hop of an internet join, the advertisements seen, other hosts only as `enet#` tags (salted per run), never their Ethernet addresses; and XLink Kai's address for the console |
-| `large_caches` | `false` | on a 128 MB console, a 44 MB texture cache (64 MB on a 256 MB one); on a 64 MB console, a message and the Xbox's 22 MB |
+| `memory_class` | `"auto"` | the memory class (see "Memory"): `"auto"` is the console's own, so a console of 128 MB or more has the extras; `"64"` holds any console to the 64 MB baseline's sizes |
+| `large_caches` | `false` | deprecated and ignored (`debug.txt` says so): a console of 128 MB or more has the larger caches on its own (`memory_class`) |
 | `debug_geometry` | `false` | the debug build's debug geometry (lines and triangles drawn by debug commands): its three 480 KB buffers are made at the start only with it on. For development, on a console with room (a devkit) |
 | `simulate_64mb` | `false` | deprecated and ignored (`debug.txt` says so): a devkit gets 64 MB from the XBE's flag now, `tools/xbox_package.py --devkit-64mb` (see "Memory") |
 | `delta` | `"auto"` | Delta Peer as a client: joining a game whose host offers it (the desktop builds and the dedicated servers), the console says it is an Xbox, with its memory class, and nothing else, so that the stats site, the scoreboard and the server show Xbox. `"auto"` and `"on"` send it; `"off"` keeps the legacy protocol alone. A host without Delta, or any failure, leaves the game as it was. About 50 KB of the console's memory (all static: its code and 11 KB of data) |
@@ -199,14 +200,51 @@ upgrade) or 256 MB (the bigger mods). The XBE does not limit itself to 64 MB
 reports it; `tools/xbox_package.py --devkit-64mb` sets the flag that
 limits a devkit again.
 
-The class sets only what the console can safely change at run time: the
-texture cache (`console.large_caches`, above). The game's limits (players,
-machines, objects, the game state) stay the Xbox's on every console, so all
-of them play the same game; docs/cross-play.md has why the bigger game
-state needs more than a bigger console. `xbox_memory_require` is how a
-feature that needs 128 MB says so: a message at the main menu, and the
-game goes on without it. `xbox_memory_delta_class` is Delta Peer's platform
-key's `memory_class` (log2 of the megabytes: 6, 7 or 8).
+64 MB is the baseline: every feature must run on a stock console. A
+console of 128 MB or more gets extras, decided once at the start, before
+anything is allocated:
+
+| | 64 MB class | 128 MB class (256 MB) |
+|---|---|---|
+| texture cache | 22 MB, the Xbox's (down to 19 MB if the console is short) | 44 MB (64 MB) |
+| sound cache | 4 MB, 512 sounds | 8 MB, 1024 sounds |
+| dynamic triangles a frame | 32768 (192 KB index buffer) | 65536 (384 KB) |
+| transparent geometry groups a frame | 384 | 1024 (100 KB more heap) |
+| network connection queues | 64 KB reliable, 32 KB unreliable, 16 KB a joined machine (16 players) | four times (the desktop builds': 256 KB, 128 KB), 32 KB a machine |
+
+That is about 30 MB of a 128 MB console's upper 64 MB; the rest stays free.
+The 64 MB class's sizes are the ones it had before the classes (the image
+grows by 40 bytes). Only what is drawn, heard and buffered on the console
+changes: the game's limits (players, machines, objects, particles, the game
+state) and what goes on the wire stay the Xbox's on every console, so all
+of them, and the PCs, play the same game; docs/cross-play.md has why the
+bigger game state needs more than a bigger console. The high-res text is
+not among the extras: the Xbox build leaves it out (it draws the maps' own
+fonts, as retail did).
+
+`debug.txt` says which class the game uses, once, at the start:
+`boot: memory: 128 MB console, extras on: texture cache 45056 KB, sound
+cache 8192 KB, and larger render buffers and network queues`, or
+`boot: memory: 64 MB console, extras off: the Xbox's sizes`, or, on a
+bigger console held to the baseline, `boot: memory: 128 MB console held to
+64 MB by console.memory_class, extras off` (or `by the XBE's 64 MB flag`).
+
+`console.memory_class` in `config.toml` chooses: `"auto"` (the default) is
+the console's own class; `"64"` holds any console to the 64 MB class, for a
+test of the baseline on a bigger console or if an extra misbehaves.
+`console.large_caches`, which raised the texture cache on request, is
+deprecated and ignored: the class does it.
+
+For code: `console_memory_extras()` (port/linux/include/halo_console_memory.h,
+console-neutral, answered here by `src/xbox_memory.c`) says whether this
+console has the extras; `HALO_CONSOLE_MEMORY_EXTRAS(baseline, extras)` picks
+a size by it (the baseline on every build that has no class). A heavy
+feature that only a bigger console can carry checks it at its start; one
+that should tell the player calls `xbox_memory_require`, a message at the
+main menu, and the game goes on without it. Another console port answers
+the same two calls with its own classes (an Xbox 360 has 512 MB) and
+defines `HALO_CONSOLE_MEMORY_CLASS`. `xbox_memory_delta_class` is Delta
+Peer's platform key's `memory_class` (log2 of the megabytes: 6, 7 or 8).
 
 The network tables hold 16 players (`HALO_CONSOLE_PLAYERS`, as the Xbox's;
 `configure.py --console-players`, console-neutral like `--console-debug-tools`): the
@@ -220,9 +258,9 @@ state, tags, textures, sound: 51 MB) are the Xbox's, so the image and the
 heap must stay near the Xbox game's. The debug build the port comes from
 kept debug records the console does not (the AI's per-actor debug records
 and path copies, 10 MB of heap; the profiler's 256-frame history; the
-oversized surface bit vector); the map checks' 2.75 MB of claims are made
-on the heap on a console of 128 MB or more only (a 64 MB console loads
-maps unchecked, as the Xbox game did). If what is free at the start still
+oversized surface bit vector); the map checks are left out of the build
+(`HALO_CONSOLE_NO_TAG_VALIDATE`: the console loads maps unchecked, as the
+Xbox game did). If what is free at the start still
 cannot hold the Xbox's 22 MB texture cache and leave 8 MB for Direct3D and
 the heap, the cache is made smaller, down to 19 MB (the attract movie
 borrows 16 MB of it), rather than the start failing.
@@ -235,7 +273,9 @@ main loop; later, `memory: N KB free (a new low)` as a map loads or a match
 peaks.
 
 The target is a stock 64 MB console; 128 MB (a devkit, the common upgrade)
-only makes it smoother. To test the 64 MB path on a 128 MB devkit, package
+only makes it smoother. To test the 64 MB path on a 128 MB console, set
+`console.memory_class = "64"` (any console: the sizes are the baseline's,
+though the memory free is still a 128 MB console's), or, on a devkit, package
 with `tools/xbox_package.py --devkit-64mb`: it sets `XINIT_LIMIT_DEVKIT_MEMORY`
 in the XBE's init flags (`0x4`, in the header at `0x124`; `cxbe`'s `Xbe.h`
 has them), and the devkit's kernel gives the game 64 MB, as a stock console

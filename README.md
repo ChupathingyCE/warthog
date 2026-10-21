@@ -129,7 +129,8 @@ join = "192.168.1.20"
 | `game_list_server` | A host or address (`:port` optional): where to get the game list if `warthog.milenko.org` doesn't resolve. |
 | `join` | A host's LAN address, or an invite (`halo://join/…`). |
 | `trace` | `true` writes detailed network traces to `debug.txt`, for reporting a join that fails. Other hosts appear only as tags (`enet#` and six hex digits), never by their network cards' addresses; with it, `debug.txt` also gives XLink Kai's address for the console. |
-| `large_caches` | `true` gives a 128 MB console a bigger texture cache (44 MB; 64 MB on a 256 MB console). On a stock 64 MB console it shows a message and keeps the Xbox's own. |
+| `memory_class` | `"auto"` (the default): a console with 128 MB or more (the common upgrade, a devkit) gets extras, such as larger texture and sound caches; a stock 64 MB console keeps the Xbox's sizes. `"64"` gives any console the stock sizes, to test the 64 MB baseline or if an extra misbehaves. The game itself plays the same either way. |
+| `large_caches` | Deprecated and ignored: a console with 128 MB or more gets the larger caches on its own now (`memory_class`). |
 | `debug_geometry` | For development: `true` brings back the debug build's debug geometry (lines and triangles drawn by debug commands), whose buffers take 1.4 MB. Off by default: a stock 64 MB console has no room to spare. |
 | `log_flush` | When `debug.txt` is written: `"buffered"` (the default) writes the game's lines together, once a second and at once for a crash; `"every_line"` writes each as it comes (slow), for a crash hunt. |
 | `simulate_64mb` | Deprecated and ignored (`debug.txt` says so). A devkit gets 64 MB from the executable's own flag now: `tools/xbox_package.py --devkit-64mb`. |
