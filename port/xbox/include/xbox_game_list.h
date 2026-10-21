@@ -16,7 +16,16 @@ the host too.
 #define __XBOX_GAME_LIST_H
 
 #define GAME_LIST_HOST "warthog.milenko.org"
+/* a build of more than 16 players (configure.py --console-players) asks
+for the games set for up to its own count; a stock build's plain request
+gets those of up to 16 */
+#if defined(HALO_CONSOLE_PLAYERS) && HALO_CONSOLE_PLAYERS > 16
+#define GAME_LIST_STRING_OF(x) #x
+#define GAME_LIST_STRING(x) GAME_LIST_STRING_OF(x)
+#define GAME_LIST_PATH "/v1/console/games?players=" GAME_LIST_STRING(HALO_CONSOLE_PLAYERS)
+#else
 #define GAME_LIST_PATH "/v1/console/games"
+#endif
 #define GAME_LIST_PORT 80
 /* console.game_list_server in D:\config.toml (once D:\game_list.txt, still
 read for one release): a host or an IPv4 address, ":port" optional; used
