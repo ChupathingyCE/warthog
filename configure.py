@@ -117,7 +117,7 @@ parser.add_argument(
 parser.add_argument(
     "--console-players",
     type=int,
-    choices=(16, 32, 64),
+    choices=(16, 24, 32, 64),
     default=16,
     help="console builds (the original Xbox's today): the players their network tables hold (HALO_CONSOLE_PLAYERS). 16 is the Xbox's; "
     "32 and 64 are test builds a stock 64 MB console does not hold, and say so when they start",

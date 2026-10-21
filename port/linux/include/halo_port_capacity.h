@@ -39,7 +39,7 @@ has the players' tables in its game state, which the Xbox's does not hold:
 the Xbox's pools, once for each 16 players, above the tag cache as the native
 builds put theirs (a 128 MB console; xbox_memory.c refuses a 64 MB one) */
 #define HALO_PORT_GAME_STATE_BASE_ADDRESS 0x81A00000
-#define HALO_PORT_GAME_STATE_CPU_SIZE (0x305000 * (HALO_CONSOLE_PLAYERS / 16))
+#define HALO_PORT_GAME_STATE_CPU_SIZE (0x305000 * ((HALO_CONSOLE_PLAYERS + 15) / 16))
 #else
 #define HALO_PORT_GAME_STATE_BASE_ADDRESS 0x80061000
 #define HALO_PORT_GAME_STATE_CPU_SIZE 0x305000

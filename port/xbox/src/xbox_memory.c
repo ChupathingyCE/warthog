@@ -108,9 +108,9 @@ typedef char xbox_mm_statistics_size_assert[sizeof(xbox_mm_statistics) == 36 ? 1
 LONG __stdcall MmQueryStatistics(xbox_mm_statistics *statistics);
 
 /* the game state (the Xbox's 0x345000; a test build of more than 16 players
-holds the Xbox's pools once for each 16, halo_port_capacity.h) */
+holds the Xbox's pools once for each 16 or part of 16, halo_port_capacity.h) */
 #if defined(HALO_CONSOLE_PLAYERS) && HALO_CONSOLE_PLAYERS > 16
-#define _game_state_size (0x305000 * (HALO_CONSOLE_PLAYERS / 16) + 0x40000)
+#define _game_state_size (0x305000 * ((HALO_CONSOLE_PLAYERS + 15) / 16) + 0x40000)
 #else
 #define _game_state_size 0x345000
 #endif
