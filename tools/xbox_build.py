@@ -55,8 +55,14 @@ GAME_FLAGS = [
     "-fms-compatibility",
     "-fms-compatibility-version=13.10",
     "-O2",
-    # the game keeps EBP frames (MSVC /Oy-): its stack walker follows them
+    # the game keeps EBP frames (MSVC /Oy-): its stack walker follows them,
+    # for the crash reports in debug.txt. A function that calls no other
+    # (the vector math, the small getters) is built without one: three
+    # instructions fewer on each call and a seventh register for its code.
+    # A crash inside one still names it (the processor's address) and the
+    # chain from its caller's caller on; only that caller is not named
     "-fno-omit-frame-pointer",
+    "-momit-leaf-frame-pointer",
     "-fcommon",
     # each function in a section of its own, so that the linker leaves out
     # the ones nothing calls (/opt:ref, LINK_FLAGS): the debug decomp has
