@@ -168,6 +168,12 @@ plays, its final mix read back from the AC'97 controller's output
 (`src/xbox_audio_capture.c`), as WAVE files beside the probe file, for
 `tools/audio_probe_compare.py`; then it goes back to the main menu. Empty
 (the default): none of it runs.
+`debug.audio_capture_seconds` records real play instead: that many seconds of
+each game (solo, system link or online) once the player has a unit, as
+`D:\audio_probe\capture-<map>-<n>-xbox-final.wav` with `-events.txt` (the
+player's position each second, and every sound a channel starts, with its
+type, gain, obstruction and occlusion). The folder must be there. 0 (the
+default): none.
 
 And the desktop builds' that apply on the console: `display.direct_camera`,
 `audio.music_volume`, `audio.effects_volume`, `game.console_log`,
