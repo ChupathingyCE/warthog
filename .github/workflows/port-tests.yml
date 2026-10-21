@@ -19,11 +19,13 @@ concurrency:
   group: port-tests-${{ github.ref }}
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
-# (on macOS, where the port is built: the game's port_config.c, which the
-# settings test compiles, takes its Linux branch on a Linux host)
+# (clang, as on macOS where the port is built: gcc rejects the co-op names
+# test's %ls in C89)
 jobs:
   host:
-    runs-on: macos-latest
+    runs-on: ubuntu-latest
+    env:
+      CC: clang
     steps:
       - uses: actions/checkout@v4
         with:
