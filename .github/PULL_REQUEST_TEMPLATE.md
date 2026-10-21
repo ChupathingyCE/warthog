@@ -1,4 +1,4 @@
-<!-- Open pull requests against ChupathingyCE/warthog's main. -->
+<!-- Open pull requests against ChupathingyCE/warthog-xbox's main. -->
 
 **What it does**
 

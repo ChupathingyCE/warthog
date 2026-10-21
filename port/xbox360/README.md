@@ -12,7 +12,7 @@ what each needs first.
 ## Build
 
 ```sh
-python3 configure.py --oxdk360 ~/OXDK360 --llvm-xenon ~/llvm-xenon
+python3 chupathingyce/configure.py --console-port port/xbox360 --oxdk360 ~/OXDK360 --llvm-xenon ~/llvm-xenon
 ninja xbox360
 ```
 

@@ -11,7 +11,7 @@ the message and drop it from a datagram, as the PC builds do, and its input
 entry says what version 32's does.
 */
 
-#include "../../linux/game/network_rules.h"
+#include "port/linux/game/network_rules.h"
 
 #include <stdio.h>
 #include <string.h>

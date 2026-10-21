@@ -41,7 +41,7 @@ prefix does not set it) */
 #include <string.h>
 
 #include "../p2p/pthread.h"
-#include "../../linux/src/p2p.h"
+#include "port/linux/src/p2p.h"
 
 void platform_log(const char *format, ...) __attribute__((format(printf, 1, 2)));
 int xbox_trace_enabled(void);

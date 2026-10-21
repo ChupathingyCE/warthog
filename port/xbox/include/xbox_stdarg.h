@@ -2,7 +2,7 @@
 XBOX_STDARG.H
 
 Force-included ahead of every unit the Xbox build compiles with the SDK's
-own headers first (tools/xbox_build.py's SUPPORT_FLAGS: port/xbox/src, the
+own headers first (port/xbox/build.py's SUPPORT_FLAGS: port/xbox/src, the
 generated sources and internet play's): the SDK's stdarg.h, then clang's
 builtins in place of its va_start, va_arg and va_end.
 

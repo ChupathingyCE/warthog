@@ -3,7 +3,7 @@ PLATFORM.H (the console's)
 
 Internet play's sources (port/linux/src/p2p.c, p2p_signal.c, p2p_crypto.c)
 and Delta Peer's (delta_wire.c, delta_peer.c, delta_peer_game.c) are the desktop builds' own, compiled for the console as they are
-(tools/xbox_build.py copies them into the build folder, so that their
+(port/xbox/build.py copies them into the build folder, so that their
 quoted includes find this folder's headers first). This stands in for the
 Linux platform layer's platform.h: the SDK's declarations, and the little
 of the layer they call (port/xbox/src/xbox_p2p.c).

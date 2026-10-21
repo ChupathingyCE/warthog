@@ -1,5 +1,5 @@
 """Writes the console build's stamp (port/xbox/src/xbox_memory.c logs it): the
-git commit, whether the tree has changes, and the time. tools/xbox_build.py
+git commit, whether the tree has changes, and the time. port/xbox/build.py
 runs it on every `ninja xbox`, so the stamp is of this build, not of the last
 time one file was compiled. Writes only when the text changed."""
 

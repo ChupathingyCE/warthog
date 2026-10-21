@@ -21,7 +21,7 @@ No address is ever logged: the host's name, or "console.game_list_server's"
 
 #include "../include/xbox_config.h"
 #include "../include/xbox_game_list.h"
-#include "../../linux/src/port_config.h"
+#include "port/linux/src/port_config.h"
 
 ULONG __cdecl DbgPrint(PCSTR format, ...);
 void xbox_memory_heap_allocation(const char *file, long line, unsigned long size, const void *address);

@@ -2,7 +2,7 @@
 XBOX_C99.H
 
 Force-included ahead of the TOML parser config.toml is read with
-(port/third_party/tomlc17, compiled as it is: tools/xbox_build.py): the
+(port/third_party/tomlc17, compiled as it is: port/xbox/build.py): the
 little of C99's library the console's C runtime lacks or names otherwise.
 port/xbox/src/xbox_port.c has snprintf and vsnprintf.
 */

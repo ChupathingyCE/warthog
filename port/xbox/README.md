@@ -6,6 +6,11 @@
 game only: the platform layer of the other ports (`port/linux`) is not in it,
 because the game's Xbox code talks to the Xbox SDK directly.
 
+The game is the `chupathingyce` submodule. Paths on this page under
+`source/`, `port/linux/`, `port/include/` and `port/third_party/` are the
+game's, in `chupathingyce/`; `port/xbox/` and `tools/` are this
+repository's.
+
 `python3 tools/easy_build.py` walks through everything below: it checks the
 tools, asks for the files you supply, builds and packages
 (`--check` only checks; `docs/building.md` has the options).
@@ -30,16 +35,20 @@ tools, asks for the files you supply, builds and packages
 ## Build
 
 ```sh
-python3 configure.py --xbox-d3d8 /path/to/d3d8ntpr.lib
+git submodule update --init
+python3 chupathingyce/configure.py --console-port port/xbox \
+    --xbox-d3d8 /path/to/d3d8ntpr.lib --console-no-debug-asserts --console-players 32
 ninja xbox
 ```
 
-`configure.py` records the options, so later runs of ninja keep them. If
+The game's `configure.py` loads this port's `build.py` (`--console-port`)
+and records the options, so later runs of ninja keep them. If
 OXDK or the Direct3D library is not found, there is no `xbox` target.
 The console-wide options: `--release` (assertions are not checked),
 `--console-no-debug-asserts` (the release-style build testers get: the
 debug decomp's asserts compiled out but for the memory checks),
-`--console-players {16,32,64}` and `--console-debug-tools` (see "Memory");
+`--console-players {16,24,32,64}` (the game's default is 16; test builds
+are 32) and `--console-debug-tools` (see "Memory");
 `--oxdk DIR` names OXDK's checkout. `docs/building.md` lists them all.
 
 ## Game data

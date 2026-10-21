@@ -5,6 +5,21 @@ This is how the original Xbox build works today. It is built on macOS with
 build on Linux the same way, but that is untested. There is no Windows
 build path yet; see "Help wanted: Windows tooling" in the README.
 
+This repository holds the console ports only. The game itself, with the
+code every platform shares, is
+[ChupathingyCE/chupathingyce](https://github.com/ChupathingyCE/chupathingyce),
+pinned here as a git submodule in `chupathingyce/`. Clone with
+`--recursive`, or run `git submodule update --init` in a clone you have.
+
+```
+warthog-xbox/
+    chupathingyce/      the game (submodule)
+    port/xbox/          the original Xbox port: its sources, build.py, tests
+    port/xbox360/       the Xbox 360 port (in development)
+    port/wiiu/          Wii U scaffolding
+    tools/              packaging, the build's stamp, easy_build.py
+```
+
 Nothing from Microsoft's SDKs is in this repository, and none of it may be
 committed. You supply your own copies of the libraries and headers, and
 the build reads them from where you keep them.
@@ -27,6 +42,7 @@ same thing by hand.
 | [OXDK](https://github.com/MrMilenko/OXDK), with its `cxbe` built | `~/OXDK` (or `--oxdk DIR`, or `OXDK_DIR`) | |
 | The Xbox SDK's libraries and headers (the 5933 SDK) | OXDK's `xbox/xdk/lib` and `xbox/xdk/include`, set up as OXDK's README says | 5933 |
 | An Aug 2001 Direct3D library, `d3d8ntpr.lib` (the `aug01` i386 build) | anywhere; you give its path to `configure.py` | |
+| The game | `chupathingyce/`, the submodule (`git submodule update --init`) | |
 
 The SDK comes as a Windows installer that installs into Microsoft Visual
 Studio .NET. You install it (and a Visual Studio that it accepts) on a
@@ -36,15 +52,35 @@ into OXDK. Why the build needs a separate Direct3D library from 2001 is in
 
 ## Build
 
+From this repository's root:
+
 ```sh
-python3 configure.py --xbox-d3d8 /path/to/d3d8ntpr.lib
+git submodule update --init
+python3 chupathingyce/configure.py --console-port port/xbox \
+    --xbox-d3d8 /path/to/d3d8ntpr.lib --console-no-debug-asserts --console-players 32
 ninja xbox
 ```
 
-The result is `build/xbox/default.xbe`. `configure.py` records its
-options, so later runs of `ninja` keep them. If it can't find OXDK or the
-Direct3D library, there is no `xbox` target. The Linux, Windows and macOS
-targets in `configure.py` are ChupathingyCE's and build as they do there.
+The result is `build/xbox/default.xbe`. The game's `configure.py` loads the
+port's `port/xbox/build.py` and writes `build.ninja` here, with the
+console's targets only (the game's `docs/building.md`, "Console ports").
+It records its options, so later runs of `ninja` keep them, and runs again
+when the port's `build.py` or the game's build files change, for example
+after a submodule update. If it can't find OXDK or the Direct3D library,
+there is no `xbox` target.
+
+The game's own configure option `--console-players` defaults to 16; give
+`--console-players 32` for the Xbox build testers get (`tools/easy_build.py`
+builds 32 by default).
+
+To build against another checkout of the game, run its `configure.py`
+instead (`python3 ../chupathingyce/configure.py --console-port port/xbox
+...`), or, from the game's root, `python3 configure.py --console-port
+../warthog-xbox/port/xbox ...`, which adds the console's targets to the
+desktop ones.
+
+Updating the game is a submodule update: `git -C chupathingyce fetch`,
+check out the commit, then commit the new `chupathingyce` pointer here.
 
 ## Host tests
 
@@ -56,7 +92,8 @@ This runs the console's parsers and rules on your computer under
 AddressSanitizer and UndefinedBehaviorSanitizer: the game list, the
 settings record's fold, `console.join`, the console's `config.toml`, the
 memory class, XLink's addressing, the log's tags, co-op names and the package script's devkit flag. `--xbox` adds the Xbox build's own checks (it needs
-`configure.py` to have been run with `--xbox-d3d8`). `--fuzz SECONDS` adds a
+the Xbox build to have been configured, with `--xbox-d3d8`). The tests read
+the game from `chupathingyce/`; `GAME=DIR` points them at another checkout. `--fuzz SECONDS` adds a
 libFuzzer run (LLVM's clang), and `--fetch` fetches the real game list over
 your computer's network.
 
@@ -83,15 +120,16 @@ test with it on a devkit.
 
 ### Options for the build
 
-`configure.py` options for the original Xbox build, all console-neutral in
-name so other consoles can take them up:
+`configure.py` options for the original Xbox build. `--xbox-d3d8` and
+`--oxdk` are the port's own (`port/xbox/build.py`); the others are the
+game's, console-neutral in name so other consoles can take them up:
 
 | Option | What it does |
 | --- | --- |
 | `--xbox-d3d8 LIBRARY` | your `d3d8ntpr.lib`; without it there is no `xbox` target |
 | `--oxdk DIR` | OXDK's checkout (default `OXDK_DIR`, or `~/OXDK`) |
 | `--release` | assertions are not checked; a failed one is noted in `debug.txt` and the game goes on |
-| `--console-players {16,32,64}` | the players the network tables hold. 16 is the Xbox's. 32 and 64 are test builds a stock 64 MB console does not hold; they say so on screen at the main menu |
+| `--console-players {16,24,32,64}` | the players the network tables hold (the game's default is 16, the Xbox's own game). Test builds are 32. 64 is more than a stock 64 MB console holds and says so on screen at the main menu |
 | `--console-debug-tools` | keeps the debug decomp's developer tools (profiler, AI, render and collision debug, the collision log's counting and timing, stack walker, libtiff and the bitmap tools), about 0.9 MB, which the build leaves out by default |
 | `--console-no-debug-asserts` | the release-style build testers get: the debug decomp's asserts compiled out, as the retail game had them, but for the checks of the data arrays, pools, caches, codecs and memory functions; about 412 KB of the image |
 
@@ -100,12 +138,17 @@ see "Package" above.
 
 ### Other consoles
 
-The Xbox 360 (`ninja xbox360`, `--oxdk360`, `--llvm-xenon`), Wii U (`ninja
-wiiu`, `--devkitppc`, `--wut`) and Switch (`ninja switch`, `--devkita64`,
-`--libnx`) targets are scaffolding: each builds a stub that logs a line and
-exits, and none of the game is compiled for them yet. The Xbox 360 needs
-your own 360 SDK as well (docs/consoles.md). A target appears only when
-`configure.py` finds its toolchain.
+The Xbox 360 (`--console-port port/xbox360`: `ninja xbox360`, with
+`--oxdk360`, `--llvm-xenon` and `--x360-sdk`) and Wii U (`--console-port
+port/wiiu`: `ninja wiiu`, with `--devkitppc` and `--wut`) are scaffolding:
+each builds a stub that logs a line and exits, and none of the game is
+compiled for them yet. The Xbox 360 needs your own 360 SDK as well
+(docs/consoles.md); its stub does not link yet (`oxdk_dbgprint`). A target
+appears only when `configure.py` finds its toolchain. `--console-port` can
+be given more than once.
+
+The Switch port is its own repository,
+[ChupathingyCE/warthog-switch](https://github.com/ChupathingyCE/warthog-switch).
 
 ## Onto the console
 

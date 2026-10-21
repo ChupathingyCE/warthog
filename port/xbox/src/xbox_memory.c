@@ -8,7 +8,7 @@ The total is the system's own answer. GlobalMemoryStatus (xapilib, the
 SDK's) gives dwTotalPhys; if it gives nothing, the kernel's
 MmQueryStatistics (xboxkrnl, which the SDK's headers leave out) gives the
 physical pages. Both count what the kernel uses, so a 128 MB console
-reads 128 MB only when the XBE does not ask for 64 (tools/xbox_build.py's
+reads 128 MB only when the XBE does not ask for 64 (port/xbox/build.py's
 cxbe -LIMIT64MB:no) and the kernel knows the upper 64 MB (a devkit, or a
 modified BIOS that supports the upgrade). Allocating 70 MB and freeing it
 was suggested as a test; it is not needed with this toolchain, and would
@@ -96,7 +96,7 @@ int xbox_memory_delta_class_of(int memory_class)
 #include <string.h>
 
 #include "../include/xbox_config.h"
-#include "../../linux/src/port_config.h"
+#include "port/linux/src/port_config.h"
 
 unsigned long __cdecl DbgPrint(const char *format, ...);
 void platform_log(const char *format, ...);

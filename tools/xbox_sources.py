@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
-"""Sources the Xbox build (tools/xbox_build.py) takes from the Linux port's.
+"""Sources the Xbox build (port/xbox/build.py) takes from the Linux port's.
 
-    xbox_sources.py common port/linux/src/halo_linker_common.c OUT
+    xbox_sources.py common chupathingyce/port/linux/src/halo_linker_common.c OUT
         The pooled COMMON globals (every HALO_COMMON line), as plain zeroed
         definitions: the Xbox link has no weak symbols to fall back on, and
         nothing else defines them.
-    xbox_sources.py bink port/linux/src/bink_null.c OUT
+    xbox_sources.py bink chupathingyce/port/linux/src/bink_null.c OUT
         The Bink stub, with the SDK's headers in place of the Linux
         platform layer's.
-    xbox_sources.py copy port/linux/src/p2p.c OUT
+    xbox_sources.py copy chupathingyce/port/linux/src/p2p.c OUT
         A source as it is (internet play's, and its libraries'), in a folder
         of the build's, so that its quoted includes find port/xbox/p2p's
         headers (named on the command line) before the Linux layer's beside

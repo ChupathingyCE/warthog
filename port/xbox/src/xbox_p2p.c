@@ -2,8 +2,8 @@
 XBOX_P2P.C
 
 Internet play on the console: the desktop builds' tunnel (port/linux/src/
-p2p.c, p2p_signal.c, p2p_crypto.c, compiled as they are: tools/
-xbox_build.py, port/xbox/p2p) over XNet, as a joiner. This is the platform
+p2p.c, p2p_signal.c, p2p_crypto.c, compiled as they are: port/xbox/
+build.py, port/xbox/p2p) over XNet, as a joiner. This is the platform
 layer they call (port/linux/src/posix.h's sockets, threads, settings and
 logging), and the stubs of what the console leaves out: hosting's UPnP,
 Discord, the server browser's public games (p2p_lobby.c), invites handed
@@ -28,9 +28,9 @@ writes them through log_address (port/xbox/src/xbox_port.c).
 #include <string.h>
 
 #include "../p2p/pthread.h"
-#include "../../linux/src/posix.h"
-#include "../../linux/src/p2p.h"
-#include "../../linux/src/port_config.h"
+#include "port/linux/src/posix.h"
+#include "port/linux/src/p2p.h"
+#include "port/linux/src/port_config.h"
 
 int snprintf(char *buffer, size_t size, const char *format, ...);
 int xbox_trace_enabled(void);

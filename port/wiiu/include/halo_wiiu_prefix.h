@@ -25,9 +25,9 @@ Target: PowerPC Espresso (750CL) 32-bit big-endian with devkitPPC and wut.
 #define HALO_PORT_FD_SETSIZE 256
 
 /* Console endianness and safe memory reading utilities */
-#include "../../console/include/console_endian.h"
-#include "../../console/include/console_common.h"
-#include "../../console/include/console_input.h"
+#include "port/console/include/console_endian.h"
+#include "port/console/include/console_common.h"
+#include "port/console/include/console_input.h"
 
 /* Disable mouse UI cursor in console menus */
 #define halo_ui_pointer_active() (0)

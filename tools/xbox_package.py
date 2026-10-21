@@ -61,7 +61,7 @@ def set_devkit_memory_limit(image: bytes, limit: bool) -> bytes:
 
 # a host or IPv4 address, :port optional
 SERVER_PATTERN = r"[A-Za-z0-9.-]+(:[0-9]{1,5})?"
-# (port/linux/src/port_config.c's CONFIG_VERSION_LINES: a file without it
+# (the game's port/linux/src/port_config.c's CONFIG_VERSION_LINES: a file without it
 # is taken for an older layout)
 CONFIG_HEADER = """# Halo settings: tools/xbox_package.py wrote these; the game adds every
 # other setting, at its default, when it starts.

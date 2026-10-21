@@ -34,8 +34,9 @@ class Answers(unittest.TestCase):
 
 class Commands(unittest.TestCase):
     def test_configure_defaults(self):
-        self.assertEqual(easy_build.configure_args("d.lib", "ox", 16, False, False),
-                         ["configure.py", "--xbox-d3d8", "d.lib", "--oxdk", "ox"])
+        self.assertEqual(easy_build.configure_args("d.lib", "ox", 32, False, False),
+                         ["chupathingyce/configure.py", "--console-port", "port/xbox", "--xbox-d3d8", "d.lib",
+                          "--oxdk", "ox", "--console-players", "32"])
 
     def test_configure_options(self):
         args = easy_build.configure_args("d.lib", "ox", 32, True, True)

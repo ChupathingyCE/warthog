@@ -8,7 +8,8 @@ import re
 import sys
 from pathlib import Path
 
-root = Path(__file__).resolve().parents[3]
+# the game (the submodule, chupathingyce/, or the directory given)
+root = Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else Path(__file__).resolve().parents[3] / "chupathingyce"
 record = (root / "port/linux/network_format.txt").read_text()
 table = (root / "source/networking/network_messages.c").read_text()
 limits = (root / "port/linux/include/halo_port_limits.h").read_text()

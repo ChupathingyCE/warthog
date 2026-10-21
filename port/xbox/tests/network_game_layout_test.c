@@ -12,7 +12,7 @@ port/xbox/tests/run.sh.
 #include <stdlib.h>
 #include <string.h>
 
-#include "../../linux/game/network_game_layout.h"
+#include "port/linux/game/network_game_layout.h"
 
 #define PC NETWORK_GAME_LAYOUT_PC_SLOTS
 /* the console's slots: 16 players, and 17 machines (a dedicated host is

@@ -11,7 +11,7 @@ still read for one release.
 
 #include "../include/xbox_config.h"
 #include "../include/xbox_memory.h"
-#include "../../linux/src/port_config.h"
+#include "port/linux/src/port_config.h"
 
 int snprintf(char *buffer, size_t size, const char *format, ...);
 void platform_log(const char *format, ...);

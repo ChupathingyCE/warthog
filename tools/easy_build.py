@@ -5,10 +5,10 @@
     python3 tools/easy_build.py --check    only checks what the build needs
     python3 tools/easy_build.py --yes ...  no questions (for scripts)
 
-It checks the tools, asks for the files you must supply yourself, runs
-configure.py and `ninja xbox`, and can lay out the finished game for the
-console's hard disk (tools/xbox_package.py). Your answers are remembered in
-.easy_build.json, which git ignores. Python 3 and its standard library only.
+It checks the tools, asks for the files you must supply yourself, runs the
+game's configure.py (chupathingyce/, a submodule) and `ninja xbox`, and can
+lay out the finished game for the console's hard disk (tools/xbox_package.py).
+Your answers are remembered in .easy_build.json, which git ignores. Python 3 and its standard library only.
 
 Nothing from Microsoft's SDKs is in this repository and none may be
 committed: you supply your own copy of the Xbox SDK (in OXDK), the Aug 2001
@@ -35,7 +35,12 @@ OXDK_URL = "https://github.com/MrMilenko/OXDK"
 UI_MAP_SIZE = 14145536
 MAP_BUILDS = (b"01.10.12.2276", b"01.01.14.2342")
 PLAYERS = (16, 32, 64)
-DEFAULT_PLAYERS = 16
+# the console build's players (the game's configure.py --console-players):
+# 32 by default, 16 as the Xbox's own game had, 64 a test build
+DEFAULT_PLAYERS = 32
+# the game's configure.py (the submodule) and the port's directory
+GAME_CONFIGURE = "chupathingyce/configure.py"
+PORT = "port/xbox"
 
 HOMEBREW_LLVM = ("/opt/homebrew/opt/llvm/bin", "/usr/local/opt/llvm/bin")
 
@@ -102,13 +107,12 @@ def check_maps(maps: Path) -> Tuple[bool, List[str]]:
 
 
 def configure_args(d3d8: str, oxdk: str, players: int, release: bool, debug_tools: bool) -> List[str]:
-    args = ["configure.py", "--xbox-d3d8", d3d8, "--oxdk", oxdk]
+    args = [GAME_CONFIGURE, "--console-port", PORT, "--xbox-d3d8", d3d8, "--oxdk", oxdk,
+            "--console-players", str(players)]
     if release:
         args.append("--release")
     if debug_tools:
         args.append("--console-debug-tools")
-    if players != DEFAULT_PLAYERS:
-        args += ["--console-players", str(players)]
     return args
 
 
@@ -321,8 +325,15 @@ def check_d3d8(path: str) -> Check:
                  "give its path with --d3d8 PATH, or when asked")
 
 
+def check_game() -> Check:
+    path = ROOT / GAME_CONFIGURE
+    return Check("the game", path.is_file(), str(path.parent) if path.is_file() else f"{path} is missing",
+                 "the game's source (ChupathingyCE/chupathingyce), a git submodule of this repository",
+                 "git submodule update --init   (or clone with --recursive)")
+
+
 def run_checks(state: Dict[str, object], oxdk: str, d3d8: str) -> List[Check]:
-    checks = [check_python(), check_ninja(), *check_llvm(), *check_oxdk(oxdk), check_d3d8(d3d8)]
+    checks = [check_python(), check_ninja(), check_game(), *check_llvm(), *check_oxdk(oxdk), check_d3d8(d3d8)]
     return checks
 
 
@@ -400,7 +411,7 @@ def main() -> int:
                         help="ask nothing: use the options given, then your remembered answers, then the defaults")
     parser.add_argument("--d3d8", metavar="PATH", help="your d3d8ntpr.lib (Aug 2001 Direct3D)")
     parser.add_argument("--oxdk", metavar="DIR", help="OXDK's checkout (default: OXDK_DIR, or ~/OXDK)")
-    parser.add_argument("--players", metavar="N", help="16 (default), or 32 or 64 for test builds for 128 MB consoles")
+    parser.add_argument("--players", metavar="N", help="32 (default), 16 (the Xbox's own game), or 64 for a test build")
     parser.add_argument("--release", action="store_true", help="a release build: assertions are not checked")
     parser.add_argument("--debug-tools", action="store_true", help="keep the debug decomp's developer tools")
     parser.add_argument("--maps", metavar="DIR", help="your own NTSC disc's maps folder: also packages the game")
@@ -466,7 +477,7 @@ def main() -> int:
         say("error, which helps bug reports). Release builds go on after one, as the retail game did.")
         release = ask_yes_no("Release build?", release)
         if args.players is None:
-            say("Players: 16 is the Xbox's. 32 or 64 are test builds for 128 MB consoles that say so on screen.")
+            say("Players: 32 is the default, 16 is what the Xbox's own game had. 64 is a test build that says so on screen.")
             while True:
                 choice = parse_players(ask("Players (16, 32 or 64)", str(players)))
                 if choice:

@@ -2,7 +2,7 @@
 HALO_XBOX_PREFIX.H
 
 Force-included ahead of every game unit of the Xbox build (clang, through
-OXDK; tools/xbox_build.py). The game compiles against the January SDK's
+OXDK; port/xbox/build.py). The game compiles against the January SDK's
 declarations (port/include/xdk), with only the C runtime's headers from the
 XDK.
 */
@@ -104,9 +104,9 @@ renamed in the game's units, the SDK's declarations of them included */
 
 /* the shared sources' limits, as the native builds' prefix includes them:
 the console's own (HALO_XBOX_CONSOLE) */
-#include "../../linux/include/halo_port_limits.h"
+#include "port/linux/include/halo_port_limits.h"
 /* the desktop builds' mouse in the menus, which the console has none of
 (port/xbox/src/xbox_port.c) */
-#include "../../linux/include/halo_ui_pointer.h"
+#include "port/linux/include/halo_ui_pointer.h"
 
 #endif

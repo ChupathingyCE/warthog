@@ -13,10 +13,10 @@ port/xbox/src/xbox_p2p.c, the settings port/xbox/src/xbox_config.c.
 #include <stdlib.h>
 #include <string.h>
 
-#include "../../linux/include/halo_ui_pointer.h"
+#include "port/linux/include/halo_ui_pointer.h"
 #include "../include/xbox_log_tag.h"
 #include "../p2p/pthread.h"
-#include "../../linux/src/port_config.h"
+#include "port/linux/src/port_config.h"
 
 unsigned long __cdecl DbgPrint(const char *format, ...);
 /* the game's (cseries/errors.c) */
@@ -387,6 +387,15 @@ void pc_menu_game_data_function_invoke(struct widget_instance *widget, long func
 {
 	(void)widget;
 	(void)function;
+}
+
+/* the settings' long text, scrolled on focus (ui_widget.c): NONE, the text
+drawn as it is */
+long pc_menu_text_marquee(struct widget_instance const *widget, boolean_type focus)
+{
+	(void)widget;
+	(void)focus;
+	return -1;
 }
 
 struct bitmap_data;

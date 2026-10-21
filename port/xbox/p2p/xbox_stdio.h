@@ -1,7 +1,7 @@
 /*
 XBOX_STDIO.H (the console's)
 
-Force-included ahead of Delta's sources on the console (tools/xbox_build.py):
+Force-included ahead of Delta's sources on the console (port/xbox/build.py):
 the C99 calls the console's C runtime lacks (it has _snprintf and
 _vsnprintf), which port/xbox/src/xbox_port.c gives.
 */
