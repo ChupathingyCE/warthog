@@ -694,6 +694,15 @@ void game_initialize_for_new_map(
 	from now on go elsewhere, port/linux/game/network_objects.c) */
 	network_objects_placed();
 	ui_widgets_safe_to_load(TRUE);
+#ifdef HALO_XBOX_CONSOLE
+	/* port: a test build of more than 16 players logs its memory at each
+	map's start (port/xbox/src/xbox_memory.c; nothing in a stock build) */
+	{
+		void xbox_memory_log_point(const char *where);
+
+		xbox_memory_log_point("a map started");
+	}
+#endif
 
 	return;
 }
@@ -909,6 +918,14 @@ void game_precache_new_map(
 void game_dispose_from_old_map(
 	void)
 {
+#ifdef HALO_XBOX_CONSOLE
+	/* port: and at its end, with the objects' peaks over it */
+	{
+		void xbox_memory_log_point(const char *where);
+
+		xbox_memory_log_point("a map ending");
+	}
+#endif
 	rasterizer_dispose_from_old_map();
 	game_state_dispose_from_old_map();
 	cheats_dispose_from_old_map();

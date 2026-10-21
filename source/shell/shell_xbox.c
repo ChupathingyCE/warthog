@@ -107,6 +107,7 @@ up (port/xbox/src/xbox_memory.c) */
 void xbox_memory_startup(void);
 void xbox_boot_log(char const *format, ...);
 unsigned long xbox_memory_free(void);
+void xbox_memory_log_point(const char *where);
 #endif
 
 int main(
@@ -133,6 +134,7 @@ int main(
 		{
 #ifdef HALO_XBOX_CONSOLE
 			xbox_boot_log("started: %lu KB free at the main loop", xbox_memory_free() >> 10);
+			xbox_memory_log_point("the main loop");
 #endif
 			main_loop();
 			shell_dispose();

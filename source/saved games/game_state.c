@@ -612,6 +612,22 @@ void *game_state_malloc(
 	return pointer;
 }
 
+#ifdef HALO_XBOX_CONSOLE
+/* port: the console's game state is the Xbox's size in every build
+(port/xbox/src/xbox_memory.c counts it so) */
+typedef char game_state_xbox_size_assert[GAME_STATE_SIZE == 0x345000 ? 1 : -1];
+
+/* port: the CPU part's use, for the console's memory log
+(port/xbox/src/xbox_memory.c) */
+void game_state_cpu_usage(
+	long *used,
+	long *size)
+{
+	*used = game_state_globals.cpu_allocation_size;
+	*size = GAME_STATE_CPU_SIZE;
+}
+#endif
+
 void *game_state_gpu_malloc(
 	const char *name,
 	const char *type,

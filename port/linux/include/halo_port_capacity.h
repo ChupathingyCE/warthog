@@ -35,16 +35,23 @@ hold no more (docs/cross-play.md) */
 
 #if defined(HALO_CONSOLE_PLAYERS) && HALO_CONSOLE_PLAYERS > 16
 /* a test build of more than 16 players (configure.py --console-players)
-has the players' tables in its game state, which the Xbox's does not hold:
-the Xbox's pools, once for each 16 players, above the tag cache as the native
-builds put theirs (a 128 MB console; xbox_memory.c refuses a 64 MB one) */
-#define HALO_PORT_GAME_STATE_BASE_ADDRESS 0x81A00000
-#define HALO_PORT_GAME_STATE_CPU_SIZE (0x305000 * ((HALO_CONSOLE_PLAYERS + 15) / 16))
+keeps the Xbox's game state, in its place and of its size: of what scales
+with the players, only the players table is in it (0xD4 bytes a player:
+24 players take 1,696 bytes more), and the Xbox's pools left 948 bytes free.
+The room comes from the GPU part, whose decal vertices
+(rasterizer_xbox_decals.c's DECAL_VERTEX_CACHE_SIZE) take 0x28000 of its
+0x40000: 64 KB of the unused rest goes to the CPU part. Nothing else moves,
+and no memory is added. The rest of what scales with the players is
+outside the game state (the netcode's arrays and queues, about 170 KB at
+24 players: xbox_memory.c's log) */
+#define HALO_PORT_GAME_STATE_BASE_ADDRESS 0x80061000
+#define HALO_PORT_GAME_STATE_CPU_SIZE 0x315000
+#define HALO_PORT_GAME_STATE_GPU_SIZE 0x30000
 #else
 #define HALO_PORT_GAME_STATE_BASE_ADDRESS 0x80061000
 #define HALO_PORT_GAME_STATE_CPU_SIZE 0x305000
-#endif
 #define HALO_PORT_GAME_STATE_GPU_SIZE 0x40000
+#endif
 #define HALO_PORT_GAME_STATE_SIZE (HALO_PORT_GAME_STATE_CPU_SIZE+HALO_PORT_GAME_STATE_GPU_SIZE)
 
 /* ---------- AI */

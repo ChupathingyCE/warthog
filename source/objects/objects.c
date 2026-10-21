@@ -4083,6 +4083,27 @@ void objects_scripting_attach(
 	return;
 }
 
+#ifdef HALO_XBOX_CONSOLE
+/* port: the objects in use and the object pool's free memory, for the
+console's memory log (port/xbox/src/xbox_memory.c); FALSE with no map */
+int objects_usage(
+	long *count,
+	long *maximum,
+	long *pool_free,
+	long *pool_size,
+	long *pool_contiguous_free)
+{
+	if (!object_header_data || !object_memory_pool || !object_header_data->valid)
+		return FALSE;
+	*count = object_header_data->actual_count;
+	*maximum = MAXIMUM_OBJECTS_PER_MAP;
+	*pool_size = OBJECT_MEMORY_POOL_SIZE;
+	*pool_free = memory_pool_get_free_size(object_memory_pool);
+	*pool_contiguous_free = memory_pool_get_contiguous_free_size(object_memory_pool);
+	return TRUE;
+}
+#endif
+
 void object_delete_immediately(
 	long object_index)
 {

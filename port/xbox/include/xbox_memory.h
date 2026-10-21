@@ -65,6 +65,9 @@ void xbox_memory_heap_allocation(const char *file, long line, unsigned long size
 /* the main loop's (main.c): a message from xbox_memory_require shown once
 the main menu is up, and the free memory's new lows logged */
 void xbox_memory_update(void);
+/* a test build of more than 16 players' memory line (the main loop, each
+map's start and end); nothing in a stock build */
+void xbox_memory_log_point(const char *where);
 
 /* Delta Peer's memory class (struct delta_platform_key's memory_class,
 docs/delta.md: log2 of the megabytes, 6 for 64 MB, 7 for 128, 8 for 256,
