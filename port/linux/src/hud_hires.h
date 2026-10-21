@@ -68,6 +68,10 @@ int hud_hires_override_point_threshold(long asset);
 /* the deko3d renderer's: an 8-bit RGBA PNG's pixels (malloc'd, red first,
 rows top down) and size; NULL if it could not be decoded */
 unsigned char *hud_hires_png_pixels(const void *png, unsigned long size, unsigned long *width, unsigned long *height);
+/* the deko3d renderer's (port/switch/guest/xbox_textures_dk.c): a map's
+sheets, for the host to decode now; and those decoded and not drawn let go */
+void dk_hud_prepare(const long *assets, long count);
+void dk_hud_forget(void);
 #endif
 
 #endif

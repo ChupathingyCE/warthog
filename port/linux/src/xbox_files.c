@@ -578,6 +578,26 @@ static struct platform_file *file_from_handle(HANDLE handle)
 	return record ? record->data : NULL;
 }
 
+/* The game is about to write a new map over one of its map cache files
+(source/cache/cache_files_windows.c). The Switch's host keeps those files in
+memory (port/switch/host/host_memory_files.c): the file is emptied and given
+its size back, so the old map's memory goes before the new map's is taken.
+A file on a disk is written over as it is, and the other builds have no
+such call. */
+#ifdef HALO_SWITCH_CONSOLE
+void platform_file_discard(HANDLE handle)
+{
+	struct platform_file *file = file_from_handle(handle);
+	struct posix_file_information information;
+
+	if (file && posix_fstat(file->descriptor, &information) == 0)
+	{
+		posix_truncate(file->descriptor, 0, 0);
+		posix_truncate(file->descriptor, information.size_low, information.size_high);
+	}
+}
+#endif
+
 HANDLE WINAPI CreateFileA(LPCSTR file_name, DWORD desired_access, DWORD share_mode,
 	LPSECURITY_ATTRIBUTES security_attributes, DWORD creation_disposition,
 	DWORD flags_and_attributes, HANDLE template_file)
