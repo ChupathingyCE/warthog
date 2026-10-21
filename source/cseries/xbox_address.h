@@ -20,6 +20,14 @@ nothing, so the code compiles as before.
 #ifndef __XBOX_ADDRESS_H
 #define __XBOX_ADDRESS_H
 
+/* the builds whose Xbox addresses are not their pointers: the 64-bit builds
+(HALO_64BIT) and the 32-bit ones whose window is not at 0x80000000
+(HALO_WINDOW_REBASE, below). Code that converts between the two, rather than
+casting, tests this. */
+#if defined(HALO_64BIT) || defined(HALO_WINDOW_REBASE)
+#define HALO_ADDRESS_TRANSLATED 1
+#endif
+
 #ifdef HALO_64BIT
 
 /* (a build may place it elsewhere: AddressSanitizer's shadow memory lies

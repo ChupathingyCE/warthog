@@ -128,7 +128,7 @@ struct tag_data
 	XPTR(void) address;
 	XPTR(struct tag_data_definition) definition;
 };
-#if defined(HALO_64BIT) || defined(HALO_WINDOW_REBASE)
+#ifdef HALO_ADDRESS_TRANSLATED
 
 typedef char tag_data_size_assert[
 	sizeof(struct tag_data) == 0x14 ? 1 : -1];
