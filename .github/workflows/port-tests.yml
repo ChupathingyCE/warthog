@@ -32,7 +32,7 @@ jobs:
           submodules: true
       - name: Configure, without any console SDK
         run: |
-          python3 chupathingyce/configure.py --console-port port/xbox --console-port port/xbox360 \
+          python3 chupathingyce/configure.py --console-port port/xbox \
             --console-players 32
           test -f build.ninja
       - name: Original Xbox host tests

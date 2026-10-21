@@ -2,7 +2,7 @@
 
 <h1 align="center">Warthog</h1>
 
-<p align="center"><b>Chupathingy on Xbox consoles: the original Xbox and the Xbox 360, playing online with the PCs.</b></p>
+<p align="center"><b>Chupathingy on the original Xbox, playing online with the PCs.</b></p>
 
 <p align="center">
 <a href="https://github.com/ChupathingyCE/chupathingyce">The game (Chupathingy)</a> ·
@@ -27,7 +27,7 @@ and there is no download yet: you build it yourself.
 | Console | Status |
 | --- | --- |
 | Original Xbox | Testing. Up to 32 players. Plays on a stock 64 MB console; 128 MB consoles get extras |
-| Xbox 360 | In development. Scaffolding only: the stub builds, the game is not compiled for it yet |
+| Xbox 360 | In development; moved to [warthog-360](https://github.com/ChupathingyCE/warthog-360) |
 | Wii U | Scaffolding only; moved to [warthog-wiiu](https://github.com/ChupathingyCE/warthog-wiiu) |
 
 **Original Xbox**
@@ -43,13 +43,6 @@ and there is no download yet: you build it yourself.
   full game is.
 - Chat: quick lines on the controller, and a USB keyboard.
 - Not yet: hosting PC players, network co-op, Bink movies, reverb.
-
-**Xbox 360**
-- Target: RGH or JTAG consoles, sized for the 360's 512 MB.
-- Builds with [OXDK360](https://github.com/MrMilenko/OXDK360), llvm-xenon
-  and your own 360 SDK. The stub does not link yet.
-- [docs/consoles.md](docs/consoles.md) has the plan: byte order, alignment,
-  the renderer.
 
 ## What you need
 
@@ -167,8 +160,8 @@ build and package (`--check` only checks).
 Notes:
 - `--console-players 32` is the test build. Without it the game's
   configure builds 16, as the Xbox's own game had.
-- The Xbox 360 stub: `--console-port port/xbox360` and `ninja xbox360`,
-  with OXDK360, llvm-xenon and your own 360 SDK.
+- The Xbox 360 port is
+  [ChupathingyCE/warthog-360](https://github.com/ChupathingyCE/warthog-360).
 - Windows: no build path yet. Help is welcome in #warthog-dev on the Discord.
 - Nothing from Microsoft's SDKs is in this repository, and none of it may be
   committed.
@@ -238,8 +231,7 @@ not be part of our community.
 - The game: [Chupathingy](https://github.com/ChupathingyCE/chupathingyce),
   and OpenCE and its contributors, up to October 9, 2026.
 - Warthog: [Milenko](https://github.com/MrMilenko) and contributors. The
-  toolchains: [OXDK](https://github.com/MrMilenko/OXDK) and
-  [OXDK360](https://github.com/MrMilenko/OXDK360).
+  toolchain: [OXDK](https://github.com/MrMilenko/OXDK).
 - Libraries: KCP and Monocypher (internet play), zlib, and the libraries
   the game uses, with their licenses in the game's `port/third_party`.
 
