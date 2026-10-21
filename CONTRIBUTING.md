@@ -1,19 +1,25 @@
 # Contributing to Warthog
 
-Warthog is [ChupathingyCE](https://github.com/ChupathingyCE/chupathingyce)'s
-console line: the original Xbox today, other consoles later
-(docs/consoles.md). Fixes to the shared game code belong in ChupathingyCE
-first; Warthog takes its main regularly (README, "Keeping in step with
-ChupathingyCE").
+Warthog is Chupathingy on Xbox consoles: the original Xbox today, the Xbox
+360 in development (docs/consoles.md). This repository holds the console
+ports only. The game, with everything the platforms share, is
+[ChupathingyCE/chupathingyce](https://github.com/ChupathingyCE/chupathingyce),
+pinned here as the `chupathingyce` submodule.
 
-## How changes flow
+## Where a change goes
 
-Code moves one way: ChupathingyCE -> Warthog. Warthog merges
-ChupathingyCE, so a fix to the shared game, network or desktop code goes
-to ChupathingyCE first and arrives here with the next merge. Pull
-requests here are for console-specific changes only: `port/<console>/`, the
-console build tools, and shared-code changes behind the console's define
-(`HALO_XBOX_CONSOLE`) that leave the desktop builds unchanged.
+- **Here:** the console's own code (`port/xbox/`, `port/xbox360/`,
+  `port/wiiu/`), its `build.py`, its tests, and the tools in `tools/`
+  (packaging, the build stamp, `easy_build.py`).
+- **The game (ChupathingyCE/chupathingyce):** the shared game, network and
+  platform code, including the console hooks the shared code has (the
+  `HALO_CONSOLE_*` capabilities, `port/console`, `tools/console_build.py`).
+  A change there must leave the desktop builds as they are. Once it is
+  merged, a pull request here moves the `chupathingyce` submodule to it.
+
+A console change that needs both is two pull requests: the game's first,
+then this repository's, with the submodule moved to the game's merged
+commit.
 
 Never commit, attach or link SDK files (Microsoft's, Sony's, Nintendo's:
 headers, libraries, tools, d3d8ntpr.lib, xnet) or game data (maps, sounds,
@@ -44,15 +50,17 @@ Contributors are credited in the release notes.
 
 ## Pull requests
 
-- **Open them against `ChupathingyCE/warthog`'s `main`.** With the GitHub
-  CLI, run `gh repo set-default ChupathingyCE/warthog` once in your clone.
+- **Open them against `ChupathingyCE/warthog-xbox`'s `main`.** With the
+  GitHub CLI, run `gh repo set-default ChupathingyCE/warthog-xbox` once in
+  your clone.
 - One change per pull request, with how you tested it: a devkit, a modified
   retail console or xemu, and which build.
-- Console code stays in `port/<console>/`, and changes to shared code stay
-  behind the console's define (`HALO_XBOX_CONSOLE`), so the desktop builds
-  are unchanged.
+- Console code stays in `port/<console>/`. Shared code is changed in the
+  game, never copied or patched here.
+- `port/xbox/tests/run.sh` passes (the Port tests check runs it).
 - The game protocol stays the PC builds': the console adapts to their
-  network version and layout, never the other way (docs/cross-play.md).
+  network version and layout, never the other way (the game's
+  docs/cross-play.md).
 - Nothing logs an IP address whole unless it is a LAN one: go through
   `log_address`.
 - Commit messages, pull requests and issues are public, and they're posted
@@ -60,10 +68,9 @@ Contributors are credited in the release notes.
 
 ## License
 
-Warthog is licensed under the GNU GPL, version 3 or later (`GPL-3.0-or-later`, [LICENSE](LICENSE)), with the console SDK permission in the README's [License](README.md#license) section. By opening a pull request, you agree that your contribution is under the same license and permission. Code shared with ChupathingyCE goes there first, under the same terms.
+Warthog is licensed under the GNU GPL, version 3 or later (`GPL-3.0-or-later`, [LICENSE](LICENSE)), with the console SDK permission in the README's [License](README.md#license) section. By opening a pull request, you agree that your contribution is under the same license and permission. The game's code is under its own repository's terms.
 
-- Changes to the files that stay CC0 (`docs/delta.md`, `port/linux/src/delta_wire.c`, `port/linux/src/delta_wire.h` and `port/linux/include/delta.h`) are under CC0 1.0, as those files are.
-- Code or assets from somewhere else must be under a license that works with the GPL (MIT, BSD, zlib, Apache-2.0, CC0, SIL OFL for fonts, and so on), credited, with the license beside them (`port/third_party` for code). Say where they come from in the pull request.
+- Code or assets from somewhere else must be under a license that works with the GPL (MIT, BSD, zlib, Apache-2.0, CC0, SIL OFL for fonts, and so on), credited, with the license beside them. Say where they come from in the pull request.
 
 ## Using AI tools
 
@@ -82,8 +89,8 @@ Test builds are the `nightly` release and `-testing` tags, outside the numbering
 
 Use the bug report form, or #warthog-support on the
 [Discord](https://discord.gg/chupathingy). Attach `D:\debug.txt`; for a
-join that fails, run once with an empty `D:\trace.txt` beside
-`default.xbe` (it shows other hosts only as tags, never their Ethernet
+join that fails, run once with `trace = true` in the `[console]` section of
+`D:\config.toml` (it shows other hosts only as tags, never their Ethernet
 addresses).
 
 ## SDK and game files

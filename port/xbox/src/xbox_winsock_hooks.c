@@ -24,12 +24,12 @@ renames the calls the game makes to these, which call XNet's own.
   p2p_incoming turns into the peer's). XNet's loopback is then not needed
   for the game's datagrams (it is for its connections, as the game's own
   host-joins-itself connection always used).
-- With D:\trace.txt (xbox_port.c's xbox_trace_enabled), every hop is
+- With console.trace (xbox_port.c's xbox_trace_enabled), every hop is
   logged, a few times then once in a while ("tunnel:" lines): the system
   link search going to the peers, the peers' datagrams handed to the game,
   the game reading them. Without it, only failures are.
 
-Without internet play (no D:\bypass_security.txt, or the tunnel off), every
+Without internet play (console.bypass_security off, or the tunnel), every
 p2p_ call answers "not a peer's", and these are XNet's calls as they were.
 Nothing here logs an address.
 */
@@ -41,7 +41,7 @@ prefix does not set it) */
 #include <string.h>
 
 #include "../p2p/pthread.h"
-#include "../../linux/src/p2p.h"
+#include "port/linux/src/p2p.h"
 
 void platform_log(const char *format, ...) __attribute__((format(printf, 1, 2)));
 int xbox_trace_enabled(void);
@@ -84,7 +84,7 @@ static struct
 	unsigned long time;
 } hops[NUMBER_OF_HOPS];
 
-/* whether to log this hop now (only with D:\trace.txt); *since: how many
+/* whether to log this hop now (only with console.trace); *since: how many
 there were since the last */
 static int hop_log(int hop, long *since)
 {
@@ -181,7 +181,10 @@ static void note_socket_port(SOCKET socket, int listening)
 
 enum
 {
-	INBOX_DATAGRAMS = 32,
+	/* (the game reads its sockets every frame, at some 30 datagrams a second
+	from a host: 16 hold half a second of them, and a full inbox drops the
+	next as a full socket does) */
+	INBOX_DATAGRAMS = 16,
 	INBOX_DATAGRAM_SIZE = 1400,
 };
 
@@ -695,7 +698,7 @@ INT WSAAPI halo_xbox_XNetXnAddrToInAddr(const struct game_xnaddr *address, const
 
 /* Winsock started (after XNet: transport_endpoint_set_winsock.c): internet
 play starts too, before the game makes any socket, so that it knows them
-all (on with D:\bypass_security.txt: xbox_p2p.c's network.online). Its
+all (on with console.bypass_security: xbox_p2p.c's network.online). Its
 stand-ins are this console's own, at 127.0.0.1 */
 int WSAAPI halo_xbox_WSAStartup(WORD version_requested, LPWSADATA data)
 {
@@ -797,8 +800,8 @@ void xbox_winsock_tunnel_key(const void *key_identifier)
 	memcpy(&tunnel_keys[tunnel_key_next++ % MAXIMUM_TUNNEL_KEYS], key_identifier, sizeof(XNKID));
 }
 
-/* (xbox_p2p.c: XNet started insecure, D:\bypass_security.txt) */
-int xbox_p2p_online(void);
+/* (D:\config.toml's, port_config.h) */
+int config_boolean(const char *name);
 
 INT WSAAPI halo_xbox_XNetRegisterKey(const XNKID *key_identifier, const XNKEY *key)
 {
@@ -817,11 +820,11 @@ INT WSAAPI halo_xbox_XNetRegisterKey(const XNKID *key_identifier, const XNKEY *k
 	if (result != 0)
 	{
 		/* (a PC host's key on a LAN: random bytes too, which XNet refuses
-		as a key id. With XNet's security bypassed (bypass_security.txt),
+		as a key id. With XNet's security bypassed (console.bypass_security),
 		the PC is reached at its address as a tunnel host is, so its key
 		is remembered as one, neither registered nor unregistered, and the
 		join goes on; with security on, the refusal stands) */
-		if (xbox_p2p_online())
+		if (config_boolean("console.bypass_security"))
 		{
 			platform_log("system link: the host's key is a PC's, not XNet's (%d); reached at its address", (int)result);
 			xbox_winsock_tunnel_key(key_identifier);

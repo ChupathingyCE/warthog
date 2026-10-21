@@ -2,8 +2,8 @@
 XBOX_D3DX.C
 
 The four D3DX functions the game calls. The SDK's D3DX library is built on
-its own Direct3D, not the Aug 2001 one the game links with (tools/
-xbox_build.py), so these are written out from D3DX's documented formulas
+its own Direct3D, not the Aug 2001 one the game links with (port/xbox/
+build.py), so these are written out from D3DX's documented formulas
 instead.
 
 This file is compiled with the later SDK's headers, not the game's.

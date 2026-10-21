@@ -68,7 +68,7 @@ int xbox_xlink_report(const unsigned char *mac, unsigned long address, int detai
 		strcat(line, ", mask 255.255.0.0)");
 	}
 	else if (address != expected)
-		strcat(line, " (D:\\trace.txt shows Kai's address for it)");
+		strcat(line, " (console.trace shows Kai's address for it)");
 	strncpy(text, line, (size_t)size - 1);
 	text[size - 1] = 0;
 	return 1;

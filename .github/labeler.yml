@@ -1,0 +1,9 @@
+# Area labels from the changed files, applied by pr-areas.yml. The names are
+# the repository's existing labels; a pull request touching several areas
+# gets each. The game's own areas are labeled in ChupathingyCE/chupathingyce.
+
+documentation:
+  - changed-files:
+      - any-glob-to-any-file:
+          - docs/**
+          - "**/*.md"

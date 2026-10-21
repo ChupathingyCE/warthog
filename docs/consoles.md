@@ -11,18 +11,20 @@ them has run anything on hardware.
 | Console | Folder | `ninja` target | Toolchain | Status |
 |---|---|---|---|---|
 | Original Xbox | `port/xbox` | `xbox` | clang, lld-link, [OXDK](https://github.com/MrMilenko/OXDK), the user's 5933 XDK | plays: menus, game list, joins PC hosts |
-| Xbox 360 | `port/xbox360` | `xbox360` | [OXDK360](https://github.com/MrMilenko/OXDK360), llvm-xenon, the user's 360 SDK (`XDK_DIR`) | planned; stub, not built here yet |
+| Xbox 360 | `port/xbox360` | `xbox360` | [OXDK360](https://github.com/MrMilenko/OXDK360), llvm-xenon, the user's 360 SDK (`XDK_DIR`) | in development; stub configures, does not link yet (`oxdk_dbgprint`) |
 | Wii U | `port/wiiu` | `wiiu` | devkitPPC, wut | planned; stub builds, game not built |
-| Switch | `port/switch` | `switch` | devkitA64, libnx | thelinkin3000's port, being brought in; the stub here until it is |
 
-A target exists only when `configure.py` finds its toolchain (the Xbox 360's
-needs the user's SDK as well), so a desktop checkout configures as before.
+Each port is a `--console-port` of the game's `configure.py`
+(`python3 chupathingyce/configure.py --console-port port/xbox360 ...`;
+docs/building.md). A target exists only when its toolchain is found (the
+Xbox 360's needs the user's SDK as well). The Switch is its own repository,
+[ChupathingyCE/warthog-switch](https://github.com/ChupathingyCE/warthog-switch).
 
 ## What each console needs before it plays
 
 The plan's order: the original Xbox first; the Xbox 360 next, with
-the Wii U alongside (both big-endian, so the byte-order work is shared);
-the Switch from thelinkin3000's port, being brought in. For any of them:
+the Wii U alongside (both big-endian, so the byte-order work is shared).
+For any of them:
 
 1. **The game's sources built for it.** Today only the original Xbox compiles
    `source/`. The others need a platform layer for what `port/linux` gives
@@ -47,12 +49,12 @@ the Switch from thelinkin3000's port, being brought in. For any of them:
    (`port/linux/include/delta.h`, once Delta Peer is in ChupathingyCE) says what it
    hosts and joins.
 5. **Cross-play.** The network protocol stays the PC builds' (network
-   version and layout); a console adapts to it, never the other way
-   (docs/cross-play.md).
+   version and layout); a console adapts to it, never the other way (the
+   game's docs/cross-play.md).
 
-## Shared console code (`port/console`)
+## Shared console code (the game's `port/console`)
 
-Headers only, not yet included by any build that runs the game:
+Headers in the game (the submodule), included as `port/console/include/...`:
 
 - `console_common.h`: the console's name and type, a controller state.
 - `console_endian.h`: byte swaps, little-endian readers and writers that
@@ -73,4 +75,3 @@ are the user's own. They stay a folder beside it.
 | Original Xbox | xemu (128 MB, NAT) | devkit, or a modified retail console |
 | Xbox 360 | Xenia | RGH or JTAG console, through a launcher such as Aurora |
 | Wii U | Cemu | Aroma |
-| Switch | Ryujinx | Atmosphere's Homebrew Menu |

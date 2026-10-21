@@ -8,25 +8,58 @@ The total is the system's own answer. GlobalMemoryStatus (xapilib, the
 SDK's) gives dwTotalPhys; if it gives nothing, the kernel's
 MmQueryStatistics (xboxkrnl, which the SDK's headers leave out) gives the
 physical pages. Both count what the kernel uses, so a 128 MB console
-reads 128 MB only when the XBE does not ask for 64 (tools/xbox_build.py's
+reads 128 MB only when the XBE does not ask for 64 (port/xbox/build.py's
 cxbe -LIMIT64MB:no) and the kernel knows the upper 64 MB (a devkit, or a
 modified BIOS that supports the upgrade). Allocating 70 MB and freeing it
 was suggested as a test; it is not needed with this toolchain, and would
 fragment the memory the game then lays out, so it is only the fallback if a
 toolchain ever lacks both calls.
 
-What follows from the class: the texture cache (the one cache whose size
-the console now sets at run time). It stays the Xbox's 22 MB everywhere by
-default: the Xbox's maps fit it. A 128 MB console takes 44 MB, a 256 MB one
-64 MB, with an empty D:\large_caches.txt beside default.xbe, kept in the
-low 128 MB, which the GPU reaches. On a 64 MB console that file brings a
-message and the Xbox's cache, never a crash.
+The class is 64 MB (a stock Xbox: the baseline, which every feature must
+run on), 128 MB (the common upgrade, and a devkit) or 256 MB (the rarer
+mods). A devkit started with the XBE's 64 MB flag is in the 64 MB class,
+and so is any console whose D:\config.toml has console.memory_class = "64"
+(xbox_config.h): for a test of the baseline, or if an extra misbehaves.
+The default, "auto", is the console's own.
+
+What follows from the class (console_memory_extras, halo_console_memory.h:
+a console above 64 MB has the extras). Nothing of the simulation or the
+network changes with it: the game state, the objects and what goes on the
+wire stay the Xbox's, so every console and PC plays the same game.
+- the texture cache: the Xbox's 22 MB on a 64 MB console; 44 MB on a 128
+MB one, 64 MB on a 256 MB one, kept in the low 128 MB, which the GPU
+reaches. A 64 MB console whose free memory cannot hold the Xbox's caches
+and still leave Direct3D and the heap theirs gets a smaller texture cache
+(down to 19 MB) rather than a failed start, a megabyte larger only while
+_main_loop_reserve is still expected free at the main loop.
+- the sound cache: the Xbox's 4 MB, 8 MB with the extras (and twice the
+sounds in it at once), in the low 128 MB too.
+- the shared code's own (halo_port_capacity.h, network_connection.c): the
+dynamic triangles (32768, 65536 with the extras), the transparent geometry
+groups (384, 1024), the network connection's queues (four times, the
+desktop builds').
+A feature that only a bigger console can carry asks console_memory_extras,
+or xbox_memory_require for a message at the main menu when it cannot run.
+
+A devkit tests the 64 MB path with the XBE's own flag (tools/xbox_package.py
+--devkit-64mb: XINIT_LIMIT_DEVKIT_MEMORY), which makes its kernel give the
+game 64 MB, as a stock console has. console.simulate_64mb, which held the
+memory above 64 MB from inside the game, is replaced by it.
+
+From the first line of main (xbox_memory_startup), each step of the start
+is written to D:\debug.txt at once ("boot:" lines: the memory, each cache
+as it is made, each large heap allocation), the file closed after each, so
+a console that stops before the game's own log opens still leaves where.
 
 Only the parse of a total into a class (xbox_memory_class_of and
 xbox_memory_delta_class_of) is built on the host (port/xbox/tests).
 */
 
 #include "../include/xbox_memory.h"
+
+/* XINIT_LIMIT_DEVKIT_MEMORY, in the XBE header's init flags (at 0x124:
+tools/xbox_package.py --devkit-64mb) */
+#define XBE_INIT_LIMIT_DEVKIT_MEMORY 0x00000004UL
 
 int xbox_memory_class_of(unsigned long total_bytes)
 {
@@ -41,14 +74,15 @@ int xbox_memory_class_of(unsigned long total_bytes)
 
 int xbox_memory_delta_class_of(int memory_class)
 {
-	/* (delta.h's: 1 up to 64 MB, 2 up to 512 MB, 0 unknown) */
+	/* (docs/delta.md's: log2 of the megabytes, 0 unknown) */
 	switch (memory_class)
 	{
 	case _xbox_memory_class_64mb:
-		return 1;
+		return 6;
 	case _xbox_memory_class_128mb:
+		return 7;
 	case _xbox_memory_class_256mb:
-		return 2;
+		return 8;
 	default:
 		return 0;
 	}
@@ -57,9 +91,14 @@ int xbox_memory_delta_class_of(int memory_class)
 #ifdef _XBOX
 
 #include <xtl.h>
+#include <stdarg.h>
 #include <stdio.h>
 #include <string.h>
 
+#include "../include/xbox_config.h"
+#include "port/linux/src/port_config.h"
+
+unsigned long __cdecl DbgPrint(const char *format, ...);
 void platform_log(const char *format, ...);
 /* the game's (interface/ui_widget.c) */
 void display_error_text_deferred(const wchar_t *text, short local_player_index);
@@ -84,15 +123,71 @@ typedef char xbox_mm_statistics_size_assert[sizeof(xbox_mm_statistics) == 36 ? 1
 
 LONG __stdcall MmQueryStatistics(xbox_mm_statistics *statistics);
 
+/* the game state (the Xbox's 0x345000, a test build of more than 16 players'
+too: halo_port_capacity.h, which this unit does not see) */
+#define _game_state_size 0x345000
+
+/* a test build of more than 16 players (configure.py --console-players):
+what it takes beyond a stock build's, measured on the build (the XBE's
+static data, halo.map: 124 KB at 24 players, the netcode's arrays) and
+logged where it counts (xbox_memory_log_point) */
+#if defined(HALO_CONSOLE_PLAYERS) && HALO_CONSOLE_PLAYERS > 16
+#define XBOX_MEMORY_PLAYERS_TEST 1
+#define XBOX_MEMORY_STRING_OF(x) #x
+#define XBOX_MEMORY_WIDE_OF(x) L ## x
+#define XBOX_MEMORY_WIDE(x) XBOX_MEMORY_WIDE_OF(x)
+/* "24", wide, from HALO_CONSOLE_PLAYERS */
+#define XBOX_MEMORY_PLAYERS_TEXT XBOX_MEMORY_WIDE(XBOX_MEMORY_STRING(HALO_CONSOLE_PLAYERS))
+#define XBOX_MEMORY_STRING(x) XBOX_MEMORY_STRING_OF(x)
+#endif
+
 enum
 {
 	_texture_cache_stock = 0x1600000,
+	/* the smallest the cache is made on a console short of memory: the
+	attract movie borrows 16 MB of it (bink_playback.c's largest pool,
+	texture_cache_steal_memory), between two guards of 0x104000 */
+	_texture_cache_minimum = 0x1300000,
 	_texture_cache_128mb = 0x2C00000,
 	_texture_cache_256mb = 0x4000000,
+	/* the sound cache: the Xbox's, and the extras' (xbox_sound_cache.c's
+	SOUND_CACHE_MAXIMUM_PAGE_COUNT pages of 4 KB at most) */
+	_sound_cache_stock = 0x400000,
+	_sound_cache_extras = 0x800000,
 	/* (the largest is halo_port_capacity.h's
 	HALO_PORT_TEXTURE_CACHE_MAXIMUM_SIZE, the texture cache's arrays' size;
 	the GPU's reach, where a raised cache is kept) */
-	_texture_cache_maximum_address = 0x7FFFFFF
+	_texture_cache_maximum_address = 0x7FFFFFF,
+
+	/* what physical_memory_allocate takes besides the texture cache: the
+	game state, the tag cache and the sound cache (physical_memory_map.c's
+	sizes, the Xbox game's) */
+	_other_caches_size = _game_state_size + 0x1600000 + _sound_cache_stock,
+	/* what the game takes after the caches are made, up to the main loop:
+	the Direct3D device (two 640x480 buffers and the depth buffer, 3.5 MB,
+	and its push buffer), the rasterizer's pools, the game's other heap
+	allocations and the system's (the sound's effects image among them).
+	Measured on the devkit in the 64 MB class: 7304 KB before the effects
+	image was downloaded (2026-10-20, builds 37857a71a and 02fead662:
+	8644 KB free after the caches, 1340 KB at the main loop); with it, the
+	leaner image (2033201d6) left 844 KB at the main loop with a 20 MB
+	cache it had only just stepped up to, which puts the use at up to
+	7741 KB. The larger, rounded up: a guess too high only keeps more free */
+	_used_after_caches = 0x790000,
+	/* what a 64 MB console keeps free at the main loop, at least, when the
+	texture cache is sized from what it has free: the menus, a join and a
+	map's start take their allocations from it (the game list's and the
+	network's queues, the UI's widgets), and a join has failed with about
+	56 KB left. A cache 1 MB larger is made only if this much would still
+	be free after it */
+	_main_loop_reserve = 0x180000,
+	/* what must stay free once the caches are made */
+	_free_after_caches = _used_after_caches + _main_loop_reserve,
+
+	/* how often xbox_memory_update looks at the free memory (main loop
+	passes), and how far below the last low it must be to be logged */
+	_low_check_interval = 300,
+	_low_log_step = 0x40000
 };
 
 static struct
@@ -100,74 +195,332 @@ static struct
 	int known;
 	unsigned long total;
 	unsigned long available;
+	const char *source;
+	/* the class of the console's memory, and the class the game uses (held
+	to 64 MB by the XBE's flag or console.memory_class), with why */
+	int hardware_class;
 	int memory_class;
-	int large_caches;
+	const char *held_by;
 	unsigned long texture_cache_size;
+	unsigned long sound_cache_size;
+	int texture_cache_reduced;
 	const wchar_t *message;
 	int message_shown;
+	unsigned long lowest_free;
+	long update_count;
+#ifdef XBOX_MEMORY_PLAYERS_TEST
+	/* the objects' peaks since the last map started */
+	long object_sample_count;
+	long objects_peak;
+	long object_pool_used_peak;
+	long object_pool_contiguous_least;
+	long objects_maximum;
+	long object_pool_size;
+#endif
 } memory;
 
-static int file_exists(const char *path)
-{
-	FILE *file = fopen(path, "r");
+/* the commit and time of this build (tools/xbox_stamp.py, regenerated by every ninja run) */
+extern const char xbox_build_stamp[];
 
-	if (!file)
-		return 0;
-	fclose(file);
-	return 1;
+/* the game's debug.txt lines, which wait in memory (source/cseries/errors.c) */
+void error_log_flush(void);
+
+void xbox_boot_log(const char *format, ...)
+{
+	char text[512];
+	va_list arguments;
+	FILE *file;
+
+	va_start(arguments, format);
+	_vsnprintf(text, sizeof(text) - 1, format, arguments);
+	va_end(arguments);
+	text[sizeof(text) - 1] = 0;
+	DbgPrint("halo: %s\n", text);
+	/* (the game's lines first, which wait in memory: errors.c) */
+	error_log_flush();
+	/* (opened and closed for each line: a console that stops on the next
+	line still leaves this one in the file) */
+	file = fopen("d:\\debug.txt", "a+b");
+	if (file)
+	{
+		fprintf(file, "boot: %s\r\n", text);
+		fclose(file);
+	}
 }
 
-static void memory_read(void)
+static void status_read(unsigned long *total, unsigned long *available, const char **source)
 {
 	MEMORYSTATUS status;
-	const char *source = "GlobalMemoryStatus";
 
-	if (memory.known)
-		return;
-	memory.known = 1;
 	memset(&status, 0, sizeof(status));
 	status.dwLength = sizeof(status);
 	GlobalMemoryStatus(&status);
-	memory.total = status.dwTotalPhys;
-	memory.available = status.dwAvailPhys;
-	if (!memory.total)
+	*total = status.dwTotalPhys;
+	*available = status.dwAvailPhys;
+	*source = "GlobalMemoryStatus";
+	if (!*total)
 	{
 		xbox_mm_statistics statistics;
 
 		memset(&statistics, 0, sizeof(statistics));
 		statistics.Length = sizeof(statistics);
-		source = "MmQueryStatistics";
+		*source = "MmQueryStatistics";
 		if (MmQueryStatistics(&statistics) >= 0)
 		{
-			memory.total = statistics.TotalPhysicalPages << 12;
-			memory.available = statistics.AvailablePages << 12;
+			*total = statistics.TotalPhysicalPages << 12;
+			*available = statistics.AvailablePages << 12;
 		}
 	}
-	memory.memory_class = xbox_memory_class_of(memory.total);
-	memory.large_caches = file_exists("d:\\large_caches.txt");
+}
+
+unsigned long xbox_memory_free(void)
+{
+	unsigned long total, available;
+	const char *source;
+
+	status_read(&total, &available, &source);
+	return available;
+}
+
+static void memory_read(void)
+{
+	if (memory.known)
+		return;
+	memory.known = 1;
+#ifdef XBOX_MEMORY_PLAYERS_TEST
+	/* a test build (configure.py --console-players): its network tables hold
+	more than the Xbox's 16 players. The game state stays the Xbox's
+	(halo_port_capacity.h); the rest is about 170 KB more of ordinary
+	memory, which a 64 MB console is expected to hold, so it starts on
+	every console and says so (the first message, shown at the main menu) */
+	xbox_boot_log("players: %d, a test build (the Xbox's: 16); game state %lu KB, as the Xbox's",
+		HALO_CONSOLE_PLAYERS, (unsigned long)_game_state_size >> 10);
+	memory.message = L"Test build: up to " XBOX_MEMORY_PLAYERS_TEXT L" players.\r\nExperimental: please send D:\\debug.txt.";
+#endif
+	status_read(&memory.total, &memory.available, &memory.source);
+	if (config_boolean("console.simulate_64mb"))
+		xbox_boot_log("console.simulate_64mb is deprecated and ignored: a devkit gets 64 MB from the XBE's flag "
+			"(tools/xbox_package.py --devkit-64mb)");
+	if (config_boolean("console.large_caches"))
+		xbox_boot_log("console.large_caches is deprecated and ignored: a console of 128 MB or more has the larger "
+			"caches on its own (console.memory_class = \"64\" keeps the Xbox's)");
+	memory.hardware_class = xbox_memory_class_of(memory.total);
+	memory.memory_class = memory.hardware_class;
+	/* a devkit started with XINIT_LIMIT_DEVKIT_MEMORY (the XBE's init flags,
+	which the kernel keeps in the header at the image's base) still reports
+	its 128 MB in all, but gives the title only a stock console's: it is in
+	the 64 MB class */
+	if ((*(unsigned long const *)0x00010124UL & XBE_INIT_LIMIT_DEVKIT_MEMORY) &&
+		memory.memory_class > _xbox_memory_class_64mb)
+	{
+		memory.memory_class = _xbox_memory_class_64mb;
+		memory.held_by = "the XBE's 64 MB flag";
+	}
+	/* the player's: "64" holds the console to the baseline; "auto" (the
+	default, or anything else, said once) is the console's own */
+	{
+		const char *setting = config_string("console.memory_class");
+
+		if (setting && !strcmp(setting, "64"))
+		{
+			if (memory.memory_class > _xbox_memory_class_64mb)
+			{
+				memory.memory_class = _xbox_memory_class_64mb;
+				memory.held_by = "console.memory_class";
+			}
+		}
+		else if (setting && *setting && strcmp(setting, "auto"))
+		{
+			xbox_boot_log("memory: console.memory_class \"%s\" is not \"auto\" or \"64\": auto", setting);
+		}
+	}
+	memory.lowest_free = memory.available;
 
 	memory.texture_cache_size = _texture_cache_stock;
-	if (memory.large_caches)
+	memory.sound_cache_size = _sound_cache_stock;
+	if (memory.memory_class == _xbox_memory_class_128mb)
 	{
-		if (memory.memory_class == _xbox_memory_class_128mb)
-			memory.texture_cache_size = _texture_cache_128mb;
-		else if (memory.memory_class == _xbox_memory_class_256mb)
-			memory.texture_cache_size = _texture_cache_256mb;
-		else
-		{
-			xbox_memory_require(_xbox_memory_class_128mb,
-				L"Larger caches (D:\\large_caches.txt) need\r\na console with 128 MB of memory.\r\n"
-				L"This one has 64 MB, so the game\r\nkeeps the Xbox's own.");
-		}
+		memory.texture_cache_size = _texture_cache_128mb;
+		memory.sound_cache_size = _sound_cache_extras;
+	}
+	else if (memory.memory_class == _xbox_memory_class_256mb)
+	{
+		memory.texture_cache_size = _texture_cache_256mb;
+		memory.sound_cache_size = _sound_cache_extras;
+	}
+	else if (memory.available < _other_caches_size + _free_after_caches + _texture_cache_stock)
+	{
+		/* a stock console (or one that cannot say): the Xbox's cache if
+		what is free holds it and still leaves Direct3D and the heap
+		theirs, else what does, down to the smallest the game can use */
+		/* the cache grows in steps of 1 MB from the smallest, a step only
+		if _main_loop_reserve is still expected free at the main loop
+		after it (the free memory, less the other caches, the cache and
+		_used_after_caches): the rest is headroom, not texture cache */
+		unsigned long room = memory.available > _other_caches_size + _free_after_caches ?
+			memory.available - _other_caches_size - _free_after_caches : 0;
+
+		room &= ~0xFFFFFUL;
+		memory.texture_cache_size = room > _texture_cache_minimum ? room : _texture_cache_minimum;
+#ifdef XBOX_MEMORY_PLAYERS_TEST
+		/* a test build of more than 16 players keeps the smallest: the
+		room is counted in whole megabytes, and a console a few KB over
+		the next would give the cache a megabyte the heap then lacks
+		(the extra players' netcode takes 170 KB of it at 24 players,
+		about 360 KB at 32) */
+		memory.texture_cache_size = _texture_cache_minimum;
+#endif
+		memory.texture_cache_reduced = 1;
 	}
 
-	/* (platform_log: to the debug monitor now, and into debug.txt once the
-	main loop runs) */
-	platform_log("memory: %lu MB in all, %lu MB free at the start (%s): the %d MB class; texture cache %lu MB%s",
-		memory.total >> 20, memory.available >> 20, source, memory.memory_class, memory.texture_cache_size >> 20,
-		memory.texture_cache_size != _texture_cache_stock ? " (raised: D:\\large_caches.txt)" :
-		memory.memory_class > _xbox_memory_class_64mb ? " (the Xbox's; D:\\large_caches.txt raises it)" :
-		" (the Xbox's)");
+	xbox_boot_log("memory: %lu MB in all, %lu KB free at the start (%s), image %lu KB: the %d MB class",
+		memory.total >> 20, memory.available >> 10, memory.source,
+		/* (the XBE's header, which the kernel keeps at the image's base:
+		its SizeOfImage) */
+		*(unsigned long const *)0x0001010CUL >> 10, memory.hardware_class);
+	if (memory.memory_class > _xbox_memory_class_64mb)
+	{
+		xbox_boot_log("memory: %d MB console, extras on: texture cache %lu KB, sound cache %lu KB, and larger "
+			"render buffers and network queues", memory.memory_class, memory.texture_cache_size >> 10,
+			memory.sound_cache_size >> 10);
+	}
+	else if (memory.held_by)
+	{
+		xbox_boot_log("memory: %d MB console held to 64 MB by %s, extras off: the Xbox's sizes",
+			memory.hardware_class, memory.held_by);
+	}
+	else
+	{
+		xbox_boot_log("memory: 64 MB console, extras off: the Xbox's sizes");
+	}
+	if (memory.texture_cache_reduced)
+	{
+		/* the decision: what is expected free at the main loop with this
+		cache, and with a step more (signed: a console short of the
+		smallest cache's room expects less than nothing) */
+		long expected = (long)(memory.available >> 10) - (long)(_other_caches_size >> 10) -
+			(long)(memory.texture_cache_size >> 10) - (long)(_used_after_caches >> 10);
+
+		xbox_boot_log("memory: texture cache %lu KB (less than the Xbox's 22 MB: what this console has free); "
+			"expected %ld KB free at the main loop, %ld KB with 1 MB more (the reserve: %lu KB)",
+			memory.texture_cache_size >> 10, expected, expected - 1024, (unsigned long)_main_loop_reserve >> 10);
+	}
+}
+
+void xbox_memory_startup(void)
+{
+	xbox_boot_log("start (build %s)", xbox_build_stamp);
+	/* (the settings first: the memory's are among them) */
+	xbox_config_startup();
+	memory_read();
+}
+
+/* physical_memory_allocate's: each cache as it is made */
+void xbox_memory_allocation(const char *name, unsigned long size, const void *address)
+{
+	if (address)
+		xbox_boot_log("memory: %s %lu KB at %p, %lu KB free", name, size >> 10, address, xbox_memory_free() >> 10);
+	else
+		xbox_boot_log("memory: %s %lu KB FAILED, %lu KB free", name, size >> 10, xbox_memory_free() >> 10);
+}
+
+/* debug_malloc's (cseries/debug_memory.c): the large allocations, and any
+that fails */
+void xbox_memory_heap_allocation(const char *file, long line, unsigned long size, const void *address)
+{
+	const char *name = file ? strrchr(file, '\\') : NULL;
+
+	name = name ? name + 1 : file ? file : "?";
+	if (address)
+		xbox_boot_log("heap: %lu KB for %s,#%ld, %lu KB free", size >> 10, name, line, xbox_memory_free() >> 10);
+	else
+		xbox_boot_log("heap: %lu KB for %s,#%ld FAILED, %lu KB free", size >> 10, name, line,
+			xbox_memory_free() >> 10);
+}
+
+#ifdef XBOX_MEMORY_PLAYERS_TEST
+/* the game's (saved games/game_state.c, objects/objects.c) */
+void game_state_cpu_usage(long *used, long *size);
+int objects_usage(long *count, long *maximum, long *pool_free, long *pool_size, long *pool_contiguous_free);
+
+/* the largest run of contiguous physical memory free, to 16 KB: each size
+tried is taken and given back at once (XPhysicalAlloc, as the caches and
+Direct3D's resources are), so this is only done at the few points that
+log it. The heap does not need contiguous memory; Direct3D and the
+caches do. */
+static unsigned long largest_free_block(unsigned long available)
+{
+	unsigned long low = 0;
+	unsigned long high = (available & ~0x3FFFUL) + 0x4000;
+
+	while (high - low > 0x4000)
+	{
+		unsigned long middle = (low + (high - low) / 2) & ~0x3FFFUL;
+		void *block;
+
+		if (middle <= low)
+			middle = low + 0x4000;
+		block = XPhysicalAlloc(middle, MAXULONG_PTR, 0, PAGE_READWRITE);
+		if (block)
+		{
+			XPhysicalFree(block);
+			low = middle;
+		}
+		else
+		{
+			high = middle;
+		}
+	}
+	return low;
+}
+
+static void objects_sample(void)
+{
+	long count, maximum, pool_free, pool_size, pool_contiguous_free;
+
+	if (!objects_usage(&count, &maximum, &pool_free, &pool_size, &pool_contiguous_free))
+		return;
+	memory.objects_maximum = maximum;
+	memory.object_pool_size = pool_size;
+	if (!memory.object_sample_count || pool_contiguous_free < memory.object_pool_contiguous_least)
+		memory.object_pool_contiguous_least = pool_contiguous_free;
+	memory.object_sample_count++;
+	if (count > memory.objects_peak)
+		memory.objects_peak = count;
+	if (pool_size - pool_free > memory.object_pool_used_peak)
+		memory.object_pool_used_peak = pool_size - pool_free;
+}
+#endif
+
+/* a test build's line at the main loop, each map's start (a game joined or
+hosted, or the main menu's) and each map's end: the players, the memory
+free and its largest block, the game state's use and, at a map's end, the
+objects' peaks over it (HALO_PORT_MAXIMUM_OBJECTS_PER_MAP and the object
+pool) */
+void xbox_memory_log_point(const char *where)
+{
+#ifdef XBOX_MEMORY_PLAYERS_TEST
+	unsigned long available = xbox_memory_free();
+	long game_state_used, game_state_size;
+
+	game_state_cpu_usage(&game_state_used, &game_state_size);
+	xbox_boot_log("players: %d, %s: %lu KB free, largest free block %lu KB, game state %ld of %ld bytes used",
+		HALO_CONSOLE_PLAYERS, where, available >> 10, largest_free_block(available) >> 10,
+		game_state_used, game_state_size);
+	if (memory.object_sample_count)
+	{
+		xbox_boot_log("objects: peak %ld of %ld, pool peak %ld KB used of %ld KB, least contiguous free %ld KB "
+			"(%ld samples)", memory.objects_peak, memory.objects_maximum,
+			memory.object_pool_used_peak >> 10, memory.object_pool_size >> 10,
+			memory.object_pool_contiguous_least >> 10, memory.object_sample_count);
+	}
+	memory.object_sample_count = 0;
+	memory.objects_peak = 0;
+	memory.object_pool_used_peak = 0;
+	memory.object_pool_contiguous_least = 0;
+#else
+	(void)where;
+#endif
 }
 
 unsigned long xbox_memory_total(void)
@@ -191,9 +544,33 @@ unsigned long xbox_memory_texture_cache_size(void)
 unsigned long xbox_memory_texture_cache_maximum_address(void)
 {
 	memory_read();
-	/* (the Xbox's own cache anywhere, as it always was) */
-	return memory.texture_cache_size == _texture_cache_stock ? 0xFFFFFFFFUL :
+	/* (the Xbox's own cache, or a smaller one, anywhere, as it always
+	was) */
+	return memory.texture_cache_size <= _texture_cache_stock ? 0xFFFFFFFFUL :
 		(unsigned long)_texture_cache_maximum_address;
+}
+
+unsigned long xbox_memory_sound_cache_size(void)
+{
+	memory_read();
+	return memory.sound_cache_size;
+}
+
+unsigned long xbox_memory_sound_cache_maximum_address(void)
+{
+	memory_read();
+	return memory.sound_cache_size <= _sound_cache_stock ? 0xFFFFFFFFUL :
+		(unsigned long)_texture_cache_maximum_address;
+}
+
+int console_memory_class(void)
+{
+	return xbox_memory_class();
+}
+
+int console_memory_extras(void)
+{
+	return xbox_memory_class() > _xbox_memory_class_64mb;
 }
 
 int xbox_memory_require(int memory_class, const wchar_t *text)
@@ -201,7 +578,7 @@ int xbox_memory_require(int memory_class, const wchar_t *text)
 	memory_read();
 	if (memory.memory_class >= memory_class)
 		return 1;
-	platform_log("memory: a feature needs the %d MB class; this console is in the %d MB class", memory_class,
+	xbox_boot_log("memory: a feature needs the %d MB class; this console is in the %d MB class", memory_class,
 		memory.memory_class);
 	/* (one message at a time: the first) */
 	if (!memory.message)
@@ -211,6 +588,24 @@ int xbox_memory_require(int memory_class, const wchar_t *text)
 
 void xbox_memory_update(void)
 {
+	/* the free memory's new lows, every few seconds: a map's load and a
+	match's peak */
+#ifdef XBOX_MEMORY_PLAYERS_TEST
+	/* the objects in use, twice a second or so */
+	if (!(memory.update_count % 15))
+		objects_sample();
+#endif
+	if (++memory.update_count >= _low_check_interval)
+	{
+		unsigned long available = xbox_memory_free();
+
+		memory.update_count = 0;
+		if (available + _low_log_step <= memory.lowest_free)
+		{
+			memory.lowest_free = available;
+			platform_log("memory: %lu KB free (a new low)", available >> 10);
+		}
+	}
 	if (!memory.message || memory.message_shown || !main_menu_is_active())
 		return;
 	memory.message_shown = 1;
@@ -220,10 +615,8 @@ void xbox_memory_update(void)
 int xbox_memory_delta_class(void)
 {
 	/* TODO(Delta Peer): this console's platform key (struct
-	delta_platform_key, port/linux/include/delta.h, once Delta Peer is in ChupathingyCE)
-	takes this as its memory_class once Delta Peer is built for the console:
-	delta_peer_platform_policy's row for _delta_platform_xbox says 1 today,
-	a 128 MB console is 2 */
+	delta_platform_key, docs/delta.md) takes this as its memory_class once
+	Delta Peer is built for the console */
 	return xbox_memory_delta_class_of(xbox_memory_class());
 }
 

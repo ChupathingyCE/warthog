@@ -14,13 +14,14 @@
 # Needs a configured Xbox build (build.ninja with the xbox target).
 set -e
 cd "$(dirname "$0")/../../.."
+G=${GAME:-chupathingyce}
 failures=0
 probe=build/xbox-tests/va_probe.c
 mkdir -p build/xbox-tests
 printf '#include <stdarg.h>\nvoid probe(const char *f, ...) { va_list a; va_start(a, f); va_end(a); }\n' > "$probe"
-command=$(ninja -t commands build/xbox/obj/port/xbox/src/xbox_port.c.obj | tail -1)
+command=$(ninja -t commands build/xbox/obj/port/src/xbox_port.c.obj | tail -1)
 if [ -z "$command" ]; then
-	echo "xbox_check: no Xbox build configured (configure.py --xbox-d3d8)" >&2
+	echo "xbox_check: no Xbox build configured (chupathingyce/configure.py --console-port port/xbox --xbox-d3d8 LIBRARY)" >&2
 	exit 2
 fi
 command=$(printf '%s' "$command" | sed -e 's| -c port/xbox/src/xbox_port.c| -E '"$probe"'|' -e 's| -o [^ ]*\.obj| -o -|' \
@@ -34,8 +35,9 @@ else
 	failures=$((failures + 1))
 fi
 # (format strings with a length modifier the 2003 runtime lacks)
-bad=$(grep -nE '"[^"]*%[-+ #0-9.*]*(z|ll|j|hh|t)[diouxXcs]' port/linux/src/p2p.c port/linux/src/p2p_signal.c \
-	port/linux/src/p2p_crypto.c port/xbox/src/*.c port/xbox/game/*.c port/linux/game/network_*.c || true)
+bad=$(grep -nE '"[^"]*%[-+ #0-9.*]*(z|ll|j|hh|t)[diouxXcs]' $G/port/linux/src/p2p.c $G/port/linux/src/p2p_signal.c \
+	$G/port/linux/src/p2p_crypto.c $G/port/linux/src/port_config.c $G/port/linux/src/delta_wire.c $G/port/linux/src/delta_peer.c $G/port/linux/src/delta_chat.c $G/port/linux/src/delta_peer_game.c port/xbox/src/*.c port/xbox/game/*.c \
+	$G/port/linux/game/network_*.c || true)
 if [ -n "$bad" ]; then
 	echo "xbox_check: formats the console's C runtime does not read:" >&2
 	printf '%s\n' "$bad" >&2

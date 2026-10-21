@@ -12,7 +12,7 @@ devkitPro's devkitPPC and wut (`/opt/devkitpro`, or `--devkitppc DIR` and `--wut
 ## Build
 
 ```sh
-python3 configure.py --devkitppc /opt/devkitpro/devkitPPC --wut /opt/devkitpro/wut
+python3 chupathingyce/configure.py --console-port port/wiiu --devkitppc /opt/devkitpro/devkitPPC --wut /opt/devkitpro/wut
 ninja wiiu
 python3 tools/wiiu_package.py --maps /path/to/maps --out ~/Downloads/Warthog-wiiu
 ```

@@ -209,23 +209,122 @@ int game_list_parse_response(const char *data, unsigned long size, struct game_l
 
 /* ---------- the list */
 
-/* a text field into a destination of maximum + 1 characters: any byte that
-is not printable ASCII becomes "?"; 0 if it is longer, or shorter than
-minimum */
+/* the Latin letters with marks (U+00C0 to U+017F) as the plain letters the
+menus' fonts have; a space for a character with no plain form */
+static const char latin_1_letters[] =
+	"AAAAAA CEEEEIIIIDNOOOOO OUUUUY  aaaaaa ceeeeiiiidnooooo ouuuuy y";
+static const char latin_extended_a_letters[] =
+	"AaAaAaCcCcCcCcDdDdEeEeEeEeEeGgGgGgGgHhHhIiIiIiIiIiIiJjKkkLlLlLlLlLlNnNnNnnNnOoOoOoOoRrRrRrSsSsSsSsTtTtTtUuUuUuUuUuUuWwYyYZzZzZzs";
+
+/* a character (a Unicode code point) as plain ASCII, into text (room for
+2): its length, 0 for one with no plain form (dropped) */
+static int plain_text(unsigned long character, char *text)
+{
+	if (character >= 0x20 && character <= 0x7e)
+	{
+		text[0] = (char)character;
+		return 1;
+	}
+	switch (character)
+	{
+	case 0xa0: text[0] = ' '; return 1;
+	case 0xa1: text[0] = '!'; return 1;
+	case 0xbf: text[0] = '?'; return 1;
+	case 0xc6: text[0] = 'A'; text[1] = 'E'; return 2;
+	case 0xe6: text[0] = 'a'; text[1] = 'e'; return 2;
+	case 0xde: text[0] = 'T'; text[1] = 'h'; return 2;
+	case 0xfe: text[0] = 't'; text[1] = 'h'; return 2;
+	case 0xdf: text[0] = 's'; text[1] = 's'; return 2;
+	case 0x152: text[0] = 'O'; text[1] = 'E'; return 2;
+	case 0x153: text[0] = 'o'; text[1] = 'e'; return 2;
+	case 0x2018: case 0x2019: text[0] = '\''; return 1;
+	case 0x201c: case 0x201d: text[0] = '"'; return 1;
+	case 0x2013: case 0x2014: text[0] = '-'; return 1;
+	default: break;
+	}
+	if (character >= 0xc0 && character <= 0xff && latin_1_letters[character - 0xc0] != ' ')
+	{
+		text[0] = latin_1_letters[character - 0xc0];
+		return 1;
+	}
+	if (character >= 0x100 && character <= 0x17f)
+	{
+		text[0] = latin_extended_a_letters[character - 0x100];
+		return 1;
+	}
+	return 0;
+}
+
+/* the UTF-8 character at text (length bytes left): its code point and how
+many bytes it takes, 1 (and a code point of 0, dropped) for a byte that
+does not start one */
+static unsigned long next_character(const unsigned char *text, unsigned long length, unsigned long *character)
+{
+	unsigned long size, index;
+	unsigned long value;
+
+	*character = 0;
+	if (text[0] < 0x80)
+	{
+		*character = text[0];
+		return 1;
+	}
+	if (text[0] >= 0xc2 && text[0] <= 0xdf)
+	{
+		size = 2;
+		value = text[0] & 0x1f;
+	}
+	else if (text[0] >= 0xe0 && text[0] <= 0xef)
+	{
+		size = 3;
+		value = text[0] & 0x0f;
+	}
+	else if (text[0] >= 0xf0 && text[0] <= 0xf4)
+	{
+		size = 4;
+		value = text[0] & 0x07;
+	}
+	else
+		return 1;
+	if (size > length)
+		return 1;
+	for (index = 1; index < size; index++)
+	{
+		if ((text[index] & 0xc0) != 0x80)
+			return 1;
+		value = (value << 6) | (text[index] & 0x3f);
+	}
+	*character = value;
+	return size;
+}
+
+/* a text field (UTF-8) into a destination of maximum + 1 characters, in
+the plain ASCII the menus' fonts draw: accented Latin letters as their
+plain letters, anything else not printable left out (a field left with
+nothing is "?"); 0 if it is longer, or shorter than minimum */
 static int copy_text(char *destination, unsigned long maximum, const char *text, unsigned long length,
 	unsigned long minimum)
 {
-	unsigned long index;
+	unsigned long index = 0, used = 0;
 
-	if (length > maximum || length < minimum)
+	if (length < minimum)
 		return 0;
-	for (index = 0; index < length; index++)
+	while (index < length)
 	{
-		unsigned char c = (unsigned char)text[index];
+		unsigned long character;
+		char plain[2];
+		int size;
 
-		destination[index] = c >= 0x20 && c <= 0x7e ? (char)c : '?';
+		index += next_character((const unsigned char *)text + index, length - index, &character);
+		size = plain_text(character, plain);
+		if (used + (unsigned long)size > maximum)
+			return 0;
+		memcpy(destination + used, plain, (size_t)size);
+		used += (unsigned long)size;
 	}
-	destination[length] = 0;
+	if (!used && length)
+		destination[used++] = '?';
+	destination[used] = 0;
 	return 1;
 }
 
@@ -387,7 +486,7 @@ int game_list_parse(const char *text, unsigned long size, struct game_list *list
 	return GAME_LIST_OK;
 }
 
-/* ---------- D:\game_list.txt */
+/* ---------- console.game_list_server (D:\config.toml) */
 
 int game_list_parse_server(const char *text, unsigned long size, char *host, int host_size, unsigned short *port)
 {

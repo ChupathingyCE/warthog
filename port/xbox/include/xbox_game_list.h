@@ -16,14 +16,28 @@ the host too.
 #define __XBOX_GAME_LIST_H
 
 #define GAME_LIST_HOST "warthog.milenko.org"
+/* a build of more than 16 players (configure.py --console-players) asks
+for the games set for up to its own count; a stock build's plain request
+gets those of up to 16 */
+#if defined(HALO_CONSOLE_PLAYERS) && HALO_CONSOLE_PLAYERS > 16
+#define GAME_LIST_STRING_OF(x) #x
+#define GAME_LIST_STRING(x) GAME_LIST_STRING_OF(x)
+#define GAME_LIST_PATH "/v1/console/games?players=" GAME_LIST_STRING(HALO_CONSOLE_PLAYERS)
+#else
 #define GAME_LIST_PATH "/v1/console/games"
+#endif
 #define GAME_LIST_PORT 80
-/* D:\game_list.txt: one line, a host or an IPv4 address, ":port" optional;
-used when the list's host does not resolve */
-#define GAME_LIST_FALLBACK_FILE "d:\\game_list.txt"
+/* console.game_list_server in D:\config.toml (once D:\game_list.txt, still
+read for one release): a host or an IPv4 address, ":port" optional; used
+when the list's host does not resolve */
+#define GAME_LIST_FALLBACK_SETTING "console.game_list_server"
+#define GAME_LIST_FALLBACK_FILE "D:\\game_list.txt"
 
-/* the whole response, headers and all, at most */
-#define GAME_LIST_RESPONSE_SIZE 65536
+/* the whole response, headers and all, at most: the console's list is
+filtered to the games it can join (about 130 bytes a line, 41 lines in
+5.3 KB), and the buffer is on the fetch thread's stack, not the 64 KB
+malloc that a 64 MB console had no room for */
+#define GAME_LIST_RESPONSE_SIZE 10240
 /* the response's header lines, at most this many of this many bytes */
 #define GAME_LIST_HEADER_LINE 1024
 #define GAME_LIST_HEADERS 64
@@ -107,7 +121,7 @@ int game_list_parse_response(const char *data, unsigned long size, struct game_l
 /* the list's text, size bytes (no terminator needed) */
 int game_list_parse(const char *text, unsigned long size, struct game_list *list);
 
-/* "host[:port]" or "a.b.c.d[:port]" (D:\game_list.txt's line): the host
+/* "host[:port]" or "a.b.c.d[:port]" (console.game_list_server's): the host
 (at most host_size - 1 characters) and the port; 0 if it is neither */
 int game_list_parse_server(const char *text, unsigned long size, char *host, int host_size, unsigned short *port);
 
@@ -140,6 +154,11 @@ bytes, the whole response); within timeout_ms */
 int game_list_fetch(unsigned long address, unsigned short port, const char *host, const char *path,
 	char *buffer, unsigned long size, unsigned long *received, unsigned long timeout_ms);
 
+/* the same, as a POST of body (JSON) when body is not NULL (the signed
+platform claim's, xbox_claim.h); the whole request is at most 1 KB */
+int game_list_request(unsigned long address, unsigned short port, const char *host, const char *path,
+	const char *body, char *buffer, unsigned long size, unsigned long *received, unsigned long timeout_ms);
+
 /* ---------- the console (xbox_game_list.c) */
 
 enum
@@ -159,6 +178,9 @@ void xbox_game_list_update(void);
 /* the main thread's: the last list taken (NULL before one came; kept while
 a refresh fails), and how many have come */
 const struct game_list *xbox_game_list_get(int *lists);
+/* the site to ask (the list's host, else console.game_list_server's): 1 with
+its address, the Host: name and the port; the signed claim asks it too */
+int xbox_game_list_server(unsigned long *address, char *host, int host_size, unsigned short *port);
 /* the latest request's state (XBOX_GAME_LIST_...), and its error's words */
 int xbox_game_list_state(void);
 const char *xbox_game_list_error(void);

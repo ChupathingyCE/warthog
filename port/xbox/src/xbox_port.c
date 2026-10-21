@@ -3,9 +3,9 @@ XBOX_PORT.C
 
 What the shared sources ask of the native builds' platform layer
 (port/linux/src) that the console answers itself, until it has more of that
-layer: the settings (their defaults: there is no config.toml yet), the log,
-the screen (640x480, no widescreen), and none of the mouse or the high-res
-HUD and text. Internet play's platform is port/xbox/src/xbox_p2p.c.
+layer: the log, the screen (640x480, no widescreen), and none of the mouse
+or the high-res HUD and text. Internet play's platform is
+port/xbox/src/xbox_p2p.c, the settings port/xbox/src/xbox_config.c.
 */
 
 #include <stdarg.h>
@@ -13,9 +13,10 @@ HUD and text. Internet play's platform is port/xbox/src/xbox_p2p.c.
 #include <stdlib.h>
 #include <string.h>
 
-#include "../../linux/include/halo_ui_pointer.h"
+#include "port/linux/include/halo_ui_pointer.h"
 #include "../include/xbox_log_tag.h"
 #include "../p2p/pthread.h"
+#include "port/linux/src/port_config.h"
 
 unsigned long __cdecl DbgPrint(const char *format, ...);
 /* the game's (cseries/errors.c) */
@@ -173,25 +174,18 @@ void platform_show_message(const char *title, const char *message)
 	DbgPrint("halo: %s: %s\n", title, message);
 }
 
-/* ---------- the trace switch: D:\trace.txt (an empty file beside
-default.xbe, as bypass_security.txt) turns on the bring-up traces, the main
-loop's progress each second and every hop of internet play's join
-("tunnel:" lines), which also name hosts by their Ethernet addresses. Off,
-the log has what a player's report needs: stalls, failures, the game's
-own events */
+/* ---------- the trace switch: console.trace in D:\config.toml
+(xbox_config.h) turns on the bring-up traces, the main loop's progress
+each second and every hop of internet play's join ("tunnel:" lines), which
+also name hosts by their Ethernet addresses. Off, the log has what a
+player's report needs: stalls, failures, the game's own events */
 
 int xbox_trace_enabled(void)
 {
 	static int known = -1;
 
 	if (known < 0)
-	{
-		FILE *file = fopen("d:\\trace.txt", "r");
-
-		known = file != NULL;
-		if (file)
-			fclose(file);
-	}
+		known = config_boolean("console.trace");
 	return known;
 }
 
@@ -242,94 +236,9 @@ static unsigned long __stdcall xbox_watchdog(void *parameter)
 
 void xbox_watchdog_start(void)
 {
-	CreateThread(NULL, 0, xbox_watchdog, NULL, 0, NULL);
-}
-
-/* ---------- the settings: their defaults (port/linux/src/port_config.c's)
-for those the console's code reads */
-
-static const struct
-{
-	const char *name;
-	const char *value;
-} settings[] =
-{
-	{ "debug.telnet_console", "false" },
-	{ "debug.telnet_console_port", "2323" },
-	{ "debug.network_test", "" },
-	{ "debug.network_test_start", "15.0" },
-	{ "debug.network_test_kill", "0.0" },
-	{ "debug.network_test_score", "0" },
-	{ "debug.network_test_shoot", "0.0" },
-	{ "debug.network_test_vehicle", "0.0" },
-	{ "debug.network_test_pickup", "0.0" },
-	{ "debug.network_test_pickup_weapon", "" },
-	{ "display.direct_camera", "true" },
-	{ "game.console_log", "important" },
-	/* internet play (port/xbox/src/xbox_p2p.c): network.online is the
-	console's own (D:\\bypass_security.txt); no UPnP, the system's port */
-	{ "network.allow_upnp", "false" },
-	{ "network.tunnel_port", "0" },
-	{ "network.brokers_file", "brokers.txt" },
-	{ "network.signalling_brokers", "broker.emqx.io:1883,broker.hivemq.com:1883,test.mosquitto.org:1883" },
-	{ "network.stun_servers", "stun.l.google.com:19302,stun.cloudflare.com:3478" },
-	{ "debug.hidden_window", "false" },
-	{ "debug.exit_after", "0.0" },
-	{ "debug.null_renderer", "false" },
-	{ "debug.log_addresses", "false" },
-	/* the desktop builds' Settings volumes (sound_manager.c), at their
-	defaults: without them both read as 0 and every sound played silent */
-	{ "audio.music_volume", "1.0" },
-	{ "audio.effects_volume", "1.0" },
-};
-
-int xbox_p2p_online(void);
-
-static const char *setting(const char *name)
-{
-	unsigned int index;
-
-	for (index = 0; index < sizeof(settings) / sizeof(settings[0]); index++)
-	{
-		if (!strcmp(settings[index].name, name))
-			return settings[index].value;
-	}
-	/* (into debug.txt too, the first few: a setting the shared code reads
-	that the console lacks reads as empty, 0 or false) */
-	{
-		static int reported;
-
-		if (reported < 16)
-		{
-			reported++;
-			platform_log("no setting %s on the console", name);
-		}
-		else
-			DbgPrint("halo: no setting %s on the console\n", name);
-	}
-	return "";
-}
-
-int config_boolean(const char *name)
-{
-	if (!strcmp(name, "network.online"))
-		return xbox_p2p_online();
-	return !strcmp(setting(name), "true");
-}
-
-long config_integer(const char *name)
-{
-	return atol(setting(name));
-}
-
-double config_real(const char *name)
-{
-	return atof(setting(name));
-}
-
-const char *config_string(const char *name)
-{
-	return setting(name);
+	/* (a stack of its own size: 0 is the main thread's, the XBE's 1 MB, all
+	of it committed memory on the Xbox) */
+	CreateThread(NULL, 64 * 1024, xbox_watchdog, NULL, 0, NULL);
 }
 
 /* ---------- the screen: the console's 640x480 */
@@ -376,80 +285,6 @@ int halo_linux_mouse_look(short gamepad_index, float *yaw, float *pitch)
 	(void)yaw;
 	(void)pitch;
 	return 0;
-}
-
-/* (the automated network tests' held action button) */
-void test_input_hold_action(int hold)
-{
-	(void)hold;
-}
-
-/* ---------- the high-res HUD and text: none, the game's own bitmaps */
-
-long hud_hires_asset_count(void)
-{
-	return 0;
-}
-
-long hud_hires_asset_bitmap(long asset)
-{
-	(void)asset;
-	return -1;
-}
-
-long hud_hires_asset_fits(long asset, long width, long height)
-{
-	(void)asset;
-	(void)width;
-	(void)height;
-	return 0;
-}
-
-const char *hud_hires_asset_tag(long asset)
-{
-	(void)asset;
-	return "";
-}
-
-void hud_hires_map_loaded(const long *assets, long count)
-{
-	(void)assets;
-	(void)count;
-}
-
-void hud_hires_map_unloaded(void)
-{
-}
-
-struct text_hires_glyph;
-
-long text_hires_font(const char *tag_name, float cap_height)
-{
-	(void)tag_name;
-	(void)cap_height;
-	return -1;
-}
-
-int text_hires_covers(long font, unsigned long code)
-{
-	(void)font;
-	(void)code;
-	return 0;
-}
-
-int text_hires_glyph(long font, unsigned long code, struct text_hires_glyph *glyph)
-{
-	(void)font;
-	(void)code;
-	(void)glyph;
-	return 0;
-}
-
-void text_hires_register_atlas(const unsigned long *texture, unsigned long width, unsigned long height)
-{
-	(void)texture;
-	(void)width;
-	(void)height;
 }
 
 /* ---------- internet play: the desktop builds' p2p.c joins (port/xbox/src/
@@ -554,6 +389,15 @@ void pc_menu_game_data_function_invoke(struct widget_instance *widget, long func
 	(void)function;
 }
 
+/* the settings' long text, scrolled on focus (ui_widget.c): NONE, the text
+drawn as it is */
+long pc_menu_text_marquee(struct widget_instance const *widget, boolean_type focus)
+{
+	(void)widget;
+	(void)focus;
+	return -1;
+}
+
 struct bitmap_data;
 
 boolean_type pc_menu_frame_placement(struct bitmap_data const *bitmap, short *x, short *y, short *width,
@@ -590,11 +434,7 @@ void halo_screen_anti_alias(short x0, short y0, short x1, short y1)
 
 /* ---------- the keyboard and the desktop's settings: none on the console */
 
-unsigned long halo_keyboard_actions(short controller_index)
-{
-	(void)controller_index;
-	return 0;
-}
+/* (halo_keyboard_actions: port/xbox/game/xbox_chat_keys.c) */
 
 void platform_text_typing(int typing)
 {
@@ -613,12 +453,6 @@ void platform_scoreboard_scroll(int open, long *notches, long *pages)
 float halo_screen_scale(void)
 {
 	return 1.0f;
-}
-
-/* (the settings never change: there is no config.toml) */
-unsigned long config_changes(void)
-{
-	return 0;
 }
 
 /* ---------- addresses in the log (port/linux/src/log_address.h): the

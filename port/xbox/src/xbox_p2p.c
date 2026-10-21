@@ -2,16 +2,17 @@
 XBOX_P2P.C
 
 Internet play on the console: the desktop builds' tunnel (port/linux/src/
-p2p.c, p2p_signal.c, p2p_crypto.c, compiled as they are: tools/
-xbox_build.py, port/xbox/p2p) over XNet, as a joiner. This is the platform
+p2p.c, p2p_signal.c, p2p_crypto.c, compiled as they are: port/xbox/
+build.py, port/xbox/p2p) over XNet, as a joiner. This is the platform
 layer they call (port/linux/src/posix.h's sockets, threads, settings and
 logging), and the stubs of what the console leaves out: hosting's UPnP,
 Discord, the server browser's public games (p2p_lobby.c), invites handed
 from another copy of the game.
 
-XNet reaches the internet only when it starts insecure (D:\bypass_security.txt);
-without it internet play is off (network.online false), as on a desktop
-with it turned off.
+XNet reaches the internet only when it starts insecure
+(console.bypass_security in D:\config.toml); without it internet play is off
+(network.online false: port/xbox/src/xbox_config.c), as on a desktop with it
+turned off.
 
 Sockets: XNet's SOCKET values are handles, not small numbers, and the tunnel
 keeps sockets as ints (-1 for none), so each gets a descriptor here, an
@@ -27,27 +28,23 @@ writes them through log_address (port/xbox/src/xbox_port.c).
 #include <string.h>
 
 #include "../p2p/pthread.h"
-#include "../../linux/src/posix.h"
-#include "../../linux/src/p2p.h"
+#include "port/linux/src/posix.h"
+#include "port/linux/src/p2p.h"
+#include "port/linux/src/port_config.h"
 
 int snprintf(char *buffer, size_t size, const char *format, ...);
 int xbox_trace_enabled(void);
 
-/* ---------- settings: xbox_port.c's, with network.online this */
+/* ---------- settings (port/xbox/src/xbox_config.c) */
 
-/* the internet, only when XNet starts insecure (D:\bypass_security.txt) */
+/* the internet, only when XNet starts insecure (console.bypass_security,
+which network.online follows) */
 int xbox_p2p_online(void)
 {
 	static int known = -1;
 
 	if (known < 0)
-	{
-		FILE *file = fopen("d:\\bypass_security.txt", "r");
-
-		known = file != NULL;
-		if (file)
-			fclose(file);
-	}
+		known = config_boolean("network.online");
 	return known;
 }
 
@@ -56,40 +53,16 @@ const char *platform_data_root(void)
 	return "d:";
 }
 
-/* (port_config.h's: the signalling brokers' list, D:\brokers.txt, as the
-desktop builds read theirs beside config.toml) */
-void config_folder(char *path, size_t size)
+/* (the desktop builds' lobby and Discord join, which the console does
+without: no rendezvous lobby, no Discord) */
+int p2p_lobby_open(void)
 {
-	if (size)
-		snprintf(path, size, "d:\\");
+	return 0;
 }
 
-enum
+void p2p_discord_set_join(const char *code)
 {
-	/* (a settings file is small: the brokers' list) */
-	CONFIG_FILE_MAXIMUM_SIZE = 16384,
-};
-
-char *config_file_read(const char *path, size_t *size)
-{
-	FILE *file = fopen(path, "rb");
-	char *text;
-	size_t length;
-
-	if (!file)
-		return NULL;
-	text = (char *)malloc(CONFIG_FILE_MAXIMUM_SIZE + 1);
-	if (!text)
-	{
-		fclose(file);
-		return NULL;
-	}
-	length = fread(text, 1, CONFIG_FILE_MAXIMUM_SIZE, file);
-	fclose(file);
-	text[length] = 0;
-	if (size)
-		*size = length;
-	return text;
+	(void)code;
 }
 
 /* ---------- threads */
@@ -140,6 +113,9 @@ struct thread_start
 	void *argument;
 };
 
+#define THREAD_STACK_SIZE (64 * 1024)
+void xbox_memory_heap_allocation(const char *file, long line, unsigned long size, const void *address);
+
 static struct thread_start thread_starts[4];
 static long thread_start_next;
 
@@ -164,9 +140,14 @@ int pthread_create(pthread_t *thread, const pthread_attr_t *attributes, void *(*
 	slot = &thread_starts[index];
 	slot->start = start;
 	slot->argument = argument;
-	handle = CreateThread(NULL, 256 * 1024, thread_main, slot, 0, NULL);
+	/* (64 KB: the tunnel's deepest chain, from p2p_thread to a send through
+	the SDK's sockets or a key exchange, is some 20 KB by the frames
+	-fstack-usage gives, the largest 3.6 KB; the stack is committed memory a
+	64 MB console is short of, and is given back when the thread ends) */
+	handle = CreateThread(NULL, THREAD_STACK_SIZE, thread_main, slot, 0, NULL);
 	if (!handle)
 		return -1;
+	xbox_memory_heap_allocation("xbox_p2p.c (thread stack)", index, THREAD_STACK_SIZE, handle);
 	*thread = (pthread_t)handle;
 	return 0;
 }
@@ -778,7 +759,7 @@ void p2p_lobby_slot_topic(const unsigned char *key_hash, char *topic, int size)
 }
 
 /* ---------- what becomes of the peers' datagrams for the game (p2p.c's
-datagram_received, P2P_TRACE_DATAGRAMS), with D:\trace.txt: a few logged,
+datagram_received, P2P_TRACE_DATAGRAMS), with console.trace: a few logged,
 then one in ten seconds, each outcome on its own */
 
 void p2p_trace_datagram(unsigned short source_port, unsigned short port, int size, int result)
@@ -813,7 +794,7 @@ void p2p_trace_datagram(unsigned short source_port, unsigned short port, int siz
 }
 
 /* each packet the tunnel opened from a peer: counted by type, logged every
-10 seconds with D:\trace.txt (types: 1 ping, 2 pong, 3 datagram, 4 stream,
+10 seconds with console.trace (types: 1 ping, 2 pong, 3 datagram, 4 stream,
 others by number) */
 void p2p_trace_packet(int type, int size)
 {

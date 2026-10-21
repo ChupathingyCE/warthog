@@ -22,6 +22,8 @@ Link list and ONLINE GAMES leave co-op games out (xbox_coop_game).
 #include "coop_scripts.h"
 #include "coop_spectate.h"
 
+int xbox_coop_name(wchar_t const *description);
+
 /* ---------- a co-op game, as the console tells one */
 
 /* a host's game is co-op if it has no game engine (a co-op round's
@@ -31,6 +33,18 @@ boolean xbox_coop_game(
 	long engine_type)
 {
 	return engine_type == game_engine_none;
+}
+
+/* whether a host's settings record is co-op: no game engine and a variant
+the host names "Co-op" (network_server_manager.c; other builds' hosts add
+the difficulty, "Co-op Heroic"). A record with no engine and no such name is
+a multiplayer game between rounds (the dedicated server's postgame and
+pregame records), not co-op */
+boolean xbox_coop_variant(
+	long engine_type,
+	wchar_t const *description)
+{
+	return xbox_coop_game(engine_type) && xbox_coop_name(description);
 }
 
 /* ---------- network_coop.h */
@@ -268,9 +282,33 @@ void coop_scripts_gather_in_volume(
 }
 
 void coop_scripts_teleport_followers(
-	long unit_index)
+	long unit_index,
+	real_point3d const *destination)
 {
 	(void)unit_index;
+	(void)destination;
+}
+
+boolean coop_scripts_unit_near(
+	long unit_index,
+	real_point3d const *destination)
+{
+	(void)unit_index;
+	(void)destination;
+	return FALSE;
+}
+
+boolean coop_scripts_arrive_at(
+	long player_index,
+	real_point3d const *destination,
+	long const *arrived_unit_indices,
+	short arrived_count)
+{
+	(void)player_index;
+	(void)destination;
+	(void)arrived_unit_indices;
+	(void)arrived_count;
+	return FALSE;
 }
 
 void coop_scripts_suspend_followers(

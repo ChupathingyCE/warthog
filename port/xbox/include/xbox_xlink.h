@@ -25,7 +25,7 @@ int xbox_xlink_matches(const unsigned char *mac, unsigned long address);
 
 /* debug.txt's line at the start (text, cut to size): whether the console's
 address is XLink Kai's for its MAC. Kai's address itself (which carries the
-MAC's last two bytes) only when detailed (D:\trace.txt). 0 and no line if
+MAC's last two bytes) only when detailed (console.trace). 0 and no line if
 the MAC gives no Kai address. */
 int xbox_xlink_report(const unsigned char *mac, unsigned long address, int detailed, char *text, int size);
 

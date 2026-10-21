@@ -16,8 +16,9 @@ joins it as the desktop builds' screen does: through its invite (the list's
 first field), internet play's tunnel to its host (port/xbox/src/
 xbox_p2p.c, the desktop builds' p2p.c) is made, and once the host's game
 is advertised through it, the game is joined and its lobby opens. Y joins
-the invite in D:\join.txt the same way (port/xbox/src/xbox_direct_join.c),
-for testing. Internet play needs D:\bypass_security.txt.
+the invite in console.join (D:\config.toml) the same way (port/xbox/src/
+xbox_direct_join.c), for testing. Internet play needs
+console.bypass_security.
 
 Memory: the screen's own state is the list's order and a few numbers; the
 list itself is the fetch's one copy (xbox_game_list_get).
@@ -94,23 +95,28 @@ enum
 	STEP_REPEAT_INTERVAL = 110,
 	STEP_RELEASE_GAP = 150,
 
-	/* the 640x480 layout */
+	/* the 640x480 layout, inside the title-safe area (the inner 85%: 48 to
+	592 across, 36 to 444 down) */
 	SCREEN_LEFT = 48,
 	SCREEN_RIGHT = 592,
-	TITLE_TOP = 34,
-	RULE_Y = 74,
-	HEAD_TOP = 80,
-	LIST_TOP = 100,
-	LIST_BOTTOM = 296,
+	TITLE_TOP = 38,
+	RULE_Y = 72,
+	HEAD_TOP = 76,
+	LIST_TOP = 96,
+	LIST_BOTTOM = 284,
 	MAXIMUM_ROWS = 9,
-	DETAIL_TOP = 318,
-	DETAIL_BOTTOM = 426,
-	PROMPT_TOP = 438,
+	DETAIL_TOP = 308,
+	DETAIL_BOTTOM = 412,
+	PROMPT_TOP = 420,
+	PROMPT_BOTTOM = 444,
 
-	COLUMN_MAP = 250,
-	COLUMN_TYPE = 380,
-	COLUMN_PLAYERS = 470,
-	COLUMN_REGION = 528,
+	/* the columns: a cell's inset from its column, the space between
+	columns, and the Map and Type columns' widths (the rest are measured in
+	the menu's font: browser_screen_render) */
+	CELL_INSET = 6,
+	COLUMN_GAP = 12,
+	COLUMN_MAP_WIDTH = 124,
+	COLUMN_TYPE_WIDTH = 96,
 
 	PICTURE_LEFT = SCREEN_LEFT + 8,
 	PICTURE_RIGHT = PICTURE_LEFT + 120,
@@ -119,9 +125,12 @@ enum
 
 /* the screen's colors (pixel32, 0xAARRGGBB), the blues of the desktop
 builds' screen */
-#define COLOR_BACKGROUND 0xF0050B18
+/* (opaque: the menu behind is hidden, as a screen the menus open hides the
+one it replaces) */
+#define COLOR_BACKGROUND 0xFF050B18
 #define COLOR_RULE 0xFF2A62C8
 #define COLOR_PANEL 0xC0081530
+#define COLOR_HEADER 0xFF0C1E40
 #define COLOR_ROW_SELECTED 0xFF2052B0
 #define COLOR_PICTURE 0xFF0A1A33
 
@@ -150,6 +159,8 @@ static struct
 	char selected_invite[GAME_LIST_INVITE_LENGTH + 1];
 	char status[64];
 	unsigned long status_time;
+	/* whether console.join holds an invite (Y's hint shown), read on opening */
+	boolean direct_join;
 	/* a join under way: the invite's digits and when it started */
 	boolean connecting;
 	char connecting_invite[GAME_LIST_INVITE_LENGTH + 1];
@@ -250,8 +261,9 @@ static void join_invite(
 
 	if (!xbox_p2p_online())
 	{
-		set_status("Online play needs D:\\bypass_security.txt.");
-		error(_error_log, "online games: no internet play without D:\\bypass_security.txt");
+		set_status("Online play needs console.bypass_security.");
+		error(_error_log, "online games: no internet play without console.bypass_security (or with network.online "
+			"off) in D:\\config.toml");
 		return;
 	}
 	if (!global_network_game_client_get())
@@ -336,6 +348,11 @@ void browser_screen_open(
 	/* (the list, as it came at the start or last time; a fresh one asked for) */
 	browser_screen.lists = 0;
 	browser_screen.connecting = FALSE;
+	{
+		char invite[XBOX_DIRECT_JOIN_INVITE_LENGTH + 1];
+
+		browser_screen.direct_join = xbox_direct_join_invite(invite) != 0;
+	}
 	take_list();
 	refresh();
 	/* the network searching, as System Link's list starts it (the joined
@@ -427,9 +444,9 @@ void browser_screen_process(
 
 					ui_play_audio_feedback_sound(_browser_sound_forward);
 					if (xbox_direct_join_invite(invite))
-						join_invite(invite, "the game in D:\\join.txt");
+						join_invite(invite, "the game in console.join");
 					else
-						set_status("D:\\join.txt holds no invite.");
+						set_status("console.join holds no invite.");
 				}
 				break;
 			case _gamepad_analog_button_x:
@@ -540,6 +557,31 @@ static short line_height(
 	return header ? (short)(header->ascending_height + header->descending_height) : 16;
 }
 
+/* text's width in a font, in pixels */
+static short text_width(
+	long font,
+	char const *string)
+{
+	wchar_t wide[96];
+	rectangle2d bounds, text_bounds, cursor_bounds;
+	real_argb_color color;
+	short index;
+
+	if (font == NONE || !string)
+		return 0;
+	for (index = 0; index < NUMBEROF(wide) - 1 && string[index]; index++)
+		wide[index] = (wchar_t)(unsigned char)string[index];
+	wide[index] = 0;
+	bounds.x0 = 0;
+	bounds.y0 = 0;
+	bounds.x1 = 640;
+	bounds.y1 = 480;
+	set_color(&color, 1.0f, 1.0f, 1.0f, 1.0f);
+	draw_string_set_draw_mode(font, NONE, _justify_left, 0, &color);
+	draw_unicode_string_compute_bounds(&bounds, wide, &text_bounds, &cursor_bounds);
+	return (short)(text_bounds.x1 - text_bounds.x0);
+}
+
 /* the map's picture (the menus' own), or the box alone for a map the
 console has no picture of */
 static void draw_map_picture(
@@ -592,8 +634,7 @@ static void draw_details(
 	struct game_list_game const *game,
 	long font,
 	real_argb_color const *label_color,
-	real_argb_color const *text_color,
-	real_argb_color const *note_color)
+	real_argb_color const *text_color)
 {
 	short height = line_height(font) + 2;
 	short y = DETAIL_TOP + 6;
@@ -618,10 +659,6 @@ static void draw_details(
 		game->region);
 	DETAIL_LINE("Status", line);
 #undef DETAIL_LINE
-	/* (A's answer, a while) */
-	if (browser_screen.status[0] && system_milliseconds() - browser_screen.status_time < STATUS_DURATION)
-		text(font, _justify_left, note_color, DETAIL_TEXT, y, SCREEN_RIGHT - 8, y + height,
-			browser_screen.status);
 }
 
 void browser_screen_render(
@@ -634,6 +671,7 @@ void browser_screen_render(
 	real_argb_color title_color, head_color, text_color, dim_color, note_color;
 	short row_height = MAX(line_height(font) + 4, 18);
 	short rows = MIN(MAXIMUM_ROWS, (LIST_BOTTOM - LIST_TOP) / row_height);
+	short column_map, column_type, column_players, column_region;
 	short page_first, row;
 	long players = 0;
 	char line[96], value[GAME_LIST_MAP_LENGTH + 8];
@@ -649,6 +687,15 @@ void browser_screen_render(
 		rows = 1;
 	browser_screen.rows = rows;
 
+	/* the columns, from the right: Region and Players as wide as their
+	headings (or their widest values), Type and Map fixed, the game's name
+	the rest */
+	column_region = (short)(SCREEN_RIGHT - CELL_INSET - MAX(text_width(font, "REGION"), text_width(font, "Europe")));
+	column_players = (short)(column_region - COLUMN_GAP -
+		MAX(text_width(font, "PLAYERS"), text_width(font, "16/16")));
+	column_type = (short)(column_players - COLUMN_GAP - COLUMN_TYPE_WIDTH);
+	column_map = (short)(column_type - COLUMN_GAP - COLUMN_MAP_WIDTH);
+
 	quad(0, 0, 640, 480, COLOR_BACKGROUND);
 	text(heading_font != NONE ? heading_font : font, _justify_left, &title_color, SCREEN_LEFT, TITLE_TOP,
 		SCREEN_RIGHT, RULE_Y - 2, "ONLINE GAMES");
@@ -659,26 +706,31 @@ void browser_screen_render(
 		RULE_Y - 2, line);
 	quad(SCREEN_LEFT, RULE_Y, SCREEN_RIGHT, RULE_Y + 1, COLOR_RULE);
 
-	/* the list */
-	text(font, _justify_left, &head_color, SCREEN_LEFT + 6, HEAD_TOP, COLUMN_MAP - 6, LIST_TOP, "GAME");
-	text(font, _justify_left, &head_color, COLUMN_MAP, HEAD_TOP, COLUMN_TYPE - 6, LIST_TOP, "MAP");
-	text(font, _justify_left, &head_color, COLUMN_TYPE, HEAD_TOP, COLUMN_PLAYERS - 6, LIST_TOP, "TYPE");
-	text(font, _justify_left, &head_color, COLUMN_PLAYERS, HEAD_TOP, COLUMN_REGION - 6, LIST_TOP, "PLAYERS");
-	text(font, _justify_left, &head_color, COLUMN_REGION, HEAD_TOP, SCREEN_RIGHT - 6, LIST_TOP, "REGION");
+	/* the list: its headings on a band as wide as the panel, at the rows'
+	columns */
+	quad(SCREEN_LEFT, HEAD_TOP, SCREEN_RIGHT, LIST_TOP, COLOR_HEADER);
+	{
+		short ty = (short)(HEAD_TOP + (LIST_TOP - HEAD_TOP - line_height(font)) / 2);
+
+		text(font, _justify_left, &head_color, SCREEN_LEFT + CELL_INSET, ty, column_map - CELL_INSET, LIST_TOP,
+			"GAME");
+		text(font, _justify_left, &head_color, column_map, ty, column_type - CELL_INSET, LIST_TOP, "MAP");
+		text(font, _justify_left, &head_color, column_type, ty, column_players - CELL_INSET, LIST_TOP, "TYPE");
+		text(font, _justify_left, &head_color, column_players, ty, column_region - CELL_INSET, LIST_TOP, "PLAYERS");
+		text(font, _justify_left, &head_color, column_region, ty, SCREEN_RIGHT, LIST_TOP, "REGION");
+	}
 	quad(SCREEN_LEFT, LIST_TOP, SCREEN_RIGHT, LIST_TOP + rows * row_height, COLOR_PANEL);
 	page_first = (short)(browser_screen.selected - browser_screen.selected % rows);
 	if (!list || !browser_screen.count)
 	{
+		/* (why a fetch failed is debug.txt's: xbox_game_list.c) */
 		char const *words =
-			state == XBOX_GAME_LIST_FAILED ? "Could not get the game list." :
+			state == XBOX_GAME_LIST_FAILED ? "Could not reach the game list. Check your network settings." :
 			state == XBOX_GAME_LIST_FETCHING || !list ? "Getting the game list..." :
 			"No one is hosting right now.";
 
 		text(font, _justify_center, &dim_color, SCREEN_LEFT, LIST_TOP + row_height * 2, SCREEN_RIGHT,
 			LIST_TOP + row_height * 3, words);
-		if (state == XBOX_GAME_LIST_FAILED)
-			text(font, _justify_center, &dim_color, SCREEN_LEFT, LIST_TOP + row_height * 3, SCREEN_RIGHT,
-				LIST_TOP + row_height * 4, xbox_game_list_error());
 	}
 	for (row = 0; list && row < rows && page_first + row < browser_screen.count; row++)
 	{
@@ -693,47 +745,57 @@ void browser_screen_render(
 			quad(SCREEN_LEFT, y0, SCREEN_RIGHT, y1, COLOR_ROW_SELECTED);
 			color = &text_color;
 		}
-		text(font, _justify_left, color, SCREEN_LEFT + 6, ty, COLUMN_MAP - 6, y1, game->name);
+		text(font, _justify_left, color, SCREEN_LEFT + CELL_INSET, ty, column_map - CELL_INSET, y1, game->name);
 		game_list_map_name(game->map, value, sizeof(value));
-		text(font, _justify_left, color, COLUMN_MAP, ty, COLUMN_TYPE - 6, y1, value);
-		text(font, _justify_left, color, COLUMN_TYPE, ty, COLUMN_PLAYERS - 6, y1, game_list_type_name(game));
+		text(font, _justify_left, color, column_map, ty, column_type - CELL_INSET, y1, value);
+		text(font, _justify_left, color, column_type, ty, column_players - CELL_INSET, y1, game_list_type_name(game));
 		snprintf(line, sizeof(line), "%d/%d", game->players, game->maximum_players);
-		text(font, _justify_left, color, COLUMN_PLAYERS, ty, COLUMN_REGION - 6, y1, line);
-		text(font, _justify_left, color, COLUMN_REGION, ty, SCREEN_RIGHT - 6, y1,
-			game->region[0] ? game->region : "-");
+		text(font, _justify_left, color, column_players, ty, column_region - CELL_INSET, y1, line);
+		text(font, _justify_left, color, column_region, ty, SCREEN_RIGHT, y1, game->region[0] ? game->region : "-");
 	}
-	/* under the list: the page, and the list's state */
+	/* under the list: what A or X last did (a while), else the list's
+	state; and the page */
 	{
 		short y0 = (short)(LIST_TOP + rows * row_height + 2);
 		short y1 = (short)(y0 + line_height(font) + 2);
 
-		if (state == XBOX_GAME_LIST_FETCHING)
-			text(font, _justify_left, &dim_color, SCREEN_LEFT + 6, y0, SCREEN_RIGHT, y1, "Refreshing...");
-		else if (state == XBOX_GAME_LIST_FAILED && list)
+		if (browser_screen.status[0] && system_milliseconds() - browser_screen.status_time < STATUS_DURATION)
 		{
-			snprintf(line, sizeof(line), "Could not refresh: %s", xbox_game_list_error());
-			text(font, _justify_left, &note_color, SCREEN_LEFT + 6, y0, SCREEN_RIGHT, y1, line);
+			text(font, _justify_left, &note_color, SCREEN_LEFT + CELL_INSET, y0, SCREEN_RIGHT, y1,
+				browser_screen.status);
+		}
+		else if (state == XBOX_GAME_LIST_FETCHING)
+			text(font, _justify_left, &dim_color, SCREEN_LEFT + CELL_INSET, y0, SCREEN_RIGHT, y1, "Refreshing...");
+		else if (state == XBOX_GAME_LIST_FAILED && list && browser_screen.count)
+		{
+			text(font, _justify_left, &note_color, SCREEN_LEFT + CELL_INSET, y0, SCREEN_RIGHT, y1,
+				"Could not refresh the game list.");
 		}
 		snprintf(line, sizeof(line), "PAGE %d OF %d", page_first / rows + 1,
 			MAX(1, (browser_screen.count + rows - 1) / rows));
-		text(font, _justify_right, &head_color, SCREEN_LEFT, y0, SCREEN_RIGHT - 6, y1, line);
+		text(font, _justify_right, &head_color, SCREEN_LEFT, y0, SCREEN_RIGHT - CELL_INSET, y1, line);
 	}
 
-	draw_details(selected, font, &head_color, &text_color, &note_color);
+	draw_details(selected, font, &head_color, &text_color);
 
-	/* the buttons, as the menus show them */
+	/* the buttons, as the menus show them: each glyph by its word, from the
+	left (the icons are drawn into the text as it goes, so the text is
+	never centered or right justified: its glyphs would part from their
+	words) */
 	if (font != NONE)
 	{
 		rectangle2d bounds;
 
-		bounds.x0 = SCREEN_LEFT;
+		bounds.x0 = SCREEN_LEFT + CELL_INSET;
 		bounds.y0 = PROMPT_TOP;
 		bounds.x1 = SCREEN_RIGHT;
-		bounds.y1 = 472;
-		draw_string_set_draw_mode(font, NONE, _justify_center, 0, &text_color);
+		bounds.y1 = PROMPT_BOTTOM;
+		draw_string_set_draw_mode(font, NONE, _justify_left, 0, &text_color);
 		draw_string_and_hack_in_icons(&bounds, &bounds, NULL, 0,
-			browser_screen.connecting ? L"Connecting...   %b-button Stop" :
-				L"%a-button Join   %x-button Refresh   %y-button join.txt   %b-button Back", FALSE);
+			browser_screen.connecting ? L"%b-button Stop" :
+			browser_screen.direct_join ?
+				L"%a-button Join     %x-button Refresh     %y-button console.join     %b-button Back" :
+				L"%a-button Join     %x-button Refresh     %b-button Back", FALSE);
 	}
 }
 
