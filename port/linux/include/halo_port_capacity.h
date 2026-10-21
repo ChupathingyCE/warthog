@@ -37,13 +37,14 @@ hold no more (docs/cross-play.md) */
 /* a test build of more than 16 players (configure.py --console-players)
 keeps the Xbox's game state, in its place and of its size: of what scales
 with the players, only the players table is in it (0xD4 bytes a player:
-24 players take 1,696 bytes more), and the Xbox's pools left 948 bytes free.
+24 players take 1,696 bytes more, 32 players 3,392), and the Xbox's pools
+left 948 bytes free.
 The room comes from the GPU part, whose decal vertices
 (rasterizer_xbox_decals.c's DECAL_VERTEX_CACHE_SIZE) take 0x28000 of its
 0x40000: 64 KB of the unused rest goes to the CPU part. Nothing else moves,
 and no memory is added. The rest of what scales with the players is
-outside the game state (the netcode's arrays and queues, about 170 KB at
-24 players: xbox_memory.c's log) */
+outside the game state (the netcode's arrays and queues: about 170 KB at
+24 players, 360 KB at 32; xbox_memory.c's log) */
 #define HALO_PORT_GAME_STATE_BASE_ADDRESS 0x80061000
 #define HALO_PORT_GAME_STATE_CPU_SIZE 0x315000
 #define HALO_PORT_GAME_STATE_GPU_SIZE 0x30000

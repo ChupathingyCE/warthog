@@ -4121,9 +4121,17 @@ Xbox's amount */
 static long active_garbage_limit(
 	long limit_per_16_players)
 {
+#ifdef HALO_XBOX_CONSOLE
+	/* port: the console's object pool is the Xbox's 1 MB whatever its
+	players (a test build of more than 16, configure.py --console-players):
+	a game it hosts keeps the Xbox's amount of garbage. 16 players or fewer
+	got this amount already */
+	return limit_per_16_players;
+#else
 	long player_count = player_data ? player_data->actual_count : 0;
 
 	return limit_per_16_players * MAX(16, player_count) / 16;
+#endif
 }
 
 /* port: whether a collection of active garbage may be tried

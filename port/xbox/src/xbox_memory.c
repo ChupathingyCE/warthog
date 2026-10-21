@@ -117,6 +117,12 @@ static data, halo.map: 124 KB at 24 players, the netcode's arrays) and
 logged where it counts (xbox_memory_log_point) */
 #if defined(HALO_CONSOLE_PLAYERS) && HALO_CONSOLE_PLAYERS > 16
 #define XBOX_MEMORY_PLAYERS_TEST 1
+#define XBOX_MEMORY_STRING_OF(x) #x
+#define XBOX_MEMORY_WIDE_OF(x) L ## x
+#define XBOX_MEMORY_WIDE(x) XBOX_MEMORY_WIDE_OF(x)
+/* "24", wide, from HALO_CONSOLE_PLAYERS */
+#define XBOX_MEMORY_PLAYERS_TEXT XBOX_MEMORY_WIDE(XBOX_MEMORY_STRING(HALO_CONSOLE_PLAYERS))
+#define XBOX_MEMORY_STRING(x) XBOX_MEMORY_STRING_OF(x)
 #endif
 
 enum
@@ -249,7 +255,7 @@ static void memory_read(void)
 	every console and says so (the first message, shown at the main menu) */
 	xbox_boot_log("players: %d, a test build (the Xbox's: 16); game state %lu KB, as the Xbox's",
 		HALO_CONSOLE_PLAYERS, (unsigned long)_game_state_size >> 10);
-	memory.message = L"Test build: up to 24 players.\r\nExperimental: please send D:\\debug.txt.";
+	memory.message = L"Test build: up to " XBOX_MEMORY_PLAYERS_TEXT L" players.\r\nExperimental: please send D:\\debug.txt.";
 #endif
 	status_read(&memory.total, &memory.available, &memory.source);
 	if (config_boolean("console.simulate_64mb"))
@@ -296,7 +302,8 @@ static void memory_read(void)
 			/* a test build of more than 16 players keeps the smallest: the
 			room is counted in whole megabytes, and a console a few KB over
 			the next would give the cache a megabyte the heap then lacks
-			(the 24 players' netcode takes about 170 KB of it) */
+			(the extra players' netcode takes 170 KB of it at 24 players,
+			about 360 KB at 32) */
 			memory.texture_cache_size = _texture_cache_minimum;
 #endif
 			memory.texture_cache_reduced = 1;
