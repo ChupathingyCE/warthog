@@ -131,8 +131,8 @@ ZLIB_DEFINES = ("-DZ_PREFIX", "-Dz_errmsg=z_port_errmsg")
 XBOX_GAME_CXX_SOURCES = [Path("source/main/d3d_intimacy.cpp")]
 # port/linux/game's sources the console builds too
 XBOX_PORT_GAME_SOURCES = [
-    "audio_probe.c", "chat.c", "map_families.c", "network_damage.c", "network_distributed.c", "network_game_layout.c",
-    "network_objects.c", "network_rules.c", "pal_tags.c", "render_interpolation.c",
+    "audio_probe.c", "chat.c", "follow_camera.c", "map_families.c", "network_damage.c", "network_distributed.c", "network_game_layout.c",
+    "network_objects.c", "network_rules.c", "pal_tags.c", "powerup_timers.c", "render_interpolation.c",
 ]
 # d3d_intimacy.cpp reads the device as the January library named it; the
 # kernel's build of the Aug 2001 library has it in its own namespace (the

@@ -5,8 +5,9 @@ The desktop builds' extras (port/linux/game and port/linux/src) that the
 console does not build, answered as a machine that has none of them: the
 shared game code calls these unconditionally. The console's 64 MB hold none
 of their code or memory, and keep the Xbox's own behavior: its own loading
-screen, its own prompts (always the controller's), no follow camera, no
-power-up timers, no team changes, no clipboard invites, no PC menu styles.
+screen, its own prompts (always the controller's), no team changes, no
+clipboard invites, no PC menu styles. (The follow camera and the power-up
+timers are built: port/linux/game.)
 */
 
 #include "cseries.h"
@@ -15,33 +16,6 @@ power-up timers, no team changes, no clipboard invites, no PC menu styles.
 #include "network_rules.h"
 
 /* ---------- the desktop's HUD and menu extras */
-
-long follow_camera_unit(
-	short local_player_index)
-{
-	(void)local_player_index;
-	return NONE;
-}
-
-void follow_camera_player_killed(
-	long killing_player_index,
-	long dead_player_index)
-{
-	(void)killing_player_index;
-	(void)dead_player_index;
-}
-
-void follow_camera_draw(
-	short local_player_index)
-{
-	(void)local_player_index;
-}
-
-void powerup_timers_draw(
-	short local_player_index)
-{
-	(void)local_player_index;
-}
 
 void loading_screen_reset(
 	void)

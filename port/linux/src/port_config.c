@@ -174,14 +174,14 @@ static const struct config_setting config_settings[] =
 		"ticks a second." },
 	{ "display.direct_camera", _config_boolean, "true", "HALO_DIRECT_CAMERA", _environment_value, _platform_desktop | _platform_xbox,
 		"In first person, turn the view the same frame the mouse moves." },
-	{ "display.field_of_view", _config_real, "70.0", "HALO_FIELD_OF_VIEW", _environment_value, _platform_all,
+	{ "display.field_of_view", _config_real, "70.0", "HALO_FIELD_OF_VIEW", _environment_value, _platform_all | _platform_xbox,
 		"The first-person field of view in degrees, 50 to 120. 70: the Xbox's." },
 	{ "display.viewmodel_field_of_view", _config_real, "0.0", "HALO_VIEWMODEL_FIELD_OF_VIEW", _environment_value,
-		_platform_all,
+		_platform_all | _platform_xbox,
 		"The weapon's field of view, 50 to 120. 0: display.field_of_view's." },
 	{ "display.far_clip_distance", _config_real, "1024.0", "HALO_FAR_CLIP_DISTANCE", _environment_value, _platform_all,
 		"How far the world is drawn, up to 10000. 1024: the Xbox's." },
-	{ "display.match_timer", _config_boolean, "false", "HALO_MATCH_TIMER", _environment_value, _platform_all,
+	{ "display.match_timer", _config_boolean, "false", "HALO_MATCH_TIMER", _environment_value, _platform_all | _platform_xbox,
 		"In a multiplayer game with a time limit, show the time left at the top\n"
 		"of the screen." },
 	{ "display.high_res_hud", _config_boolean, "true", "HALO_HIGH_RES_HUD", _environment_value, _platform_all,
@@ -197,7 +197,7 @@ static const struct config_setting config_settings[] =
 		"A font file for the large text only, as display.high_res_font. Empty:\n"
 		"display.high_res_font's." },
 	{ "display.version_watermark", _config_boolean, "false", "HALO_VERSION_WATERMARK", _environment_value,
-		_platform_all,
+		_platform_all | _platform_xbox,
 		"Show the build's version in the bottom right corner while playing." },
 	{ "display.shadow_resolution", _config_integer, DEFAULT_SHADOW_RESOLUTION, "HALO_SHADOW_RESOLUTION",
 		_environment_value, _platform_all,
@@ -217,15 +217,15 @@ static const struct config_setting config_settings[] =
 	{ "display.player_name_scale", _config_real, "1.0", "HALO_PLAYER_NAME_SCALE", _environment_value, _platform_all,
 		"The size of player names, 0.25 to 4." },
 	{ "display.follow_camera", _config_string, "\"long_waits\"", "HALO_FOLLOW_CAMERA", _environment_value,
-		_platform_all,
+		_platform_all | _platform_xbox,
 		"After a death, follow a living player's view: \"long_waits\" (only\n"
 		"during a long respawn wait), \"always\" or \"off\". LB and RB, or Q and E,\n"
 		"switch players." },
 	{ "display.follow_camera_after", _config_real, "5.0", "HALO_FOLLOW_CAMERA_AFTER", _environment_value,
-		_platform_all,
+		_platform_all | _platform_xbox,
 		"For \"long_waits\": the seconds of respawn wait left that start the\n"
 		"follow camera." },
-	{ "display.powerup_timers", _config_boolean, "false", "HALO_POWERUP_TIMERS", _environment_value, _platform_all,
+	{ "display.powerup_timers", _config_boolean, "false", "HALO_POWERUP_TIMERS", _environment_value, _platform_all | _platform_xbox,
 		"Show the seconds left on your active camouflage, overshield and full\n"
 		"spectrum vision." },
 	{ "display.loading_screen_min_seconds", _config_real, "0.0", "HALO_LOADING_SCREEN_MIN_SECONDS",
@@ -233,11 +233,11 @@ static const struct config_setting config_settings[] =
 		"The shortest time the loading screen stays up, up to 30 seconds; 0 for\n"
 		"no wait. Campaign and split screen only." },
 	{ "display.scoreboard_team_layout", _config_string, "\"teams\"", "HALO_SCOREBOARD_TEAM_LAYOUT", _environment_value,
-		_platform_all,
+		_platform_all | _platform_xbox,
 		"A team game's scoreboard: \"teams\" (a column for each team) or \"score\"\n"
 		"(everyone in order of score)." },
 	{ "display.scoreboard_background", _config_boolean, "true", "HALO_SCOREBOARD_BACKGROUND", _environment_value,
-		_platform_all,
+		_platform_all | _platform_xbox,
 		"Draw a panel behind the multiplayer scoreboard." },
 	{ "display.scoreboard_platforms", _config_string, "\"auto\"", "HALO_SCOREBOARD_PLATFORMS", _environment_value,
 		_platform_all,
@@ -251,7 +251,7 @@ static const struct config_setting config_settings[] =
 		_platform_all | _platform_xbox,
 		"Keep players who quit on the multiplayer scoreboard." },
 	{ "display.scoreboard_background_color", _config_string, "\"16, 16, 16, 150\"", "HALO_SCOREBOARD_BACKGROUND_COLOR",
-		_environment_value, _platform_all,
+		_environment_value, _platform_all | _platform_xbox,
 		"The scoreboard panel's colour: \"red, green, blue, alpha\", each 0 to 255." },
 	{ "display.pause_change_teams", _config_boolean, "true", "HALO_PAUSE_CHANGE_TEAMS", _environment_value,
 		_platform_all,
@@ -396,11 +396,11 @@ static const struct config_setting config_settings[] =
 	{ "game.language", _config_string, "\"\"", "HALO_LANGUAGE", _environment_value, _platform_all,
 		"The game's language: \"ja\", \"de\", \"fr\", \"es\" or \"it\"; empty for English." },
 
-	{ "game.unlock_all_levels", _config_boolean, "false", "HALO_UNLOCK_ALL_LEVELS", _environment_value, _platform_all,
+	{ "game.unlock_all_levels", _config_boolean, "false", "HALO_UNLOCK_ALL_LEVELS", _environment_value, _platform_all | _platform_xbox,
 		"New profiles start with every campaign level unlocked." },
 
 	{ "game.start_with_one_player", _config_boolean, "false", "HALO_START_WITH_ONE_PLAYER", _environment_value,
-		_platform_all,
+		_platform_all | _platform_xbox,
 		"Let a game you host start with only you. Others can join in progress." },
 
 	{ "game.downloaded_maps", _config_string, "\"\"", "HALO_DOWNLOADED_MAPS", _environment_value, _platform_all,
