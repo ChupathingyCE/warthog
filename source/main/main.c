@@ -396,6 +396,7 @@ symbols in this file:
 #include "interface/player_ui.h"
 #include "interface/marketing_and_strategic_business_development.h"
 #endif
+#include "halo_perf_log.h" /* port: console.perf_log */
 
 /* port: the main loop's stage, for the console's bring-up watchdog
 (port/xbox/src/xbox_port.c); nothing elsewhere */
@@ -3312,7 +3313,9 @@ static void main_game_render(
 	MAIN_STAGE("render: collision_log_continue_period");
 	collision_log_continue_period(TRUE);
 	MAIN_STAGE("render: sound_render");
+	HALO_PERF_BEGIN(_halo_perf_sound);
 	sound_render();
+	HALO_PERF_END(_halo_perf_sound);
 	force_single_screen = game_engine_force_single_screen();
 	last_local_player_index = NONE;
 
@@ -3609,6 +3612,7 @@ void main_loop(
 			/* changing teams during a game (port/linux/game/team_change.c) */
 			team_change_update();
 #endif
+			HALO_PERF_BEGIN(_halo_perf_network);
 			connection = main_globals.connection;
 			if (connection==_game_connection_network_client)
 			{
@@ -3641,6 +3645,7 @@ void main_loop(
 			{
 				break;
 			}
+			HALO_PERF_END(_halo_perf_network);
 
 			MAIN_STAGE("main_update_time");
 			main_update_time();
@@ -3702,6 +3707,7 @@ void main_loop(
 					MAIN_STAGE("player_control_update");
 					player_control_update((real)main_globals.halt_time_scale*main_globals.seconds_elapsed);
 
+					HALO_PERF_BEGIN(_halo_perf_network);
 					connection = main_globals.connection;
 					if (connection>_game_connection_local && connection<=_game_connection_network_server && !network_game_client_end_frame())
 					{
@@ -3709,6 +3715,7 @@ void main_loop(
 						MAIN_STAGE("network_game_abort");
 						network_game_abort();
 					}
+					HALO_PERF_END(_halo_perf_network);
 
 					MAIN_STAGE("game_time_update");
 					game_time_update((real)main_globals.halt_time_scale*main_globals.seconds_elapsed);
@@ -3754,7 +3761,9 @@ void main_loop(
 					render_interpolation_frame_end();
 					MAIN_STAGE("profile_render_end");
 #else
+					HALO_PERF_BEGIN(_halo_perf_render);
 					main_game_render((double)main_globals.seconds_elapsed);
+					HALO_PERF_END(_halo_perf_render);
 #endif
 					profile_render_end();
 				}
@@ -3764,18 +3773,24 @@ void main_loop(
 				MAIN_STAGE("profile_render_start");
 				profile_render_start();
 				MAIN_STAGE("main_pregame_render");
+				HALO_PERF_BEGIN(_halo_perf_render);
 				main_pregame_render();
+				HALO_PERF_END(_halo_perf_render);
 				MAIN_STAGE("profile_render_end");
 				profile_render_end();
 			}
 
 			MAIN_STAGE("main_rasterizer_throttle");
+			HALO_PERF_BEGIN(_halo_perf_vsync_wait);
 			main_rasterizer_throttle();
+			HALO_PERF_END(_halo_perf_vsync_wait);
 
 			if (render_frame && !debug_no_drawing)
 			{
 				MAIN_STAGE("main_present_frame");
+				HALO_PERF_BEGIN(_halo_perf_present);
 				main_present_frame();
+				HALO_PERF_END(_halo_perf_present);
 			}
 		}
 
@@ -3783,6 +3798,7 @@ void main_loop(
 		input_frame_end();
 		MAIN_STAGE("profile_frame_end");
 		profile_frame_end();
+		HALO_PERF_FRAME();
 		MAIN_STAGE("main_frame_rate_debug");
 		main_frame_rate_debug();
 

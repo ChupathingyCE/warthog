@@ -108,6 +108,13 @@ parser.add_argument(
     help="an Aug 2001 Direct3D library (d3d8ntpr.lib) for the original Xbox build, `ninja xbox` (port/xbox/README.md)",
 )
 parser.add_argument(
+    "--console-no-debug-asserts",
+    action="store_true",
+    help="console builds (the original Xbox's today): a release-style build (HALO_CONSOLE_NO_DEBUG_ASSERTS): the "
+    "debug decomp's asserts compiled out as retail compiled them out, except the memory checks of source/memory "
+    "and source/cseries (source/cseries/cseries.h)",
+)
+parser.add_argument(
     "--console-debug-tools",
     action="store_true",
     help="console builds (the original Xbox's today): the debug decomp's developer tools (HALO_CONSOLE_DEBUG_TOOLS: the profiler, "
@@ -182,6 +189,7 @@ sln = SimpleNamespace(
     android_guest_cc=args.android_guest_cc,
     xbox_d3d8=args.xbox_d3d8,
     console_debug_tools=args.console_debug_tools,
+    console_no_debug_asserts=args.console_no_debug_asserts,
     console_players=args.console_players,
     oxdk_dir=args.oxdk,
     oxdk360_dir=args.oxdk360,

@@ -188,6 +188,7 @@ struct game_options;
 #include "networking/network_game_globals.h"
 #include "tag_files/tag_files.h"
 #include "cseries/cseries_windows.h"
+#include "halo_perf_log.h" /* port: console.perf_log */
 
 /* network_game_globals.c's */
 boolean network_game_distributed_client(void);
@@ -969,7 +970,9 @@ void game_frame(
 	contrails_update(frame_dt);
 	particle_systems_update(frame_dt);
 	widgets_update(frame_dt);
+	HALO_PERF_BEGIN(_halo_perf_sound);
 	game_sound_update(frame_dt);
+	HALO_PERF_END(_halo_perf_sound);
 	scenario_frame_update(frame_dt);
 	rasterizer_frame_update(frame_dt);
 	numeric_countdown_timer_update();

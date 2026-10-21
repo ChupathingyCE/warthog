@@ -1,0 +1,211 @@
+/*
+XBOX_PERF_LOG.C
+
+The original Xbox's frame timing log (port/linux/include/halo_perf_log.h),
+on with console.perf_log = true in config.toml. Times are read from the
+processor's time stamp counter, whose rate each second's line measures
+against the system's millisecond clock (an upgraded processor runs it
+faster than 733 MHz). The line goes through the game's log (errors.c), which
+keeps it in memory and writes debug.txt once a second.
+*/
+
+#include "cseries.h"
+#include "cseries/cseries_windows.h"
+#include "cseries/errors.h"
+#include "game/game.h"
+#include "game/players.h"
+#include "units/units.h"
+
+#include "halo_perf_log.h"
+
+int config_boolean(const char *name);
+
+int halo_perf_log_on = FALSE;
+unsigned long halo_perf_counters[NUMBER_OF_HALO_PERF_COUNTERS];
+
+/* ---------- the clock */
+
+static __inline __int64 perf_now(void)
+{
+	return (__int64)__builtin_ia32_rdtsc();
+}
+
+/* ---------- the second being measured */
+
+static struct
+{
+	boolean started;
+	unsigned long second_start_milliseconds;
+	__int64 second_start;
+	__int64 last_frame;
+	/* (counter ticks a millisecond: the last second's, 733 MHz at first) */
+	double ticks_per_millisecond;
+	boolean rate_logged;
+
+	long frames;
+	__int64 frame_total;
+	__int64 frame_maximum;
+	long slow_frames;
+
+	__int64 phase_start[NUMBER_OF_HALO_PERF_PHASES];
+	__int64 phase_total[NUMBER_OF_HALO_PERF_PHASES];
+	int render_part;
+	__int64 render_part_start;
+
+	short zoom_level;
+} perf;
+
+void halo_perf_begin(int phase)
+{
+	perf.phase_start[phase] = perf_now();
+}
+
+void halo_perf_end(int phase)
+{
+	perf.phase_total[phase] += perf_now() - perf.phase_start[phase];
+}
+
+void halo_perf_render_part(int phase)
+{
+	__int64 now = perf_now();
+
+	if (perf.render_part != NONE)
+		perf.phase_total[perf.render_part] += now - perf.render_part_start;
+	perf.render_part = phase;
+	perf.render_part_start = now;
+}
+
+/* the local player's zoom: a line when it changes */
+static void perf_zoom_update(void)
+{
+	short zoom_level = NONE;
+
+	if (game_in_progress())
+	{
+		long player_index = local_player_get_player_index(0);
+		struct player_datum *player = player_index != NONE ? player_try_and_get(player_index) : NULL;
+
+		if (player && player->unit_index != NONE)
+			zoom_level = unit_get_zoom_level(player->unit_index);
+	}
+
+	if (zoom_level != perf.zoom_level)
+	{
+		if (perf.zoom_level == NONE)
+			error(_error_log, "perf: zoom in (level %d)", zoom_level + 1);
+		else if (zoom_level == NONE)
+			error(_error_log, "perf: zoom out");
+		else
+			error(_error_log, "perf: zoom level %d", zoom_level + 1);
+		perf.zoom_level = zoom_level;
+	}
+}
+
+static double perf_milliseconds(__int64 ticks, long frames)
+{
+	return frames > 0 ? (double)ticks / perf.ticks_per_millisecond / (double)frames : 0.0;
+}
+
+static void perf_second_log(unsigned long milliseconds, __int64 now)
+{
+	long frames = perf.frames;
+	double frame_count = frames > 0 ? (double)frames : 1.0;
+	unsigned long elapsed = milliseconds - perf.second_start_milliseconds;
+
+	if (elapsed > 0)
+		perf.ticks_per_millisecond = (double)(now - perf.second_start) / (double)elapsed;
+
+	if (!perf.rate_logged)
+	{
+		error(_error_log, "perf: timing on, a line a second (processor about %ld MHz): times in ms a frame",
+			(long)(perf.ticks_per_millisecond / 1000.0 + 0.5));
+		perf.rate_logged = TRUE;
+	}
+
+	error(_error_log,
+		"perf: %ld frames in %lu ms, frame %.1f avg %.1f max, %ld over 34 ms; "
+		"tick %.1f (%.1f ticks), render %.1f (world %.1f objects %.1f transparent %.1f effects %.1f hud %.1f), "
+		"sound %.1f, network %.1f, present %.1f, vsync wait %.1f; "
+		"%.0f draws, %.0f objects, %.0f models (%.0f high lod) a frame; zoom %d",
+		frames, elapsed,
+		perf_milliseconds(perf.frame_total, frames),
+		perf_milliseconds(perf.frame_maximum, 1),
+		perf.slow_frames,
+		perf_milliseconds(perf.phase_total[_halo_perf_tick], frames),
+		(double)halo_perf_counters[_halo_perf_ticks] / frame_count,
+		perf_milliseconds(perf.phase_total[_halo_perf_render], frames),
+		perf_milliseconds(perf.phase_total[_halo_perf_render_world], frames),
+		perf_milliseconds(perf.phase_total[_halo_perf_render_objects], frames),
+		perf_milliseconds(perf.phase_total[_halo_perf_render_transparent], frames),
+		perf_milliseconds(perf.phase_total[_halo_perf_render_effects], frames),
+		perf_milliseconds(perf.phase_total[_halo_perf_render_hud], frames),
+		perf_milliseconds(perf.phase_total[_halo_perf_sound], frames),
+		perf_milliseconds(perf.phase_total[_halo_perf_network], frames),
+		perf_milliseconds(perf.phase_total[_halo_perf_present], frames),
+		perf_milliseconds(perf.phase_total[_halo_perf_vsync_wait], frames),
+		(double)halo_perf_counters[_halo_perf_draws] / frame_count,
+		(double)halo_perf_counters[_halo_perf_objects] / frame_count,
+		(double)halo_perf_counters[_halo_perf_models] / frame_count,
+		(double)halo_perf_counters[_halo_perf_models_high_lod] / frame_count,
+		perf.zoom_level + 1);
+}
+
+static void perf_second_start(unsigned long milliseconds, __int64 now)
+{
+	perf.second_start_milliseconds = milliseconds;
+	perf.second_start = now;
+	perf.frames = 0;
+	perf.frame_total = 0;
+	perf.frame_maximum = 0;
+	perf.slow_frames = 0;
+	csmemset(perf.phase_total, 0, sizeof(perf.phase_total));
+	csmemset(halo_perf_counters, 0, sizeof(halo_perf_counters));
+}
+
+void halo_perf_frame(void)
+{
+	static int known = -1;
+	unsigned long milliseconds;
+	__int64 now;
+
+	if (known < 0)
+	{
+		known = config_boolean("console.perf_log") ? 1 : 0;
+		halo_perf_log_on = known;
+		perf.render_part = NONE;
+		perf.zoom_level = NONE;
+		perf.ticks_per_millisecond = 733333.0;
+	}
+	if (!halo_perf_log_on)
+		return;
+
+	now = perf_now();
+	milliseconds = system_milliseconds();
+	if (!perf.started)
+	{
+		perf.started = TRUE;
+		perf.last_frame = now;
+		perf_second_start(milliseconds, now);
+		return;
+	}
+
+	{
+		__int64 frame = now - perf.last_frame;
+
+		perf.last_frame = now;
+		perf.frames++;
+		perf.frame_total += frame;
+		if (frame > perf.frame_maximum)
+			perf.frame_maximum = frame;
+		if ((double)frame > perf.ticks_per_millisecond * 34.0)
+			perf.slow_frames++;
+	}
+
+	perf_zoom_update();
+
+	if (milliseconds - perf.second_start_milliseconds >= 1000)
+	{
+		perf_second_log(milliseconds, now);
+		perf_second_start(milliseconds, now);
+	}
+}

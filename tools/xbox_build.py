@@ -43,6 +43,11 @@ XDK_INCLUDE = Path("port/include/xdk")
 LINUX_SRC = Path("port/linux/src")
 PORT_LINUX_INCLUDE = Path("port/linux/include")
 
+# the directories whose asserts a release-style build (configure.py
+# --console-no-debug-asserts) keeps: the data arrays, memory pools, caches and
+# packet codecs, and the memory and string functions (cseries.h)
+KEEP_ASSERTS_DIRECTORIES = ("source/memory/", "source/cseries/")
+
 GAME_FLAGS = [
     "-target", "i386-pc-windows-msvc",
     "-march=pentium3",
@@ -284,6 +289,9 @@ def generate_xbox_build(n: Writer, sln: Any) -> None:
         # configure.py --console-debug-tools: the developer tools of the debug
         # decomp stay in (halo_xbox_prefix.h)
         *(["-DHALO_CONSOLE_DEBUG_TOOLS"] if getattr(sln, "console_debug_tools", False) else []),
+        # configure.py --console-no-debug-asserts: the asserts compiled out,
+        # as retail did, but for the memory checks (cseries.h)
+        *(["-DHALO_CONSOLE_NO_DEBUG_ASSERTS"] if getattr(sln, "console_no_debug_asserts", False) else []),
         players_flag,
         f"-include {_quote(prefix_header)}", f"-include {_quote(semantics_header)}",
         game_defines_and_includes(config), f"-idirafter {_quote(XDK_INCLUDE)}", f"-idirafter {_quote(xdk / 'include')}",
@@ -303,7 +311,9 @@ def generate_xbox_build(n: Writer, sln: Any) -> None:
         # (the script console is not the console's: telnet_console.h)
         if source.as_posix() == "source/networking/telnet_console.c":
             continue
-        add_object(source, f"-std=gnu89 {game_cflags}", [semantics_header, prefix_header],
+        # (the memory checks a release-style build keeps: cseries.h)
+        keep = " -DHALO_CONSOLE_KEEP_ASSERTS" if source.as_posix().startswith(KEEP_ASSERTS_DIRECTORIES) else ""
+        add_object(source, f"-std=gnu89 {game_cflags}{keep}", [semantics_header, prefix_header],
                    _inline_export_wrapper(source, build_dir))
     # the game's C++, which the native builds replace (d3d8_gl.c): the frame
     # counter read out of the console's Direct3D device
