@@ -274,9 +274,15 @@ and path copies, 10 MB of heap; the profiler's 256-frame history; the
 oversized surface bit vector); the map checks are left out of the build
 (`HALO_CONSOLE_NO_TAG_VALIDATE`: the console loads maps unchecked, as the
 Xbox game did). If what is free at the start still
-cannot hold the Xbox's 22 MB texture cache and leave 8 MB for Direct3D and
-the heap, the cache is made smaller, down to 19 MB (the attract movie
-borrows 16 MB of it), rather than the start failing.
+cannot hold the Xbox's 22 MB texture cache, what Direct3D and the heap take
+before the main loop (up to 7,741 KB measured on the devkit, 7,744 KB
+assumed) and a reserve of 1,536 KB, the cache is made smaller, down to 19 MB (the attract movie
+borrows 16 MB of it), rather than the start failing. Below 22 MB it grows a
+megabyte at a time only while the reserve is still expected free at the
+main loop (`_main_loop_reserve`, xbox_memory.c), so memory the build saves
+stays free for the menus and joins instead of going to textures; the
+`boot: memory: texture cache` line gives the expected free memory with the
+cache made and with a step more.
 
 Every step of the start is in `debug.txt` before the game's own log opens
 (`boot:` lines, the file closed after each): the memory and the class, the

@@ -30,7 +30,8 @@ wire stay the Xbox's, so every console and PC plays the same game.
 MB one, 64 MB on a 256 MB one, kept in the low 128 MB, which the GPU
 reaches. A 64 MB console whose free memory cannot hold the Xbox's caches
 and still leave Direct3D and the heap theirs gets a smaller texture cache
-(down to 19 MB) rather than a failed start.
+(down to 19 MB) rather than a failed start, a megabyte larger only while
+_main_loop_reserve is still expected free at the main loop.
 - the sound cache: the Xbox's 4 MB, 8 MB with the extras (and twice the
 sounds in it at once), in the low 128 MB too.
 - the shared code's own (halo_port_capacity.h, network_connection.c): the
@@ -162,10 +163,26 @@ enum
 	game state, the tag cache and the sound cache (physical_memory_map.c's
 	sizes, the Xbox game's) */
 	_other_caches_size = _game_state_size + 0x1600000 + _sound_cache_stock,
-	/* what must stay free once the caches are made: the Direct3D device
-	(two 640x480 buffers and the depth buffer, 3.5 MB, and its push
-	buffer), and the game's and the system's own allocations */
-	_free_after_caches = 0x800000,
+	/* what the game takes after the caches are made, up to the main loop:
+	the Direct3D device (two 640x480 buffers and the depth buffer, 3.5 MB,
+	and its push buffer), the rasterizer's pools, the game's other heap
+	allocations and the system's (the sound's effects image among them).
+	Measured on the devkit in the 64 MB class: 7304 KB before the effects
+	image was downloaded (2026-10-20, builds 37857a71a and 02fead662:
+	8644 KB free after the caches, 1340 KB at the main loop); with it, the
+	leaner image (2033201d6) left 844 KB at the main loop with a 20 MB
+	cache it had only just stepped up to, which puts the use at up to
+	7741 KB. The larger, rounded up: a guess too high only keeps more free */
+	_used_after_caches = 0x790000,
+	/* what a 64 MB console keeps free at the main loop, at least, when the
+	texture cache is sized from what it has free: the menus, a join and a
+	map's start take their allocations from it (the game list's and the
+	network's queues, the UI's widgets), and a join has failed with about
+	56 KB left. A cache 1 MB larger is made only if this much would still
+	be free after it */
+	_main_loop_reserve = 0x180000,
+	/* what must stay free once the caches are made */
+	_free_after_caches = _used_after_caches + _main_loop_reserve,
 
 	/* how often xbox_memory_update looks at the free memory (main loop
 	passes), and how far below the last low it must be to be logged */
@@ -336,6 +353,10 @@ static void memory_read(void)
 		/* a stock console (or one that cannot say): the Xbox's cache if
 		what is free holds it and still leaves Direct3D and the heap
 		theirs, else what does, down to the smallest the game can use */
+		/* the cache grows in steps of 1 MB from the smallest, a step only
+		if _main_loop_reserve is still expected free at the main loop
+		after it (the free memory, less the other caches, the cache and
+		_used_after_caches): the rest is headroom, not texture cache */
 		unsigned long room = memory.available > _other_caches_size + _free_after_caches ?
 			memory.available - _other_caches_size - _free_after_caches : 0;
 
@@ -374,8 +395,15 @@ static void memory_read(void)
 	}
 	if (memory.texture_cache_reduced)
 	{
-		xbox_boot_log("memory: texture cache %lu KB (less than the Xbox's 22 MB: what this console has free)",
-			memory.texture_cache_size >> 10);
+		/* the decision: what is expected free at the main loop with this
+		cache, and with a step more (signed: a console short of the
+		smallest cache's room expects less than nothing) */
+		long expected = (long)(memory.available >> 10) - (long)(_other_caches_size >> 10) -
+			(long)(memory.texture_cache_size >> 10) - (long)(_used_after_caches >> 10);
+
+		xbox_boot_log("memory: texture cache %lu KB (less than the Xbox's 22 MB: what this console has free); "
+			"expected %ld KB free at the main loop, %ld KB with 1 MB more (the reserve: %lu KB)",
+			memory.texture_cache_size >> 10, expected, expected - 1024, (unsigned long)_main_loop_reserve >> 10);
 	}
 }
 
