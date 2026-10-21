@@ -15,7 +15,6 @@ pinned here as a git submodule in `chupathingyce/`. Clone with
 warthog-xbox/
     chupathingyce/      the game (submodule)
     port/xbox/          the original Xbox port: its sources, build.py, tests
-    port/xbox360/       the Xbox 360 port (in development)
     tools/              packaging, the build's stamp, easy_build.py
 ```
 
@@ -137,13 +136,10 @@ see "Package" above.
 
 ### Other consoles
 
-The Xbox 360 (`--console-port port/xbox360`: `ninja xbox360`, with
-`--oxdk360`, `--llvm-xenon` and `--x360-sdk`) is scaffolding (the Wii U is in [ChupathingyCE/warthog-wiiu](https://github.com/ChupathingyCE/warthog-wiiu)):
-it builds a stub that logs a line and exits, and none of the game is
-compiled for it yet. The Xbox 360 needs your own 360 SDK as well
-(docs/consoles.md); its stub does not link yet (`oxdk_dbgprint`). A target
-appears only when `configure.py` finds its toolchain. `--console-port` can
-be given more than once.
+The Xbox 360 is its own repository,
+[ChupathingyCE/warthog-360](https://github.com/ChupathingyCE/warthog-360),
+and so is the Wii U,
+[ChupathingyCE/warthog-wiiu](https://github.com/ChupathingyCE/warthog-wiiu).
 
 The Switch port is its own repository,
 [ChupathingyCE/warthog-switch](https://github.com/ChupathingyCE/warthog-switch).

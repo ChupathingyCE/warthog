@@ -16,7 +16,6 @@ body:
         - "Original Xbox: development kit"
         - "Original Xbox: modified retail console"
         - "Original Xbox: xemu"
-        - "Xbox 360 (in development)"
         - "Other console (scaffolding, docs/consoles.md)"
     validations:
       required: true

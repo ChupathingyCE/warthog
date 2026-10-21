@@ -11,19 +11,19 @@ them has run anything on hardware.
 | Console | Folder | `ninja` target | Toolchain | Status |
 |---|---|---|---|---|
 | Original Xbox | `port/xbox` | `xbox` | clang, lld-link, [OXDK](https://github.com/MrMilenko/OXDK), the user's 5933 XDK | plays: menus, game list, joins PC hosts |
-| Xbox 360 | `port/xbox360` | `xbox360` | [OXDK360](https://github.com/MrMilenko/OXDK360), llvm-xenon, the user's 360 SDK (`XDK_DIR`) | in development; stub configures, does not link yet (`oxdk_dbgprint`) |
 
 Each port is a `--console-port` of the game's `configure.py`
-(`python3 chupathingyce/configure.py --console-port port/xbox360 ...`;
-docs/building.md). A target exists only when its toolchain is found (the
-Xbox 360's needs the user's SDK as well). The Switch and the Wii U are their
-own repositories,
+(`python3 chupathingyce/configure.py --console-port port/xbox ...`;
+docs/building.md). A target exists only when its toolchain is found. The
+Xbox 360, the Switch and the Wii U are their own repositories,
+[ChupathingyCE/warthog-360](https://github.com/ChupathingyCE/warthog-360),
 [ChupathingyCE/warthog-switch](https://github.com/ChupathingyCE/warthog-switch)
 and [ChupathingyCE/warthog-wiiu](https://github.com/ChupathingyCE/warthog-wiiu).
 
 ## What each console needs before it plays
 
-The plan's order: the original Xbox first; the Xbox 360 next (the Wii U, in its own repository, is big-endian
+The plan's order: the original Xbox first; the Xbox 360 next (in
+[warthog-360](https://github.com/ChupathingyCE/warthog-360); the Wii U, in its own repository, is big-endian
 too, so the byte-order work is shared).
 For any of them:
 
@@ -74,4 +74,3 @@ are the user's own. They stay a folder beside it.
 | Console | Emulator | Hardware |
 |---|---|---|
 | Original Xbox | xemu (128 MB, NAT) | devkit, or a modified retail console |
-| Xbox 360 | Xenia | RGH or JTAG console, through a launcher such as Aurora |
