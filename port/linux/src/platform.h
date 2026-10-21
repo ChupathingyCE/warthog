@@ -168,22 +168,41 @@ host put it, and PLATFORM_CONTIGUOUS_BASE is that address: the layer's own
 arithmetic on the window (its pages, its protection, the renderer's mirror)
 is in host addresses, as in the other 32-bit builds, and only what crosses
 into the game's data goes through xbox_pointer and xbox_address. The size
-stays this build's own, which the host's window has to be at least. */
+is as large as the host found room for (platform_contiguous_size), from
+PLATFORM_CONTIGUOUS_MINIMUM, this build's own, which the host's window has
+to be at least, to PLATFORM_CONTIGUOUS_MAXIMUM, which sizes the tables the
+layer keeps for each page of the window. In the other builds the size is
+this build's, and the maximum the same. */
 
 #ifdef HALO_WINDOW_REBASE
 #define PLATFORM_CONTIGUOUS_BASE (platform_contiguous_base)
 #else
 #define PLATFORM_CONTIGUOUS_BASE 0x80000000U
 #endif
+#ifdef HALO_WINDOW_REBASE
+#define PLATFORM_CONTIGUOUS_SIZE (platform_contiguous_size)
 #ifdef HALO_ANDROID
+/* the Switch's guest: a 128 MB development kit's, or the 256 MB the host
+holds for it at its pinned address (port/switch/host/host_memory.c), the
+extra going to the texture cache (halo_port_capacity.h) */
+#define PLATFORM_CONTIGUOUS_MINIMUM 0x08000000UL
+#define PLATFORM_CONTIGUOUS_MAXIMUM 0x10000000UL
+#else
+/* the Linux build's test of a moved window: the desktop's size, always */
+#define PLATFORM_CONTIGUOUS_MINIMUM 0x20000000UL
+#define PLATFORM_CONTIGUOUS_MAXIMUM 0x20000000UL
+#endif
+#elif defined(HALO_ANDROID)
 /* a 128 MB development kit's: Android's guest image is linked just above it
 (port/android/include/halo_android_abi.h) */
 #define PLATFORM_CONTIGUOUS_SIZE 0x08000000U
+#define PLATFORM_CONTIGUOUS_MAXIMUM PLATFORM_CONTIGUOUS_SIZE
 #else
 /* the desktop builds' (Linux, macOS, Windows): four times a 128 MB
 development kit's, for their larger texture cache (halo_port_capacity.h);
 port/windows/src/win32_memory_watch.c has the same */
 #define PLATFORM_CONTIGUOUS_SIZE 0x20000000U
+#define PLATFORM_CONTIGUOUS_MAXIMUM PLATFORM_CONTIGUOUS_SIZE
 #endif
 #define PLATFORM_ANY_PHYSICAL_ADDRESS 0xffffffffU
 

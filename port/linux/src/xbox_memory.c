@@ -52,9 +52,10 @@ Xbox kernel does.
 #define CONTIGUOUS_PAGE_COUNT (PLATFORM_CONTIGUOUS_SIZE / PAGE_SIZE_BYTES)
 
 /* per page: 0 free, otherwise the protection of the block (PAGE_*); the
-first page of a block also records the block length */
-static DWORD page_protection[CONTIGUOUS_PAGE_COUNT];
-static unsigned long block_page_count[CONTIGUOUS_PAGE_COUNT];
+first page of a block also records the block length. As many as the largest
+window has (platform.h); CONTIGUOUS_PAGE_COUNT is this one's */
+static DWORD page_protection[PLATFORM_CONTIGUOUS_MAXIMUM / PAGE_SIZE_BYTES];
+static unsigned long block_page_count[PLATFORM_CONTIGUOUS_MAXIMUM / PAGE_SIZE_BYTES];
 static BOOL arena_reserved = FALSE;
 static pthread_mutex_t arena_lock = PTHREAD_MUTEX_INITIALIZER;
 #ifdef HALO_CUSTOM_EDITION
@@ -66,7 +67,7 @@ address until the guest's runtime is told the host's, before any
 constructor runs (port/android/guest/runtime/guest_start.c), or the Linux
 build reads HALO_WINDOW_BASE (below) */
 unsigned long platform_contiguous_base = 0x80000000UL;
-unsigned long platform_contiguous_size = PLATFORM_CONTIGUOUS_SIZE;
+unsigned long platform_contiguous_size = PLATFORM_CONTIGUOUS_MINIMUM;
 #endif
 #ifdef HALO_64BIT
 
@@ -116,11 +117,18 @@ static void contiguous_arena_reserve(void)
 	}
 #endif
 #ifdef HALO_WINDOW_REBASE
-	if (platform_contiguous_size < PLATFORM_CONTIGUOUS_SIZE)
+	if (platform_contiguous_size < PLATFORM_CONTIGUOUS_MINIMUM)
 	{
 		platform_log("the host's window is %lu MB at %#lx; this build needs %lu MB", platform_contiguous_size >> 20,
-			platform_contiguous_base, (unsigned long)PLATFORM_CONTIGUOUS_SIZE >> 20);
+			platform_contiguous_base, (unsigned long)PLATFORM_CONTIGUOUS_MINIMUM >> 20);
 		abort();
+	}
+	/* (a larger window than the tables are for: the rest goes unused) */
+	if (platform_contiguous_size > PLATFORM_CONTIGUOUS_MAXIMUM)
+	{
+		platform_log("the host's window is %lu MB; this build uses %lu MB of it", platform_contiguous_size >> 20,
+			(unsigned long)PLATFORM_CONTIGUOUS_MAXIMUM >> 20);
+		platform_contiguous_size = PLATFORM_CONTIGUOUS_MAXIMUM;
 	}
 	platform_log("contiguous window at %08lx, %lu MB", platform_contiguous_base, platform_contiguous_size >> 20);
 #endif

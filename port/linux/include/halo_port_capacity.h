@@ -192,9 +192,23 @@ texture cache, Portent and Foundation take about 23 MB of that in a game
 the Xbox's, 44 MB, and leaves about 15 MB free: Portent's busiest frames
 fit, Foundation's (66 MB) do not, and some of its surfaces can show the
 wrong pixels there. The Xbox builds (HALO_XBOX_CONSOLE) keep the Xbox's
-cache. */
+cache.
 
-#if defined(HALO_ANDROID)
+The Switch's guest (HALO_ANDROID with HALO_WINDOW_REBASE) is told at start-up
+how large a window its host found room for (platform_contiguous_size, up to
+256 MB: port/linux/src/platform.h), and the cache is half of it where that is
+more than a development kit's 128 MB, as on the desktop, and Android's
+otherwise; the tables kept per page of the cache are sized for the largest
+(HALO_PORT_TEXTURE_CACHE_MAXIMUM_SIZE). */
+
+#if defined(HALO_ANDROID) && defined(HALO_WINDOW_REBASE)
+extern unsigned long platform_contiguous_size;
+#define HALO_PORT_TEXTURE_CACHE_SIZE \
+	(platform_contiguous_size > 0x08000000UL ? platform_contiguous_size / 2 : 0x2C00000UL) /* (0x1600000) */
+#define HALO_PORT_TEXTURE_CACHE_MAXIMUM_SIZE 0x8000000
+/* (the size is known only at start-up: cache/xbox_texture_cache.c) */
+#define HALO_PORT_TEXTURE_CACHE_SIZE_VARIES
+#elif defined(HALO_ANDROID)
 #define HALO_PORT_TEXTURE_CACHE_SIZE 0x2C00000 /* (0x1600000) */
 #elif !defined(HALO_XBOX_CONSOLE)
 #define HALO_PORT_TEXTURE_CACHE_SIZE 0x10000000 /* (0x1600000) */
