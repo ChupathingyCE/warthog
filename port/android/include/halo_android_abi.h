@@ -26,11 +26,23 @@ This header is included by both halves.
 
 #include <stdint.h>
 
+#ifdef HALO_SWITCH_CONSOLE
+/* The Switch's guest image is linked to run here, and its host loads it here
+always: it cannot move the image. 0x88000000, Android's, is outside the
+only range a Switch maps memory in (0x08000000 to 0x80000000). This is below
+the range Halo Custom Edition maps' tag data is linked to (0x40440000), with
+room to spare; at 0x42000000 the image reached 0x43a00000, where a Switch's
+loader module sits (the reference's fe4e8cb5). The host holds 48 MB from
+here at start-up (port/switch/host/host_memory.c). */
+#define HALO_GUEST_IMAGE_BASE 0x3c000000u
+#define HALO_GUEST_IMAGE_RESERVE 0x01000000u
+#else
 /* the guest image is linked to run here, just above the Xbox window: ART
 keeps its heaps low in the address space and fills it upwards */
 #define HALO_GUEST_IMAGE_BASE 0x88000000u
 /* the room the host reserves for the image there (port/android/host/host_memory.c) */
 #define HALO_GUEST_IMAGE_RESERVE 0x04000000u
+#endif
 
 /* the Xbox contiguous memory window (port/linux/src/platform.h). The game
 data is linked to the addresses of the window. The Android host keeps it
