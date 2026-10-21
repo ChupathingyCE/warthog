@@ -112,6 +112,7 @@ symbols in this file:
 #include "saved games/game_state.h"
 #include "rasterizer/rasterizer_console_vars.h"
 #include "rasterizer/rasterizer_model_types.h"
+#include "halo_perf_log.h" /* port: console.perf_log */
 
 /* ---------- constants */
 
@@ -358,6 +359,7 @@ void render_objects(
 
 	rasterizer_models_begin(FALSE);
 	find_rendered_objects();
+	HALO_PERF_COUNT(_halo_perf_objects, render_object_globals.rendered_object_count);
 
 	data.shadow = FALSE;
 

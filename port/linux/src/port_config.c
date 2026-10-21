@@ -736,6 +736,12 @@ static const struct config_setting config_settings[] =
 		"Detailed traces in debug.txt, for reporting a join that fails: the main\n"
 		"loop each second, every hop of an internet join, the games advertised.\n"
 		"Other hosts appear only as tags, never by their addresses." },
+	{ "console.perf_log", _config_boolean, "false", NULL, _environment_value, _platform_xbox,
+		"For finding what makes a scene slow: once a second, a line in debug.txt\n"
+		"with the frame time (average and worst), the time each part of the frame\n"
+		"took (game ticks, the render's parts, sound, network, present, the wait\n"
+		"for the screen), the draw calls and objects drawn, and a line when the\n"
+		"player zooms in or out. Read when the game starts." },
 	{ "console.join", _config_string, "\"\"", NULL, _environment_value, _platform_xbox,
 		"For testing joins without the game list: a host's LAN address\n"
 		"(\"192.168.1.20\"), which System Link joins directly, or an invite\n"

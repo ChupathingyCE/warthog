@@ -87,6 +87,7 @@ symbols in this file:
 #include "effects/weather_particle_systems.h"
 #include "main/main.h"
 #include "structures/structures.h"
+#include "halo_perf_log.h" /* port: console.perf_log */
 
 /* ---------- constants */
 
@@ -337,6 +338,7 @@ static void render_window(
 	parameters.window_index = render.window_index;
 	parameters.fog = render.fog;
 
+	HALO_PERF_RENDER_PART(_halo_perf_render_world);
 	structure_visibility_compute();
 	player_effect_get_screen_flash(local_player_index, &parameters.screen_flash);
 	rasterizer_window_begin(&parameters);
@@ -345,13 +347,19 @@ static void render_window(
 	{
 		build_sprite_prepare_for_window();
 		render_sky();
+		HALO_PERF_RENDER_PART(_halo_perf_render_objects);
 		first_person_weapon_render_update();
+		HALO_PERF_RENDER_PART(_halo_perf_render_world);
 		lights_preprocess_scene();
+		HALO_PERF_RENDER_PART(_halo_perf_render_objects);
 		render_objects();
+		HALO_PERF_RENDER_PART(_halo_perf_render_world);
 		structure_render_preprocess();
 		structure_render_lightmaps();
 		rasterizer_lens_flares_submit_occlusion_tests();
+		HALO_PERF_RENDER_PART(_halo_perf_render_objects);
 		render_object_shadows();
+		HALO_PERF_RENDER_PART(_halo_perf_render_world);
 		lights_render_diffuse();
 
 		rasterizer_decals_begin(_decal_layer_light);
@@ -397,14 +405,20 @@ static void render_window(
 		structure_render_reflection_lightmap_masks();
 		structure_render_reflection_mirrors();
 		structure_render_reflections();
+		HALO_PERF_RENDER_PART(_halo_perf_render_transparent);
 		structure_render_transparent_geometry();
+		HALO_PERF_RENDER_PART(_halo_perf_render_world);
 		structure_render_fog();
+		HALO_PERF_RENDER_PART(_halo_perf_render_objects);
 		game_engine_post_rasterize_objects();
+		HALO_PERF_RENDER_PART(_halo_perf_render_effects);
 		weather_particle_systems_render();
 		render_particles();
 		particle_systems_render();
 		render_contrails_normal();
+		HALO_PERF_RENDER_PART(_halo_perf_render_transparent);
 		rasterizer_transparent_geometry_draw(TRUE);
+		HALO_PERF_RENDER_PART(_halo_perf_render_world);
 
 		rasterizer_decals_begin(_decal_layer_water);
 		for (rendered_cluster_index = 0;
@@ -416,10 +430,14 @@ static void render_window(
 		rasterizer_decals_end();
 
 		structure_render_detail_objects();
+		HALO_PERF_RENDER_PART(_halo_perf_render_transparent);
 		rasterizer_transparent_geometry_draw(FALSE);
 		rasterizer_transparent_geometry_stop();
+		HALO_PERF_RENDER_PART(_halo_perf_render_world);
 		structure_render_fog_screen();
+		HALO_PERF_RENDER_PART(_halo_perf_render_effects);
 		rasterizer_lens_flares_draw();
+		HALO_PERF_RENDER_PART(_halo_perf_render_world);
 		/* port: the 3D view antialiased (display.anti_aliasing), before the
 		HUD and menus are drawn over it */
 		if (rasterizer_target == _render_target_primary)
@@ -430,6 +448,7 @@ static void render_window(
 				rasterizer_camera->viewport_bounds.x1,
 				rasterizer_camera->viewport_bounds.y1);
 		}
+		HALO_PERF_RENDER_PART(_halo_perf_render_hud);
 		interface_draw_screen();
 		rasterizer_screen_flash();
 #ifndef HALO_XBOX_CONSOLE
@@ -441,12 +460,14 @@ static void render_window(
 #endif
 	}
 
+	HALO_PERF_RENDER_PART(_halo_perf_render_world);
 	bink_playback_render();
 	render_camera_debug_frustum(&render.camera, &render.frustum);
 	render_debug();
 	editor_render();
 	rasterizer_debug_draw();
 	rasterizer_window_end();
+	HALO_PERF_RENDER_PART(NONE);
 	profile_render_window_end();
 
 	return;
