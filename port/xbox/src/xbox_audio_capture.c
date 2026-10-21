@@ -8,8 +8,12 @@ through the DSP's effects: the I3DL2 reverb, the crosstalk), sample for
 sample as the console sends it to its DAC, 16-bit stereo at 48 kHz.
 
 DirectSound has the DSP write its stereo output into a ring of system memory
-that the AC'97 controller's PCM out channel plays, through a list of 32
+that the AC'97 controller's PCM out channel plays, through a list of up to 32
 buffer descriptors (each a physical address and a length in 16-bit samples).
+The retail DirectSound fills only the first: one buffer of 4096 samples that
+the controller plays again and again (the devkit, 2026-10-21), so the ring is
+as many descriptors as are filled, from the first, and a look at the
+controller that finds it back in the descriptor it was in has gone round.
 The controller is the MCPX's ACI, PCI 0:6.0, whose bus master registers the
 kernel puts at I/O 0xD200 (the SDK's xpcicfg.h); PCM out's are at 0x10 of
 them: the list's physical address (BDBAR), the descriptor playing (CIV) and
@@ -73,8 +77,9 @@ static struct
 	volatile struct descriptor *descriptors;
 	unsigned long span_start, span_size;
 	unsigned char *span;
-	/* the frames of a whole turn of the ring */
+	/* the frames of a whole turn of the ring, and its descriptors */
 	unsigned long ring_frames;
+	unsigned long count;
 
 	/* where the copy has reached: a descriptor and the samples into it */
 	unsigned long index, offset;
@@ -125,7 +130,7 @@ static void playing(unsigned long *index, unsigned long *offset)
 		after = in8(ACI_BUS_MASTER_PORT + PCM_OUT_CIV);
 	}
 	while (before != after);
-	*index = before % DESCRIPTORS;
+	*index = before % capture.count;
 	{
 		unsigned long samples = capture.descriptors[*index].samples;
 
@@ -193,10 +198,18 @@ static DWORD WINAPI capture_thread(LPVOID parameter)
 		}
 		last = now;
 		playing(&index, &offset);
+		/* (back in the descriptor it was in, behind where it was: round the
+		ring, as a ring of one descriptor always is) */
+		if (capture.index == index && offset < capture.offset)
+		{
+			copy(capture.index, capture.offset, capture.descriptors[capture.index].samples);
+			capture.index = (capture.index + 1) % capture.count;
+			capture.offset = 0;
+		}
 		while (capture.index != index)
 		{
 			copy(capture.index, capture.offset, capture.descriptors[capture.index].samples);
-			capture.index = (capture.index + 1) % DESCRIPTORS;
+			capture.index = (capture.index + 1) % capture.count;
 			capture.offset = 0;
 		}
 		if (offset > capture.offset)
@@ -279,8 +292,9 @@ static int map_output(void)
 				entry->samples, entry->flags);
 		if (!entry->address || !entry->samples || (entry->samples & 1))
 		{
-			platform_log("audio capture: descriptor %lu is not a buffer of stereo samples; nothing is recorded",
-				index);
+			if (index)
+				break;
+			platform_log("audio capture: descriptor 0 is not a buffer of stereo samples; nothing is recorded");
 			return 0;
 		}
 		if (entry->address < low)
@@ -289,16 +303,18 @@ static int map_output(void)
 			high = entry->address + entry->samples * 2UL;
 		samples += entry->samples;
 	}
+	capture.count = index;
+	platform_log("audio capture: %lu of %d descriptors filled", capture.count, DESCRIPTORS);
 	/* (a ring is one buffer cut in turn: each descriptor's buffer where the
 	last's ends, if its lengths are in 16-bit samples) */
-	for (index = 1; index < DESCRIPTORS; index++)
+	for (index = 1; index < capture.count; index++)
 	{
 		volatile struct descriptor *previous = &capture.descriptors[index - 1];
 
 		if (capture.descriptors[index].address != previous->address + previous->samples * 2UL)
 			break;
 	}
-	platform_log("audio capture: %lu of %d descriptors follow each other in memory", index, DESCRIPTORS);
+	platform_log("audio capture: %lu of %lu descriptors follow each other in memory", index, capture.count);
 	if (high - low > MAXIMUM_SPAN)
 	{
 		platform_log("audio capture: the buffers span %lu bytes, more than expected; nothing is recorded", high - low);
