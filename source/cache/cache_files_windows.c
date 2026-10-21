@@ -574,7 +574,7 @@ void tags_header_register_vertex_and_index_buffers(
 
 	for (index = 0; index < header->vertex_buffer_count; index++)
 	{
-#ifdef HALO_64BIT
+#if defined(HALO_64BIT) || defined(HALO_WINDOW_REBASE)
 		D3DVertexBuffer *vertex_buffer = &XBOX_POINTER(D3DVertexBuffer, header->vertex_buffers)[index];
 #else
 		D3DVertexBuffer *vertex_buffer = &header->vertex_buffers[index];
@@ -586,7 +586,7 @@ void tags_header_register_vertex_and_index_buffers(
 
 	for (index = 0; index < header->index_buffer_count; index++)
 	{
-#ifdef HALO_64BIT
+#if defined(HALO_64BIT) || defined(HALO_WINDOW_REBASE)
 		D3DIndexBuffer *index_buffer = &XBOX_POINTER(D3DIndexBuffer, header->index_buffers)[index];
 #else
 		D3DIndexBuffer *index_buffer = &header->index_buffers[index];
@@ -607,7 +607,7 @@ void tags_header_deregister_vertex_and_index_buffers(
 
 	for (index = 0; index < header->vertex_buffer_count; index++)
 	{
-#ifdef HALO_64BIT
+#if defined(HALO_64BIT) || defined(HALO_WINDOW_REBASE)
 		D3DVertexBuffer *vertex_buffer = &XBOX_POINTER(D3DVertexBuffer, header->vertex_buffers)[index];
 #else
 		D3DVertexBuffer *vertex_buffer = &header->vertex_buffers[index];
@@ -622,7 +622,7 @@ void tags_header_deregister_vertex_and_index_buffers(
 
 	for (index = 0; index < header->index_buffer_count; index++)
 	{
-#ifdef HALO_64BIT
+#if defined(HALO_64BIT) || defined(HALO_WINDOW_REBASE)
 		D3DIndexBuffer *index_buffer = &XBOX_POINTER(D3DIndexBuffer, header->index_buffers)[index];
 #else
 		D3DIndexBuffer *index_buffer = &header->index_buffers[index];
@@ -647,7 +647,7 @@ void structure_bsp_header_register_vertex_buffers(
 
 	for (index = 0; index < header->vertex_buffer_count; index++)
 	{
-#ifdef HALO_64BIT
+#if defined(HALO_64BIT) || defined(HALO_WINDOW_REBASE)
 		D3DVertexBuffer *vertex_buffer = &XBOX_POINTER(D3DVertexBuffer, header->vertex_buffers)[index];
 #else
 		D3DVertexBuffer *vertex_buffer = &header->vertex_buffers[index];
@@ -659,7 +659,7 @@ void structure_bsp_header_register_vertex_buffers(
 
 	for (index = 0; index < header->lightmap_vertex_buffer_count; index++)
 	{
-#ifdef HALO_64BIT
+#if defined(HALO_64BIT) || defined(HALO_WINDOW_REBASE)
 		D3DVertexBuffer *vertex_buffer = &XBOX_POINTER(D3DVertexBuffer, header->lightmap_vertex_buffers)[index];
 #else
 		D3DVertexBuffer *vertex_buffer = &header->lightmap_vertex_buffers[index];
@@ -683,7 +683,7 @@ void structure_bsp_header_deregister_vertex_buffers(
 
 	for (index = 0; index < header->vertex_buffer_count; index++)
 	{
-#ifdef HALO_64BIT
+#if defined(HALO_64BIT) || defined(HALO_WINDOW_REBASE)
 		D3DVertexBuffer *vertex_buffer = &XBOX_POINTER(D3DVertexBuffer, header->vertex_buffers)[index];
 #else
 		D3DVertexBuffer *vertex_buffer = &header->vertex_buffers[index];
@@ -694,7 +694,7 @@ void structure_bsp_header_deregister_vertex_buffers(
 
 	for (index = 0; index < header->lightmap_vertex_buffer_count; index++)
 	{
-#ifdef HALO_64BIT
+#if defined(HALO_64BIT) || defined(HALO_WINDOW_REBASE)
 		D3DVertexBuffer *vertex_buffer = &XBOX_POINTER(D3DVertexBuffer, header->lightmap_vertex_buffers)[index];
 #else
 		D3DVertexBuffer *vertex_buffer = &header->lightmap_vertex_buffers[index];

@@ -533,7 +533,7 @@ void data_compact(
 
 	if (compacted_data!=empty)
 	{
-#ifdef HALO_64BIT
+#if defined(HALO_64BIT) || defined(HALO_WINDOW_REBASE)
 		datum = xbox_pointer(data->data);
 		absolute_index = 0;
 		compacted_count = 0;

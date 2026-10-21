@@ -200,6 +200,11 @@ void *game_state_allocate_buffer(
 		"c:\\halo\\SOURCE\\saved games\\game_state_xbox.c",
 		59,
 		xbox_address(result)==address);
+#elif defined(HALO_WINDOW_REBASE)
+	match_assert(
+		"c:\\halo\\SOURCE\\saved games\\game_state_xbox.c",
+		59,
+		(unsigned long)xbox_address(result)==address);
 #else
 	match_assert(
 		"c:\\halo\\SOURCE\\saved games\\game_state_xbox.c",
@@ -208,7 +213,7 @@ void *game_state_allocate_buffer(
 #endif
 
 	XPhysicalProtect(
-#ifdef HALO_64BIT
+#if defined(HALO_64BIT) || defined(HALO_WINDOW_REBASE)
 		xbox_pointer(address+cpu_size),
 #else
 		(void *)(address+cpu_size),
@@ -217,7 +222,7 @@ void *game_state_allocate_buffer(
 		PAGE_READWRITE|PAGE_WRITECOMBINE);
 
 	xbox_game_state_globals.buffer_allocated = TRUE;
-#ifdef HALO_64BIT
+#if defined(HALO_64BIT) || defined(HALO_WINDOW_REBASE)
 	xbox_game_state_globals.buffer = xbox_pointer(address);
 #else
 	xbox_game_state_globals.buffer = (void *)address;

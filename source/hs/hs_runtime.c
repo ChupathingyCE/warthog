@@ -2513,7 +2513,7 @@ void hs_evaluate_debug_string(
 
 		hs_evaluate(thread_index, *expression_index, &argument);
 		*expression_index = hs_syntax_get(*expression_index)->next_node_index;
-#ifdef HALO_64BIT
+#if defined(HALO_64BIT) || defined(HALO_WINDOW_REBASE)
 		arguments[*argument_count] = xbox_pointer(argument);
 #else
 		arguments[*argument_count] = (char const *)argument;

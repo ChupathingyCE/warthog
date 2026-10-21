@@ -161,9 +161,20 @@ The Xbox maps physical memory at virtual 0x80000000 + P. The layer commits
 that window of the Xbox address space (cseries/xbox_address.h) at start-up and
 hands out page-granular blocks from it, so the physical/virtual arithmetic
 the game and Direct3D rely on keeps working. PLATFORM_CONTIGUOUS_BASE is an
-Xbox address. */
+Xbox address.
 
+With HALO_WINDOW_REBASE (cseries/xbox_address.h) the window is wherever the
+host put it, and PLATFORM_CONTIGUOUS_BASE is that address: the layer's own
+arithmetic on the window (its pages, its protection, the renderer's mirror)
+is in host addresses, as in the other 32-bit builds, and only what crosses
+into the game's data goes through xbox_pointer and xbox_address. The size
+stays this build's own, which the host's window has to be at least. */
+
+#ifdef HALO_WINDOW_REBASE
+#define PLATFORM_CONTIGUOUS_BASE (platform_contiguous_base)
+#else
 #define PLATFORM_CONTIGUOUS_BASE 0x80000000U
+#endif
 #ifdef HALO_ANDROID
 /* a 128 MB development kit's: Android's guest image is linked just above it
 (port/android/include/halo_android_abi.h) */
@@ -200,8 +211,27 @@ void platform_contiguous_free(void *address);
 BOOL platform_is_contiguous(const void *address);
 /* write guest memory like DMA does, ignoring its page protection */
 void platform_contiguous_write(void *destination, const void *source, size_t size);
+#ifdef HALO_WINDOW_REBASE
+/* A physical address is an offset into the window, but the game also hands
+these the window's addresses, as the data was linked or as they are where
+the window is, which on the Xbox setting bit 31 made the same. The three are
+told apart as on the Xbox: an offset is less than the window's size, and
+every address in the window is at least that, because the window starts on
+a whole number of its size; xbox_pointer then moves a linked address and
+leaves one already moved. */
+#define PLATFORM_PHYSICAL_TO_VIRTUAL(physical) \
+	((unsigned long)(physical) < PLATFORM_CONTIGUOUS_SIZE ? \
+		(void *)(PLATFORM_CONTIGUOUS_BASE + (unsigned long)(physical)) : xbox_pointer(physical))
+#define PLATFORM_VIRTUAL_TO_PHYSICAL(address) \
+	((unsigned long)xbox_pointer(address) - PLATFORM_CONTIGUOUS_BASE)
+/* an address in the window, in the terms PLATFORM_CONTIGUOUS_BASE is in */
+#define PLATFORM_WINDOW_ADDRESS(pointer) ((unsigned long)(pointer))
+#else
 #define PLATFORM_PHYSICAL_TO_VIRTUAL(physical) xbox_pointer((unsigned long)(physical) | PLATFORM_CONTIGUOUS_BASE)
 #define PLATFORM_VIRTUAL_TO_PHYSICAL(address) ((unsigned long)XBOX_ADDRESS(address) & ~PLATFORM_CONTIGUOUS_BASE)
+/* an address in the window, in the terms PLATFORM_CONTIGUOUS_BASE is in */
+#define PLATFORM_WINDOW_ADDRESS(pointer) ((unsigned long)XBOX_ADDRESS(pointer))
+#endif
 
 /* ---------- the game's heap (xbox_heap.c), in the Xbox address space */
 
