@@ -535,9 +535,76 @@ int xbox_memory_class(void)
 	return memory.memory_class;
 }
 
+/* the largest run of contiguous physical memory free below limit, to 64
+KB and at most ceiling: each size tried is taken and given back at once */
+static unsigned long largest_block_below(unsigned long limit, unsigned long ceiling)
+{
+	unsigned long low = 0;
+	unsigned long high = (ceiling & ~0xFFFFUL) + 0x10000;
+
+	while (high - low > 0x10000)
+	{
+		unsigned long middle = (low + (high - low) / 2) & ~0xFFFFUL;
+		void *block;
+
+		if (middle <= low)
+			middle = low + 0x10000;
+		block = XPhysicalAlloc(middle, limit, 0, PAGE_READWRITE);
+		if (block)
+		{
+			XPhysicalFree(block);
+			low = middle;
+		}
+		else
+		{
+			high = middle;
+		}
+	}
+	return low;
+}
+
+/* a cache larger than the Xbox's (the 128 MB extras) as large as the
+memory free in one piece allows when the game makes it, keeping 1 MB of
+the room the rest needs free in that piece and never less than the Xbox's own size: a 128 MB console's
+free memory is in pieces (a devkit, 2026-10-21: 97 MB free, the largest
+piece 24 MB), and a 44 MB texture cache that could not be made left the
+game with none (a black screen, and on a retail console its lights
+flashing red and green). Decided once, when the game first asks. */
+static void fit_extras_cache(const char *name, unsigned long *size, unsigned long stock, unsigned long keep,
+	int *fitted)
+{
+	unsigned long largest;
+	unsigned long fit;
+
+	if (*fitted)
+		return;
+	*fitted = 1;
+	if (*size <= stock)
+		return;
+	/* (keep: what the piece must still hold after this cache, for what
+	is made after it in one piece: the sound cache and Direct3D's device,
+	its frame buffers and push buffer. A 37 MB texture cache in a 39 MB
+	piece left the sound cache and the device nowhere to go, and the game
+	went back to the dashboard: 2026-10-21) */
+	largest = largest_block_below(MAXULONG_PTR, *size + keep);
+	if (largest >= *size + keep)
+		return;
+	fit = largest > keep ? (largest - keep) & ~0xFFFFFUL : 0;
+	if (fit < stock)
+		fit = stock;
+	xbox_boot_log("memory: %s %lu KB is more than the largest free piece (%lu KB): %lu KB instead",
+		name, *size >> 10, largest >> 10, fit >> 10);
+	*size = fit;
+}
+
+static int texture_cache_fitted;
+static int sound_cache_fitted;
+
 unsigned long xbox_memory_texture_cache_size(void)
 {
 	memory_read();
+	fit_extras_cache("texture cache", &memory.texture_cache_size, _texture_cache_stock, 12 * 0x100000,
+		&texture_cache_fitted);
 	return memory.texture_cache_size;
 }
 
@@ -546,21 +613,25 @@ unsigned long xbox_memory_texture_cache_maximum_address(void)
 	memory_read();
 	/* (the Xbox's own cache, or a smaller one, anywhere, as it always
 	was) */
-	return memory.texture_cache_size <= _texture_cache_stock ? 0xFFFFFFFFUL :
-		(unsigned long)_texture_cache_maximum_address;
+	/* anywhere, as the Xbox's own cache always was: a limit of 128 MB
+	(0x7FFFFFF) made every allocation fail on a 128 MB devkit, even one
+	of the Xbox's own size, and the game ran without a texture cache (a
+	black screen, then its lights flashing red and green; 2026-10-21) */
+	return 0xFFFFFFFFUL;
 }
 
 unsigned long xbox_memory_sound_cache_size(void)
 {
 	memory_read();
+	fit_extras_cache("sound cache", &memory.sound_cache_size, _sound_cache_stock, 8 * 0x100000, &sound_cache_fitted);
 	return memory.sound_cache_size;
 }
 
 unsigned long xbox_memory_sound_cache_maximum_address(void)
 {
 	memory_read();
-	return memory.sound_cache_size <= _sound_cache_stock ? 0xFFFFFFFFUL :
-		(unsigned long)_texture_cache_maximum_address;
+	/* (anywhere, as the texture cache's) */
+	return 0xFFFFFFFFUL;
 }
 
 int console_memory_class(void)
