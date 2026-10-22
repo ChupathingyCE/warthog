@@ -30,6 +30,7 @@ one; a feature that would is to ask for it through the memory class
 | Moderation (moderator sign-in, kicks) | Yes | Not yet | Desktop and dedicated server only |
 | Network co-op | Yes | Not yet | Not built for the console (`network_coop.c`, 3,100 lines); co-op games are left out of its lists |
 | Custom Edition and HaloMD maps, map downloads | Yes | Cut | 2026-10-19: memory and storage; the console plays the Xbox's maps |
+| Xbox map packs (Halo CE+ in `maps_cex`) | Yes | Yes | Xbox-format maps, read by the console's own loader; the menus' map list (`ui_map_list.c`, `map_packs.c`) is on the console for them, about 35 KB |
 | Pings in the game list | Yes | Not yet | The console's list shows none; the probe code (`p2p_probe.c`) is already linked |
 
 ## Menus and controls

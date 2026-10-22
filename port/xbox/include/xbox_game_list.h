@@ -22,10 +22,14 @@ gets those of up to 16 */
 #if defined(HALO_CONSOLE_PLAYERS) && HALO_CONSOLE_PLAYERS > 16
 #define GAME_LIST_STRING_OF(x) #x
 #define GAME_LIST_STRING(x) GAME_LIST_STRING_OF(x)
-#define GAME_LIST_PATH "/v1/console/games?players=" GAME_LIST_STRING(HALO_CONSOLE_PLAYERS)
+#define GAME_LIST_PATH "/v1/console/games?packs=1&players=" GAME_LIST_STRING(HALO_CONSOLE_PLAYERS)
 #else
-#define GAME_LIST_PATH "/v1/console/games"
+#define GAME_LIST_PATH "/v1/console/games?packs=1"
 #endif
+/* (packs=1: this build plays Xbox map packs' maps, <file>@<pack> in
+maps_<pack>, so the list sends their games too, each with its map's name
+and its pack's tag in the line's 14th and 15th fields; a build before map
+packs asks without it and gets none of them) */
 #define GAME_LIST_PORT 80
 /* console.game_list_server in D:\config.toml (once D:\game_list.txt, still
 read for one release): a host or an IPv4 address, ":port" optional; used
@@ -53,6 +57,9 @@ CONSOLE_GAMES and CONSOLE_LINE */
 #define GAME_LIST_GAMETYPE_LENGTH 24
 #define GAME_LIST_REGION_LENGTH 16
 #define GAME_LIST_STATE_LENGTH 8
+/* an Xbox map pack's map's name and its pack's tag ("Gothra", "CE+") */
+#define GAME_LIST_MAP_TITLE_LENGTH 32
+#define GAME_LIST_MAP_TAG_LENGTH 4
 
 enum
 {
@@ -97,6 +104,10 @@ struct game_list_game
 	char gametype[GAME_LIST_GAMETYPE_LENGTH + 1];
 	char region[GAME_LIST_REGION_LENGTH + 1];
 	char state[GAME_LIST_STATE_LENGTH + 1];
+	/* an Xbox map pack's map's name and its pack's tag, as the list says
+	(fields 14 and 15; empty when it doesn't) */
+	char map_title[GAME_LIST_MAP_TITLE_LENGTH + 1];
+	char map_tag[GAME_LIST_MAP_TAG_LENGTH + 1];
 	short engine;
 	short players;
 	short maximum_players;
@@ -132,6 +143,10 @@ scenario's path; else the file's name, "timberland (PC)" for a Halo PC map,
 "(MD)" for HaloMD's) in text, at most size - 1 characters: 1 if it is one of
 the console's own multiplayer maps */
 int game_list_map_name(const char *map, char *text, unsigned long size);
+/* a game's map in words: an Xbox map pack's by the name and tag the list
+gives it ("Gothra (CE+)"), any other as game_list_map_name says (its
+result) */
+int game_list_game_map_name(const struct game_list_game *game, char *text, unsigned long size);
 /* a game's type: its gametype, else its engine's name, else "Unknown" */
 const char *game_list_type_name(const struct game_list_game *game);
 /* a game's state ("open", ...) in words */

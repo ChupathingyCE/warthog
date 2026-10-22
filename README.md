@@ -68,6 +68,25 @@ and there is no download yet: you build it yourself.
 
 `tools/easy_build.py` does steps 1 and 3 for you, with questions.
 
+### Xbox map packs (Halo CE+)
+
+Warthog plays community packs of Xbox maps, such as Halo CE+ X (Original
+Xbox) by VKMT, beside your retail maps. A pack's maps reuse the retail
+maps' file names, so each pack has a folder of its own beside `maps`:
+Halo CE+ goes in `D:\maps_cex\`. Copy the contents of the pack's `maps`
+folder there, its `maplist.txt` included, and keep the retail maps in
+`D:\maps\`. With the packaging script:
+`python3 tools/xbox_package.py --maps /path/to/maps --map-pack cex="/path/to/Halo CE+ X/maps" --out ...`.
+
+The pack's maps appear in the multiplayer map list after the retail ones,
+marked [CE+] and named as the pack names them (Abyss, Gothra, ...). Online,
+a CE+ game is joined only with the same version of the pack, and a console
+without it is told which map and folder it needs. The larger CE+ maps use a
+campaign map's cache file on the utility partition. Warthog never provides
+the pack's files: get them from the pack's release page. The pack's own
+menus (`ui.map`) stay unused unless `game.pack_menus = "cex"` is set in
+`D:\config.toml`.
+
 ## Settings on the console
 
 The settings are in `D:\config.toml` (`D:\` is the game's folder, beside

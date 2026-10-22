@@ -363,18 +363,24 @@ static int parse_state(char *destination, const char *text, unsigned long length
 }
 
 #define GAME_FIELDS 10
+/* the fields read, at most: the ten, the host's platform, hosting and
+protocol (passed over), and an Xbox map pack's map's name and its pack's
+tag */
+#define GAME_FIELDS_READ 15
 
-/* a game's line: its ten fields, tab separated (more after them are a later
-format's, and left alone); 0 if one is missing or out of bounds */
+/* a game's line: its ten fields, tab separated, and the map pack's two after
+the host's three (more after them are a later format's, and left alone); 0
+if one of the ten is missing or out of bounds (a map pack field that is
+out of bounds is left empty) */
 static int parse_game(const char *line, unsigned long length, struct game_list_game *game)
 {
-	const char *fields[GAME_FIELDS];
-	unsigned long sizes[GAME_FIELDS];
+	const char *fields[GAME_FIELDS_READ];
+	unsigned long sizes[GAME_FIELDS_READ];
 	unsigned long start = 0, index;
 	int count = 0;
 	long engine, players, maximum_players, version;
 
-	for (index = 0; index <= length && count < GAME_FIELDS; index++)
+	for (index = 0; index <= length && count < GAME_FIELDS_READ; index++)
 	{
 		if (index == length || line[index] == '\t')
 		{
@@ -401,6 +407,15 @@ static int parse_game(const char *line, unsigned long length, struct game_list_g
 		!parse_state(game->state, fields[9], sizes[9]))
 	{
 		return 0;
+	}
+	/* (an Xbox map pack's map's name and its pack's tag, only for a map of a
+	pack, <file>@<pack>) */
+	if (count >= 15 && strchr(game->map, '@') && sizes[13] && sizes[14] &&
+		(!copy_text(game->map_title, GAME_LIST_MAP_TITLE_LENGTH, fields[13], sizes[13], 1) ||
+		!copy_text(game->map_tag, GAME_LIST_MAP_TAG_LENGTH, fields[14], sizes[14], 1)))
+	{
+		game->map_title[0] = 0;
+		game->map_tag[0] = 0;
 	}
 	game->engine = (short)engine;
 	game->players = (short)players;
