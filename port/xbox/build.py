@@ -172,7 +172,13 @@ XBOX_GAME_CXX_SOURCES = [Path("source/main/d3d_intimacy.cpp")]
 XBOX_PORT_GAME_SOURCES = [
     "audio_probe.c", "chat.c", "follow_camera.c", "map_families.c", "network_damage.c", "network_distributed.c", "network_game_layout.c",
     "network_objects.c", "network_rules.c", "pal_tags.c", "powerup_timers.c", "render_interpolation.c",
+    # the menus' map list and the Xbox map packs (maps_cex: Halo CE+), as
+    # the desktop builds have them (HALO_MAP_LIST, below)
+    "map_packs.c", "ui_map_list.c",
 ]
+# the menus' map list filled by the port, with the map packs' maps
+# (port/linux/game/ui_map_list.c, map_packs.c), on the console too
+MAP_LIST_DEFINES = ["-DHALO_MAP_LIST"]
 # d3d_intimacy.cpp reads the device as the January library named it; the
 # kernel's build of the Aug 2001 library has it in its own namespace (the
 # same layout)
@@ -347,6 +353,7 @@ def generate(n: Writer, sln: Any, port: ConsolePort) -> None:
     game_cflags = " ".join([
         " ".join(GAME_FLAGS),
         *defines,
+        *MAP_LIST_DEFINES,
         f"-include {_quote(prefix_header)}", f"-include {_quote(semantics_header)}", f"-iquote {_quote(game)}",
         port.game_defines_and_includes(config, _quote), f"-idirafter {_quote(game / XDK_INCLUDE)}",
         f"-idirafter {_quote(xdk / 'include')}",

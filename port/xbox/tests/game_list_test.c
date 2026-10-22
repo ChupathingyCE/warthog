@@ -394,6 +394,28 @@ static void test_text(void)
 	CHECK(!game_list_map_name("bloodgulch@xx", text, sizeof(text)) && !strcmp(text, "bloodgulch (?)"));
 	CHECK(!game_list_map_name("levels\\b30\\b30", text, sizeof(text)) && !strcmp(text, "b30"));
 	CHECK(!game_list_map_name("bloodgulc", text, sizeof(text)) && !strcmp(text, "bloodgulc"));
+	/* (an Xbox map pack's map: the list's name and tag for it, fields 14 and
+	15 after the host's three; a list without them, or with them on another
+	map, as before) */
+	{
+		static const char pack_list[] =
+			"warthog-list 1 4\n"
+			INVITE_A "\t[D] CE+\twizard@cex\t2\tSlayer\t0\t16\t32\t\topen\tpc_linux\tdedicated\tdelta\tGothra\tCE+\n"
+			INVITE_B "\tNo pack fields\tbloodgulch@cex\t2\tSlayer\t0\t16\t32\t\topen\n"
+			INVITE_A "\tNot a pack\tbloodgulch\t2\tSlayer\t0\t16\t32\t\topen\t\t\t\tAbyss\tCE+\n"
+			INVITE_B "\tToo long\twizard@cex\t2\tSlayer\t0\t16\t32\t\topen\t\t\t\tGothra\tTOOLONG\tmore\n"
+			"end\n";
+
+		CHECK(parse_list(pack_list, sizeof(pack_list) - 1, &list) == GAME_LIST_OK && list.count == 4);
+		CHECK(!strcmp(list.games[0].map_title, "Gothra") && !strcmp(list.games[0].map_tag, "CE+"));
+		CHECK(!game_list_game_map_name(&list.games[0], text, sizeof(text)) && !strcmp(text, "Gothra (CE+)"));
+		CHECK(!list.games[1].map_title[0]);
+		CHECK(!game_list_game_map_name(&list.games[1], text, sizeof(text)) && !strcmp(text, "bloodgulch (?)"));
+		CHECK(!list.games[2].map_title[0]);
+		CHECK(game_list_game_map_name(&list.games[2], text, sizeof(text)) && !strcmp(text, "Blood Gulch"));
+		CHECK(!list.games[3].map_title[0] && !list.games[3].map_tag[0]);
+		CHECK(!game_list_game_map_name(&list.games[0], small, sizeof(small)) && !strcmp(small, "Got"));
+	}
 	CHECK(!game_list_map_name("", text, sizeof(text)) && !strcmp(text, ""));
 	/* (cut to the room, always terminated) */
 	CHECK(game_list_map_name("bloodgulch", small, sizeof(small)) && !strcmp(small, "Blo"));

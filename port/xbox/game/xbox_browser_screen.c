@@ -650,7 +650,7 @@ static void draw_details(
 	text(font, _justify_left, label_color, DETAIL_TEXT, y, DETAIL_TEXT + 80, y + height, label); \
 	text(font, _justify_left, text_color, DETAIL_TEXT + 84, y, SCREEN_RIGHT - 8, y + height, value); \
 	y += height;
-	game_list_map_name(game->map, value, sizeof(value));
+	game_list_game_map_name(game, value, sizeof(value));
 	DETAIL_LINE("Map", value);
 	DETAIL_LINE("Type", game_list_type_name(game));
 	snprintf(line, sizeof(line), "%d of %d", game->players, game->maximum_players);
@@ -746,7 +746,7 @@ void browser_screen_render(
 			color = &text_color;
 		}
 		text(font, _justify_left, color, SCREEN_LEFT + CELL_INSET, ty, column_map - CELL_INSET, y1, game->name);
-		game_list_map_name(game->map, value, sizeof(value));
+		game_list_game_map_name(game, value, sizeof(value));
 		text(font, _justify_left, color, column_map, ty, column_type - CELL_INSET, y1, value);
 		text(font, _justify_left, color, column_type, ty, column_players - CELL_INSET, y1, game_list_type_name(game));
 		snprintf(line, sizeof(line), "%d/%d", game->players, game->maximum_players);
