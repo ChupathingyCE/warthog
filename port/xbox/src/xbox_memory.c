@@ -160,9 +160,9 @@ enum
 	_texture_cache_maximum_address = 0x7FFFFFF,
 	/* the screen effect's swizzled target, 1024x512 at 4 bytes a pixel
 	(rasterizer_xbox_screen_effect.c), where Direct3D keeps its own
-	textures and targets: below 0x3FFB000, aligned to a page */
+	textures and targets: below 0x3FFB000 */
 	_screen_effect_target_size = 0x200000,
-	_screen_effect_target_maximum_address = 0x3FFAFFF,
+	_screen_effect_target_limit = 0x3FFB000,
 
 	/* what physical_memory_allocate takes besides the texture cache: the
 	game state, the tag cache and the sound cache (physical_memory_map.c's
@@ -627,8 +627,19 @@ static void screen_effect_target_reserve(void)
 			memory.texture_cache_size >> 10);
 		return;
 	}
-	memory.screen_effect_target = XPhysicalAlloc(_screen_effect_target_size,
-		_screen_effect_target_maximum_address, 0x1000, PAGE_READWRITE | PAGE_WRITECOMBINE);
+	/* (anywhere, as the caches: a highest address below the top fails on
+	a 128 MB devkit, as 0x7FFFFFF did for the caches, 2026-10-21; then
+	the address is checked against Direct3D's limit) */
+	memory.screen_effect_target = XPhysicalAlloc(_screen_effect_target_size, MAXULONG_PTR, 0,
+		PAGE_READWRITE | PAGE_WRITECOMBINE);
+	if (memory.screen_effect_target &&
+		((unsigned long)memory.screen_effect_target & 0x7FFFFFFFUL) + _screen_effect_target_size > _screen_effect_target_limit)
+	{
+		xbox_boot_log("memory: screen effect target at %p is past the graphics chip's 64 MB: given back",
+			memory.screen_effect_target);
+		XPhysicalFree(memory.screen_effect_target);
+		memory.screen_effect_target = NULL;
+	}
 	if (!memory.screen_effect_target)
 	{
 		xbox_boot_log("memory: screen effect target %lu KB FAILED, %lu KB free", (unsigned long)_screen_effect_target_size >> 10,
