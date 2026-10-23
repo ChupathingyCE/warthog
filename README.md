@@ -6,7 +6,7 @@
 
 <p align="center">
 <a href="https://github.com/ChupathingyCE/chupathingyce">The game (Chupathingy)</a> ·
-<a href="https://halo.milenko.org">Games online now</a> ·
+<a href="https://stats.chupathingy.org">Games online now</a> ·
 <a href="https://discord.gg/chupathingy">Discord</a>
 </p>
 
@@ -26,9 +26,9 @@ and there is no download yet: you build it yourself.
 
 | Console | Status |
 | --- | --- |
-| Original Xbox | Testing. Up to 32 players. Plays on a stock 64 MB console; 128 MB consoles get extras |
-| Xbox 360 | In development; moved to [warthog-360](https://github.com/ChupathingyCE/warthog-360) |
-| Wii U | Scaffolding only; moved to [warthog-wiiu](https://github.com/ChupathingyCE/warthog-wiiu) |
+| Original Xbox | Testing (update c, 2026-10-21). Up to 32 players, Halo CE+ maps. Plays on a stock 64 MB console; 128 MB consoles get extras |
+| Xbox 360 | Plays and joins servers on RGH hardware; moved to [warthog-360](https://github.com/ChupathingyCE/warthog-360) |
+| Wii U | Public test build; moved to [warthog-wiiu](https://github.com/ChupathingyCE/warthog-wiiu) |
 
 **Original Xbox**
 - Network version: 32 (wire `chupa-32a`). Joins hosts of network versions
@@ -39,6 +39,7 @@ and there is no download yet: you build it yourself.
 - Memory: 64 MB is the baseline. A console with 128 MB or more (a devkit,
   or the common upgrade) gets larger texture and sound caches; the game
   plays the same either way.
+- Maps: the retail maps, and community packs of Xbox maps beside them, Halo CE+ in `D:\maps_cex` ([below](#xbox-map-packs-halo-ce)).
 - Players: the test build holds 32 players. Games past that are left, as a
   full game is.
 - Chat: quick lines on the controller, and a USB keyboard.
