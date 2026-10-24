@@ -158,6 +158,51 @@ int pthread_detach(pthread_t thread)
 	return 0;
 }
 
+/* ---------- the threads' end (port/linux/src/thread_stop.h)
+
+The console never asks for it: the game ends by rebooting, and the threads
+run until then, as on the desktop builds. So no thread is counted, the end
+is never requested, and a sleep is the whole sleep. */
+
+int thread_stop_create(const char *name, void *(*main)(void *), void *argument)
+{
+	pthread_t thread;
+
+	(void)name;
+	if (pthread_create(&thread, NULL, main, argument) != 0)
+		return -1;
+	pthread_detach(thread);
+	return 0;
+}
+
+int thread_stop_enter(const char *name, int waited)
+{
+	(void)name;
+	(void)waited;
+	return -1;
+}
+
+void thread_stop_leave(int slot)
+{
+	(void)slot;
+}
+
+int thread_stop_requested(void)
+{
+	return 0;
+}
+
+int thread_stop_sleep(unsigned long milliseconds)
+{
+	Sleep(milliseconds);
+	return 0;
+}
+
+void thread_stop_all(unsigned long milliseconds)
+{
+	(void)milliseconds;
+}
+
 /* ---------- sockets */
 
 enum

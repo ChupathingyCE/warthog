@@ -366,6 +366,19 @@ boolean_type pc_menu_tag(long tag_index)
 	return 0;
 }
 
+/* the Chupathingy menus are never up: the Xbox's own are */
+boolean_type pc_menus_chupathingy(void)
+{
+	return 0;
+}
+
+/* the loading screen's skip (port/linux/game/loading_screen.c): the
+console's loading screen runs to its end, as before */
+boolean_type loading_screen_skip_pressed(void)
+{
+	return 0;
+}
+
 boolean_type pc_menu_text_color(struct widget_instance const *widget, void *rgb)
 {
 	(void)widget;
