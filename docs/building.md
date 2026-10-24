@@ -79,6 +79,10 @@ desktop ones.
 
 Updating the game is a submodule update: `git -C chupathingyce fetch`,
 check out the commit, then commit the new `chupathingyce` pointer here.
+The pull request's CI runs the host tests only (it has no SDK or Direct3D
+library, so it can't link), so run `ninja xbox` on the new game before
+merging: a function the shared code now calls that the console doesn't give
+(port/xbox/src) fails only at the link.
 
 ## Host tests
 
